@@ -37,7 +37,79 @@ impl Pattern {
             (Pattern::Var, t) => Some(vec![t.clone()]),
             (Pattern::Boolean(a), Term::Boolean(b)) if a == b => Some(vec![]),
             (Pattern::Int(a), Term::Int(b)) if a == b => Some(vec![]),
-            (Pattern::Constructor(reference, number, children), mut inner) => {
+            (Pattern::Float(a), Term::Float(b)) if a == b => Some(vec![]),
+            (Pattern::Text(a), Term::Text(b)) if a == b => Some(vec![]),
+            (Pattern::Char(a), Term::Char(b)) if a == b => Some(vec![]),
+            (Pattern::As(a), term) => match a.match_(term) {
+                None => None,
+                Some(mut terms) => {
+                    terms.insert(0, term.clone());
+                    Some(terms)
+                }
+            },
+            (Pattern::SequenceLiteral(patterns), Term::Sequence(items))
+                if patterns.len() == items.len() =>
+            {
+                let mut all = vec![];
+                for i in 0..patterns.len() {
+                    match &*items[i] {
+                        ABT::Tm(term) => match patterns[i].match_(term) {
+                            None => return None,
+                            Some(v) => {
+                                all.extend(v);
+                            }
+                        },
+                        _ => unreachable!("Nonevaluated sequence item"),
+                    }
+                }
+                return Some(all);
+            }
+            (Pattern::SequenceOp(one, op, two), Term::Sequence(contents)) => match op {
+                SeqOp::Cons => {
+                    if contents.len() > 0 {
+                        match &*contents[0] {
+                            ABT::Tm(term) => match one.match_(term) {
+                                None => None,
+                                Some(mut ones) => {
+                                    match two.match_(&Term::Sequence(contents[1..].to_vec())) {
+                                        None => None,
+                                        Some(twos) => {
+                                            ones.extend(twos);
+                                            Some(ones)
+                                        }
+                                    }
+                                }
+                            },
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    }
+                }
+                SeqOp::Snoc => {
+                    if contents.len() > 0 {
+                        match &*contents[contents.len() - 1] {
+                            ABT::Tm(term) => match one
+                                .match_(&Term::Sequence(contents[..contents.len() - 1].to_vec()))
+                            {
+                                None => None,
+                                Some(mut ones) => match two.match_(term) {
+                                    None => None,
+                                    Some(twos) => {
+                                        ones.extend(twos);
+                                        Some(ones)
+                                    }
+                                },
+                            },
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            },
+            (Pattern::Constructor(reference, number, children), inner) => {
                 let mut all = vec![];
                 if children.len() > 0 {
                     match inner {
@@ -129,8 +201,9 @@ impl Env {
                 None => {
                     let mut full = self.root.clone();
                     full.push("terms");
-                    full.push(hash);
+                    full.push("#".to_owned() + hash);
                     full.push("compiled.ub");
+                    println!("Trying to load {:?}", full);
                     let res = parser::Buffer::from_file(full.as_path())
                         .unwrap()
                         .get_term();
@@ -152,7 +225,7 @@ impl Stack {
                 return term.clone();
             }
         }
-        unreachable!("No term {} found", name);
+        unreachable!("No term {} found - {}", name, self.0[0].term);
     }
 
     fn set(&mut self, k: String, v: Term) {
@@ -162,6 +235,12 @@ impl Stack {
     fn with(&self, k: String, v: Term) -> Self {
         let mut nw = self.clone();
         nw.set(k, v);
+        nw
+    }
+
+    fn with_frame(&self, hash: String) -> Self {
+        let mut nw = self.clone();
+        nw.0.insert(0, Frame::new(hash));
         nw
     }
 }
@@ -205,12 +284,39 @@ impl ABT<Term> {
     }
 }
 
+fn unroll_cycle(
+    inner: &ABT<Term>,
+    names: &mut Vec<String>,
+) -> (Vec<Box<ABT<Term>>>, Box<ABT<Term>>) {
+    match inner {
+        ABT::Abs(sym, inner) => {
+            names.push(sym.text.clone());
+            match &**inner {
+                ABT::Tm(Term::LetRec(_, things, body)) => (things.clone(), body.clone()),
+                _ => unroll_cycle(inner, names),
+            }
+        }
+        _ => unreachable!("Cycle not abs"),
+    }
+}
+
 impl Eval for ABT<Term> {
     fn eval(&self, env: &mut Env, stack: &Stack) -> Term {
         match self {
             ABT::Var(sym) => stack.lookup(&sym.text),
-            ABT::Cycle(inner) => inner.eval(env, stack),
-            ABT::Abs(sym, inner) => unreachable!(),
+            ABT::Cycle(inner) => {
+                let mut names = vec![];
+                let (values, body) = unroll_cycle(inner, &mut names);
+                let mut new_stack = stack.clone();
+                for i in 0..names.len() {
+                    new_stack.set(
+                        names[i].clone(),
+                        values[values.len() - 1 - i].eval(env, stack),
+                    );
+                }
+                body.eval(env, stack)
+            }
+            ABT::Abs(sym, inner) => unreachable!("Raw abs {}", stack.0[0].term),
             ABT::Tm(inner) => inner.eval(env, stack),
         }
     }
@@ -240,9 +346,9 @@ impl Eval for Term {
                 }
                 _ => unreachable!(),
             },
-            Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                env.load(&hash.to_string()).eval(env, stack)
-            }
+            Term::Ref(Reference::DerivedId(Id(hash, _, _))) => env
+                .load(&hash.to_string())
+                .eval(env, &stack.with_frame(hash.to_string())),
             Term::Ref(Reference::Builtin(contents)) => {
                 match contents.as_str() {
                     "Text.empty" => Term::Text("".to_string()),
@@ -266,7 +372,7 @@ impl Eval for Term {
                         }
                     }
                 }
-                unreachable!("Nothing matched {:?}", term);
+                unreachable!("Nothing matched {:?}\n{:?}", term, arms);
             }
 
             Term::Ann(term, _type) => term.eval(env, stack),
@@ -291,7 +397,11 @@ impl Eval for Term {
                 (a, b) => unreachable!("or not bool {:?} and {:?}", a, b),
             },
             // Term::Lam(contents) => Term::Lam(Box::new(ABT::Tm(contents.eval(env, stack)))),
-            Term::Lam(_) => self.clone(),
+            Term::Lam(contents) => Term::ScopedFunction(
+                contents.clone(),
+                stack.0[0].term.clone(),
+                stack.0[0].bindings.clone(),
+            ),
             // Term::LetRec(
             Term::App(one, two) => {
                 let one = one.eval(env, stack);
@@ -416,10 +526,14 @@ impl Eval for Term {
                             (builtin, two) => Term::PartialNativeApp(builtin.to_owned(), vec![two]),
                         }
                     }
-                    Term::Lam(contents) => match &*contents {
+                    Term::ScopedFunction(contents, term, bindings) => match &*contents {
                         ABT::Abs(name, contents) => {
                             let two = two.eval(env, stack);
-                            contents.eval(env, &stack.with(name.text.clone(), two))
+                            let mut inner_stack = stack.with_frame(term);
+                            for (k, v) in bindings {
+                                inner_stack.set(k, v);
+                            }
+                            contents.eval(env, &inner_stack.with(name.text.clone(), two))
                         }
                         contents => unreachable!("Lam {:?}", contents),
                     },

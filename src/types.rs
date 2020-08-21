@@ -31,6 +31,15 @@ pub enum Referent {
     Con(Reference, usize, ConstructorType),
 }
 
+impl Referent {
+    fn reference(&self) -> &Reference {
+        match self {
+            Referent::Ref(r) => r,
+            Referent::Con(r, _, _) => r,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct MatchCase(pub Pattern, pub Option<Box<ABT<Term>>>, pub Box<ABT<Term>>);
 
@@ -94,6 +103,7 @@ pub enum Term {
 
     PartialNativeApp(String, Vec<Term>),
     PartialConstructor(Reference, usize, Vec<Term>),
+    ScopedFunction(Box<ABT<Term>>, String, Vec<(String, Term)>),
 
     Constructor(Reference, usize),
     Request(Reference, usize),
@@ -126,7 +136,38 @@ pub enum Term {
     TypeLink(Reference),
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+// impl Term {
+//     fn walk<F>(&self, f: F) where F: Fn(&Term) -> () {
+//         f(self);
+//         match self {
+//             Match(a, b) =>
+//             Handle(Box<ABT<Term>>, Box<ABT<Term>>),
+//             App(Box<ABT<Term>>, Box<ABT<Term>>),
+//             Ann(Box<ABT<Term>>, ABT<Type>),
+//             Sequence(Vec<Box<ABT<Term>>>),
+//             If(Box<ABT<Term>>, Box<ABT<Term>>, Box<ABT<Term>>),
+//             And(Box<ABT<Term>>, Box<ABT<Term>>),
+//             Or(Box<ABT<Term>>, Box<ABT<Term>>),
+//             Lam(Box<ABT<Term>>),
+//             //   -- Note: let rec blocks have an outer ABT.Cycle which introduces as many
+//             //   -- variables as there are bindings
+//             LetRec(bool, a, b) => {
+//                 for m in a {
+//                     m.walk(f);
+//                 }
+//                 b.walk(f);
+//             }
+//             //   -- Note: first parameter is the binding, second is the expression which may refer
+//             //   -- to this let bound variable. Constructed as `Let b (abs v e)`
+//             Let(bool, a, b) => {
+//                 a.walk(f); b.walk(f);
+//             }
+//             ScopedFunction(a, _, _) => a.walk(f)
+//         }
+//     }
+// }
+
+#[derive(Clone, PartialEq, PartialOrd)]
 pub enum ABT<Content> {
     Var(Symbol),
     Cycle(Box<ABT<Content>>),

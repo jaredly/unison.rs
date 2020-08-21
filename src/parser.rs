@@ -310,6 +310,17 @@ impl FromBuffer for SeqOp {
     }
 }
 
+impl<Inner: std::fmt::Debug> std::fmt::Debug for ABT<Inner> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ABT::Tm(i) => f.write_fmt(format_args!("{:?}", i)),
+            ABT::Var(i) => f.write_fmt(format_args!("〰️{}", i.text)),
+            ABT::Cycle(i) => f.write_fmt(format_args!("🚲({:?})", i)),
+            ABT::Abs(s, i) => f.write_fmt(format_args!("|{}|({:?})", s.text, i)),
+        }
+    }
+}
+
 impl std::fmt::Debug for Term {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -323,9 +334,9 @@ impl std::fmt::Debug for Term {
             Term::PartialNativeApp(_, _) => f.write_str("<blank>"),
             Term::Ref(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::Constructor(i, n) => f.write_fmt(format_args!("[constructor]{:?}#{}", i, n)),
-            Term::PartialConstructor(i, n, _) => {
-                f.write_fmt(format_args!("[partial-constructor]{:?}#{}", i, n))
-            }
+            // Term::PartialConstructor(i, n, _) => {
+            //     f.write_fmt(format_args!("[partial-constructor]{:?}#{}", i, n))
+            // }
             Term::Request(i, n) => f.write_fmt(format_args!("[request]{:?}#{}", i, n)),
             Term::Handle(i, n) => f.write_fmt(format_args!("handle {:?} with {:?}", i, n)),
             Term::App(i, n) => f.write_fmt(format_args!("{:?} <app> {:?}", i, n)),
@@ -337,11 +348,12 @@ impl std::fmt::Debug for Term {
             Term::And(a, b) => f.write_fmt(format_args!("{:?} && {:?}", a, b)),
             Term::Or(a, b) => f.write_fmt(format_args!("{:?} || {:?}", a, b)),
             Term::Lam(a) => f.write_fmt(format_args!("-> {:?}", a)),
-            Term::LetRec(_, a, b) => f.write_fmt(format_args!("let(rec) {:?} in {:?}", a, b)),
+            Term::LetRec(_, a, b) => f.write_fmt(format_args!("let(rec)\n{:?}\nin {:?}", a, b)),
             Term::Let(_, a, b) => f.write_fmt(format_args!("let {:?} in {:?}", a, b)),
             Term::Match(a, b) => f.write_fmt(format_args!("match {:?} with {:?}", a, b)),
             Term::TermLink(a) => f.write_fmt(format_args!("termLink {:?}", a)),
             Term::TypeLink(a) => f.write_fmt(format_args!("typeLink {:?}", a)),
+            _ => f.write_str("Something Else"),
         }
     }
 }
