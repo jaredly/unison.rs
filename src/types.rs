@@ -1,4 +1,5 @@
 use std::cmp::{Eq, PartialEq, PartialOrd};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Symbol {
@@ -139,4 +140,70 @@ fn indent(n: usize) -> String {
         res += "|  ";
     }
     res
+}
+
+#[derive(Debug, Clone, std::cmp::Eq, std::hash::Hash, std::cmp::PartialEq)]
+pub struct NameSegment {
+    pub text: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum Modifier {
+    Structural,
+    Unique(String),
+    Opaque,
+}
+
+#[derive(Debug, Clone)]
+pub enum TypeDecl {
+    Effect(DataDecl),
+    Data(DataDecl),
+}
+
+#[derive(Debug, Clone)]
+pub struct DataDecl {
+    pub modifier: Modifier,
+    pub bound: Vec<Symbol>,
+    pub constructors: Vec<(Symbol, ABT<Type>)>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Causal<Contents> {
+    One(Contents),
+    Cons(Hash, Contents),
+    Merge(Vec<Hash>, Contents),
+}
+
+#[derive(Debug, Clone)]
+pub struct RawBranch {
+    pub terms: Star<Referent, NameSegment>,
+    pub types: Star<Reference, NameSegment>,
+    pub children: HashMap<NameSegment, Hash>,
+    pub edits: HashMap<NameSegment, Hash>,
+}
+
+impl RawBranch {
+    pub fn merge(&mut self, other: &RawBranch) {
+        self.terms.merge(&other.terms);
+        self.types.merge(&other.types);
+        self.children.extend(other.children.clone());
+        self.edits.extend(other.edits.clone());
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Star<K, V> {
+    pub fact: std::collections::HashSet<K>,
+    pub d1: HashMap<K, V>,
+    pub d2: HashMap<K, Reference>,
+    pub d3: HashMap<K, (Reference, Reference)>,
+}
+
+impl<K: std::hash::Hash + std::cmp::Eq + Clone, V: Clone> Star<K, V> {
+    fn merge(&mut self, other: &Self) {
+        self.fact.extend(other.fact.clone());
+        self.d1.extend(other.d1.clone());
+        self.d2.extend(other.d2.clone());
+        self.d3.extend(other.d3.clone());
+    }
 }

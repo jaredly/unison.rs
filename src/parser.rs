@@ -193,7 +193,9 @@ impl FromBuffer for ConstructorType {
 
 impl Hash {
     pub fn to_string(&self) -> String {
-        base32hex::encode(&self.0)
+        let mut m = base32hex::encode(&self.0);
+        m.pop();
+        m
     }
 }
 
@@ -499,29 +501,6 @@ impl<T: FromBuffer> FromBuffer for Causal<T> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Causal<Contents: FromBuffer> {
-    One(Contents),
-    Cons(Hash, Contents),
-    Merge(Vec<Hash>, Contents),
-}
-
-#[derive(Debug, Clone)]
-pub struct RawBranch {
-    terms: Star<Referent, NameSegment>,
-    types: Star<Reference, NameSegment>,
-    children: HashMap<NameSegment, Hash>,
-    edits: HashMap<NameSegment, Hash>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Star<K: FromBuffer, V: FromBuffer> {
-    fact: std::collections::HashSet<K>,
-    d1: HashMap<K, V>,
-    d2: HashMap<K, Reference>,
-    d3: HashMap<K, (Reference, Reference)>,
-}
-
 impl<K: FromBuffer, V: FromBuffer> FromBuffer for (K, V) {
     fn get(buf: &mut Buffer) -> Self {
         (buf.get(), buf.get())
@@ -566,22 +545,10 @@ impl<K: FromBuffer + std::hash::Hash + std::cmp::Eq> FromBuffer for std::collect
     }
 }
 
-#[derive(Debug, Clone, std::cmp::Eq, std::hash::Hash, std::cmp::PartialEq)]
-pub struct NameSegment {
-    text: String,
-}
-
 impl FromBuffer for NameSegment {
     fn get(buf: &mut Buffer) -> Self {
         NameSegment { text: buf.get() }
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum Modifier {
-    Structural,
-    Unique(String),
-    Opaque,
 }
 
 impl FromBuffer for Modifier {
@@ -593,13 +560,6 @@ impl FromBuffer for Modifier {
             _ => unreachable!(),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct DataDecl {
-    modifier: Modifier,
-    bound: Vec<Symbol>,
-    constructors: Vec<(Symbol, ABT<Type>)>,
 }
 
 impl FromBuffer for DataDecl {
@@ -616,12 +576,6 @@ impl FromBuffer for DataDecl {
         //     _ => unreachable!()
         // }
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum TypeDecl {
-    Effect(DataDecl),
-    Data(DataDecl),
 }
 
 impl FromBuffer for TypeDecl {

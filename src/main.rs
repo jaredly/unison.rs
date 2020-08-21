@@ -24,12 +24,58 @@ fn load_term(file: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
+fn resolve_branch(
+    root: &std::path::Path,
+    branch: types::Causal<types::RawBranch>,
+) -> std::io::Result<types::RawBranch> {
+    match branch {
+        types::Causal::One(c) => Ok(c),
+        types::Causal::Cons(h, mut b) => {
+            let mut p = std::path::PathBuf::from(root);
+            p.push(h.to_string() + ".ub");
+            // println!("Resolve: {:?}", p);
+            b.merge(&resolve_branch(
+                root,
+                parser::Buffer::from_file(p.as_path())?.get_branch(),
+            )?);
+            Ok(b)
+        }
+        types::Causal::Merge(hashes, mut b) => {
+            for hash in hashes.iter() {
+                let mut p = std::path::PathBuf::from(root);
+                p.push(hash.to_string() + ".ub");
+                b.merge(&resolve_branch(
+                    root,
+                    parser::Buffer::from_file(p.as_path())?.get_branch(),
+                )?)
+            }
+            Ok(b)
+        }
+    }
+}
+
+fn load_full_branch(root: &std::path::Path) -> std::io::Result<types::RawBranch> {
+    let root = std::path::PathBuf::from(root);
+    let mut head = root.clone();
+    head.push("_head");
+    let entries = std::fs::read_dir(head.as_path())?
+        .map(|res| res.map(|e| e.path()))
+        .collect::<Result<Vec<_>, std::io::Error>>()?;
+    // println!("Loading branch {}", )
+    let name = entries[0].file_name().unwrap().to_str().unwrap().to_owned();
+    let mut head = root.clone();
+    head.push(name + ".ub");
+    // println!("Yes: {:?}", head);
+    let head = parser::Buffer::from_file(head.as_path())?.get_branch();
+    resolve_branch(&root, head)
+}
+
 fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
         return Ok(());
     }
     let _result = parser::Buffer::from_file(file)?.get_branch();
-    println!("{:?}", _result);
+    // println!("{:?}", _result);
     Ok(())
 }
 
@@ -50,6 +96,28 @@ fn run_term(file: &std::path::Path) -> std::io::Result<()> {
 
 fn run(file: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
+
+    if path.ends_with("paths") {
+        let base = path.parent().unwrap();
+
+        let _full = load_full_branch(path.as_path())?;
+        println!("Terms {:?}", _full.terms.d1.values());
+        println!("Sub {:?}", _full.children.keys());
+        println!("Terms: {}", _full.terms.d1.len());
+
+        // let entries = std::fs::read_dir(path)?
+        //     .map(|res| res.map(|e| e.path()))
+        //     .collect::<Result<Vec<_>, std::io::Error>>()?;
+
+        // for mut entry in entries {
+        //     println!("Checking folder: {:?}", entry);
+        //     entry.push("compiled.ub");
+        //     let branch = load_branch(entry.as_path())?;
+        // }
+        // println!("Parsed them all");
+        return Ok(());
+    }
+
     if path.ends_with("types") {
         let entries = std::fs::read_dir(path)?
             .map(|res| res.map(|e| e.path()))
