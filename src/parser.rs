@@ -5,11 +5,20 @@ use std::fs::File;
 use std::io::Read;
 
 use super::base32hex;
+use super::types::*;
+
+pub trait FromBuffer {
+    fn get(buf: &mut Buffer) -> Self;
+}
+
+pub trait FromBufferWithEnv {
+    fn get(buf: &mut Buffer, env: &Vec<Symbol>, fvs: &Vec<Symbol>) -> Self;
+}
 
 pub struct Buffer {
     buf: Vec<u8>,
     idx: usize,
-    indent: usize,
+    pub indent: usize,
 }
 
 impl Buffer {
@@ -24,10 +33,37 @@ impl Buffer {
         })
     }
 
-    fn get_n(&mut self, count: usize) -> &[u8] {
+    pub fn get_n(&mut self, count: usize) -> &[u8] {
         self.idx += count;
         let res = &self.buf[self.idx - count..self.idx];
         res
+    }
+
+    pub fn get<T: FromBuffer>(&mut self) -> T {
+        info!(
+            "{}Getting {:?} @ {}",
+            indent(self.indent),
+            std::any::type_name::<T>(),
+            self.idx
+        );
+        self.indent += 1;
+        let res = T::get(self);
+        self.indent -= 1;
+        res
+    }
+
+    pub fn get_with_env<T: FromBufferWithEnv>(
+        &mut self,
+        env: &Vec<Symbol>,
+        fvs: &Vec<Symbol>,
+    ) -> T {
+        info!(
+            "{}Getting with env {:?} @ {}",
+            indent(self.indent),
+            std::any::type_name::<T>(),
+            self.idx
+        );
+        T::get(self, env, fvs)
     }
 
     pub fn get_branch(&mut self) -> Causal<RawBranch> {
@@ -42,29 +78,6 @@ impl Buffer {
     pub fn get_term(&mut self) -> ABT<Term> {
         self.get()
     }
-
-    fn get<T: FromBuffer>(&mut self) -> T {
-        info!(
-            "{}Getting {:?} @ {}",
-            indent(self.indent),
-            std::any::type_name::<T>(),
-            self.idx
-        );
-        self.indent += 1;
-        let res = T::get(self);
-        self.indent -= 1;
-        res
-    }
-
-    fn get_with_env<T: FromBufferWithEnv>(&mut self, env: &Vec<Symbol>, fvs: &Vec<Symbol>) -> T {
-        info!(
-            "{}Getting with env {:?} @ {}",
-            indent(self.indent),
-            std::any::type_name::<T>(),
-            self.idx
-        );
-        T::get(self, env, fvs)
-    }
 }
 
 fn indent(n: usize) -> String {
@@ -73,10 +86,6 @@ fn indent(n: usize) -> String {
         res += "|  ";
     }
     res
-}
-
-pub trait FromBuffer {
-    fn get(buf: &mut Buffer) -> Self;
 }
 
 impl FromBuffer for String {
@@ -162,12 +171,6 @@ impl<T: FromBuffer> FromBuffer for Vec<T> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Symbol {
-    num: usize,
-    text: String,
-}
-
 impl FromBuffer for Symbol {
     fn get(buf: &mut Buffer) -> Self {
         Symbol {
@@ -175,12 +178,6 @@ impl FromBuffer for Symbol {
             text: buf.get(),
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
-pub enum ConstructorType {
-    Data,
-    Effect,
 }
 
 impl FromBuffer for ConstructorType {
@@ -193,9 +190,6 @@ impl FromBuffer for ConstructorType {
         }
     }
 }
-
-#[derive(Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
-pub struct Hash(Vec<u8>);
 
 impl std::fmt::Debug for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
@@ -213,19 +207,10 @@ impl FromBuffer for Hash {
     }
 }
 
-#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
-pub struct Id(Hash, usize, usize);
-
 impl FromBuffer for Id {
     fn get(buf: &mut Buffer) -> Self {
         Id(buf.get(), buf.get(), buf.get())
     }
-}
-
-#[derive(Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
-pub enum Reference {
-    Builtin(String),
-    DerivedId(Id),
 }
 
 impl std::fmt::Debug for Reference {
@@ -248,12 +233,6 @@ impl FromBuffer for Reference {
     }
 }
 
-#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
-pub enum Referent {
-    Ref(Reference),
-    Con(Reference, usize, ConstructorType),
-}
-
 impl FromBuffer for Referent {
     fn get(buf: &mut Buffer) -> Self {
         let tag = buf.get();
@@ -266,9 +245,6 @@ impl FromBuffer for Referent {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct MatchCase(Pattern, Option<Box<ABT<Term>>>, Box<ABT<Term>>);
-
 impl FromBufferWithEnv for MatchCase {
     fn get(buf: &mut Buffer, env: &Vec<Symbol>, fvs: &Vec<Symbol>) -> Self {
         MatchCase(
@@ -277,12 +253,6 @@ impl FromBufferWithEnv for MatchCase {
             buf.get_with_env(env, fvs),
         )
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum Kind {
-    Star,
-    Arrow(Box<Kind>, Box<Kind>),
 }
 
 impl FromBuffer for Kind {
@@ -294,24 +264,6 @@ impl FromBuffer for Kind {
             _ => unreachable!("Kind tag {}", tag),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum Pattern {
-    Unbound,
-    Var,
-    Boolean(bool),
-    Int(i64),
-    Nat(u64),
-    Float(f64),
-    Text(String),
-    Char(char),
-    Cosntructor(Reference, usize, Vec<Pattern>),
-    As(Box<Pattern>),
-    EffectPure(Box<Pattern>),
-    EffectBind(Reference, usize, Vec<Pattern>, Box<Pattern>),
-    SequenceLiteral(Vec<Pattern>),
-    SequenceOp(Box<Pattern>, SeqOp, Box<Pattern>),
 }
 
 impl FromBuffer for Pattern {
@@ -338,13 +290,6 @@ impl FromBuffer for Pattern {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum SeqOp {
-    Cons,
-    Snoc,
-    Concat,
-}
-
 impl FromBuffer for SeqOp {
     fn get(buf: &mut Buffer) -> Self {
         let tag: u8 = buf.get();
@@ -355,64 +300,6 @@ impl FromBuffer for SeqOp {
             _ => unreachable!("Kind tag {}", tag),
         }
     }
-}
-
-// Base functor for types in the Unison language
-#[derive(Debug, Clone)]
-pub enum Type {
-    Ref(Reference),
-    Arrow(Box<ABT<Type>>, Box<ABT<Type>>),
-    Ann(Box<ABT<Type>>, Kind),
-    App(Box<ABT<Type>>, Box<ABT<Type>>),
-    Effect(Box<ABT<Type>>, Box<ABT<Type>>),
-    Effects(Vec<ABT<Type>>),
-    Forall(Box<ABT<Type>>),
-    //  binder like ∀, used to introduce variables that are
-    //  bound by outer type signatures, to support scoped type
-    //  variables
-    IntroOuter(Box<ABT<Type>>),
-}
-
-#[derive(Clone)]
-pub enum Term {
-    Int(i64),
-    Nat(u64),
-    Float(f64),
-    Boolean(bool),
-    Text(String),
-    Char(char),
-    Blank,
-    Ref(Reference),
-
-    Constructor(Reference, usize),
-    Request(Reference, usize),
-    Handle(Box<ABT<Term>>, Box<ABT<Term>>),
-    App(Box<ABT<Term>>, Box<ABT<Term>>),
-    Ann(Box<ABT<Term>>, ABT<Type>),
-    Sequence(Vec<Box<ABT<Term>>>),
-    If(Box<ABT<Term>>, Box<ABT<Term>>, Box<ABT<Term>>),
-    And(Box<ABT<Term>>, Box<ABT<Term>>),
-    Or(Box<ABT<Term>>, Box<ABT<Term>>),
-    Lam(Box<ABT<Term>>),
-    //   -- Note: let rec blocks have an outer ABT.Cycle which introduces as many
-    //   -- variables as there are bindings
-    LetRec(bool, Vec<Box<ABT<Term>>>, Box<ABT<Term>>),
-    //   -- Note: first parameter is the binding, second is the expression which may refer
-    //   -- to this let bound variable. Constructed as `Let b (abs v e)`
-    Let(bool, Box<ABT<Term>>, Box<ABT<Term>>),
-    //   -- Pattern matching / eliminating data types, example:
-    //   --  case x of
-    //   --    Just n -> rhs1
-    //   --    Nothing -> rhs2
-    //   --
-    //   -- translates to
-    //   --
-    //   --   Match x
-    //   --     [ (Constructor 0 [Var], ABT.abs n rhs1)
-    //   --     , (Constructor 1 [], rhs2) ]
-    Match(Box<ABT<Term>>, Vec<MatchCase>),
-    TermLink(Referent),
-    TypeLink(Reference),
 }
 
 impl std::fmt::Debug for Term {
@@ -445,10 +332,6 @@ impl std::fmt::Debug for Term {
             Term::TypeLink(a) => f.write_fmt(format_args!("typeLink {:?}", a)),
         }
     }
-}
-
-trait FromBufferWithEnv {
-    fn get(buf: &mut Buffer, env: &Vec<Symbol>, fvs: &Vec<Symbol>) -> Self;
 }
 
 impl<T: FromBuffer> FromBuffer for Box<T> {
@@ -546,14 +429,6 @@ impl FromBufferWithEnv for Term {
             _ => panic!("Failed {}", tag),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum ABT<Content> {
-    Var(Symbol),
-    Cycle(Box<ABT<Content>>),
-    Abs(Symbol, Box<ABT<Content>>),
-    Tm(Content),
 }
 
 impl<Inner: FromBufferWithEnv + std::fmt::Debug> FromBufferWithEnv for ABT<Inner> {

@@ -3,6 +3,7 @@ extern crate env_logger;
 
 mod base32hex;
 mod parser;
+mod types;
 
 fn load_type(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
