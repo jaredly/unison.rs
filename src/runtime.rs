@@ -185,6 +185,83 @@ impl Eval for Term {
                     Term::PartialNativeApp(name, body) => {
                         match (name.as_str(), body.as_slice(), &two.eval(env, stack)) {
                             ("Int.+", [Term::Int(a)], Term::Int(b)) => Term::Int(a + b),
+                            ("Int.-", [Term::Int(a)], Term::Int(b)) => Term::Int(a - b),
+                            ("Int.*", [Term::Int(a)], Term::Int(b)) => Term::Int(a * b),
+                            ("Int./", [Term::Int(a)], Term::Int(b)) => Term::Int(a / b),
+                            ("Int.<", [Term::Int(a)], Term::Int(b)) => Term::Boolean(*a < *b),
+                            ("Int.<=", [Term::Int(a)], Term::Int(b)) => Term::Boolean(*a <= *b),
+                            ("Int.>", [Term::Int(a)], Term::Int(b)) => Term::Boolean(*a > *b),
+                            ("Int.>=", [Term::Int(a)], Term::Int(b)) => Term::Boolean(*a >= *b),
+                            ("Int.==", [Term::Int(a)], Term::Int(b)) => Term::Boolean(*a == *b),
+                            ("Int.and", [Term::Int(a)], Term::Int(b)) => Term::Int(a & b),
+                            ("Int.or", [Term::Int(a)], Term::Int(b)) => Term::Int(a | b),
+                            ("Int.xor", [Term::Int(a)], Term::Int(b)) => Term::Int(a ^ b),
+                            ("Int.mod", [Term::Int(a)], Term::Int(b)) => Term::Int(a % b),
+                            ("Int.pow", [Term::Int(a)], Term::Nat(b)) => {
+                                Term::Int(a.pow(*b as u32))
+                            }
+                            ("Int.shiftLeft", [Term::Int(a)], Term::Nat(b)) => {
+                                Term::Int(a >> *b as u32)
+                            }
+                            ("Int.shiftRight", [Term::Int(a)], Term::Nat(b)) => {
+                                Term::Int(a << *b as u32)
+                            }
+
+                            ("Nat.+", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a + b),
+                            ("Nat.*", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a * b),
+                            ("Nat./", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a / b),
+                            ("Nat.>", [Term::Nat(a)], Term::Nat(b)) => Term::Boolean(*a > *b),
+                            ("Nat.>=", [Term::Nat(a)], Term::Nat(b)) => Term::Boolean(*a >= *b),
+                            ("Nat.<", [Term::Nat(a)], Term::Nat(b)) => Term::Boolean(*a < *b),
+                            ("Nat.<=", [Term::Nat(a)], Term::Nat(b)) => Term::Boolean(*a <= *b),
+                            ("Nat.==", [Term::Nat(a)], Term::Nat(b)) => Term::Boolean(*a == *b),
+                            ("Nat.and", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a & b),
+                            ("Nat.or", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a | b),
+                            ("Nat.xor", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a ^ b),
+                            ("Nat.mod", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a % b),
+                            ("Nat.pow", [Term::Nat(a)], Term::Nat(b)) => {
+                                Term::Nat(a.pow(*b as u32))
+                            }
+                            ("Nat.shiftLeft", [Term::Nat(a)], Term::Nat(b)) => {
+                                Term::Nat(a >> *b as u32)
+                            }
+                            ("Nat.shiftRight", [Term::Nat(a)], Term::Nat(b)) => {
+                                Term::Nat(a << *b as u32)
+                            }
+
+                            // , ("Nat.drop", 2, DropN (Slot 1) (Slot 0))
+                            // , ("Nat.sub", 2, SubN (Slot 1) (Slot 0))
+                            // , ("Nat.mod", 2, ModN (Slot 1) (Slot 0))
+                            // , ("Nat.pow", 2, PowN (Slot 1) (Slot 0))
+                            ("Float.+", [Term::Float(a)], Term::Float(b)) => Term::Float(a + b),
+                            ("Float.-", [Term::Float(a)], Term::Float(b)) => Term::Float(a - b),
+                            ("Float.*", [Term::Float(a)], Term::Float(b)) => Term::Float(a * b),
+                            ("Float./", [Term::Float(a)], Term::Float(b)) => Term::Float(a / b),
+                            ("Float.<", [Term::Float(a)], Term::Float(b)) => Term::Boolean(*a < *b),
+                            ("Float.<=", [Term::Float(a)], Term::Float(b)) => {
+                                Term::Boolean(*a <= *b)
+                            }
+                            ("Float.>", [Term::Float(a)], Term::Float(b)) => Term::Boolean(*a > *b),
+                            ("Float.>=", [Term::Float(a)], Term::Float(b)) => {
+                                Term::Boolean(*a >= *b)
+                            }
+                            ("Float.==", [Term::Float(a)], Term::Float(b)) => {
+                                Term::Boolean(*a == *b)
+                            }
+
+                            ("Universal.==", [one], two) => Term::Boolean(one == two),
+                            ("Universal.>", [one], two) => Term::Boolean(one > two),
+                            ("Universal.<", [one], two) => Term::Boolean(one < two),
+                            ("Universal.>=", [one], two) => Term::Boolean(one >= two),
+                            ("Universal.<=", [one], two) => Term::Boolean(one <= two),
+                            ("Universal.compare", [one], two) => Term::Int(if one < two {
+                                -1
+                            } else if one > two {
+                                1
+                            } else {
+                                0
+                            }),
+
                             // , ("Universal.compare", 2, CompareU (Slot 1) (Slot 0))
                             (a, b, c) => unreachable!(
                                 "Native app, we dont have more than two args {} - {:?} - {:?}",
@@ -195,6 +272,16 @@ impl Eval for Term {
 
                     Term::Ref(Reference::Builtin(builtin)) => {
                         match (builtin.as_str(), two.eval(env, stack)) {
+                            ("Int.increment", Term::Int(i)) => Term::Int(i + 1),
+                            ("Int.negate", Term::Int(i)) => Term::Int(-i),
+                            ("Int.isEven", Term::Int(i)) => Term::Boolean(i % 2 == 0),
+                            ("Int.isOdd", Term::Int(i)) => Term::Boolean(i % 2 == 1),
+                            ("Nat.increment", Term::Nat(i)) => Term::Nat(i + 1),
+                            ("Nat.isEvent", Term::Nat(i)) => Term::Boolean(i % 2 == 0),
+                            ("Nat.isOdd", Term::Nat(i)) => Term::Boolean(i % 2 == 1),
+                            ("Nat.toInt", Term::Nat(i)) => Term::Int(i as i64),
+                            ("Boolean.not", Term::Boolean(i)) => Term::Boolean(!i),
+
                             (builtin, two) => Term::PartialNativeApp(builtin.to_owned(), vec![two]),
                         }
                     }
