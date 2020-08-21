@@ -1,8 +1,10 @@
-use std::env;
+// use std::env;
 extern crate env_logger;
 
 mod base32hex;
+mod env;
 mod parser;
+mod pattern;
 mod runtime;
 mod types;
 
@@ -129,13 +131,13 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
 
 fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<()> {
     println!("Running {:?} - {}", terms_path, hash);
-    let mut env = runtime::Env::init(terms_path.parent().unwrap());
+    let mut env = env::Env::init(terms_path.parent().unwrap());
     // let hash_name = file.file_name().unwrap().to_str().unwrap();
     let res = env.load(hash);
     use runtime::Eval;
     let ret = res.eval(
         &mut env,
-        &runtime::Stack(vec![runtime::Frame::new(hash.to_owned())]),
+        &env::Stack(vec![env::Frame::new(hash.to_owned())]),
     );
     // let result = parser::Buffer::from_file(file)?.get_term();
     println!("{:?}", res);
@@ -249,7 +251,7 @@ fn run(file: &String) -> std::io::Result<()> {
 fn main() -> std::io::Result<()> {
     env_logger::init();
     println!("Hello, world!");
-    match env::args().collect::<Vec<String>>().as_slice() {
+    match std::env::args().collect::<Vec<String>>().as_slice() {
         [_, cmd, path] if cmd == "test" => run_test(path),
         [_, file] => run(file),
         _ => {
