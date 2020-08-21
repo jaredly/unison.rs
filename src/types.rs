@@ -49,7 +49,7 @@ pub enum Pattern {
     Float(f64),
     Text(String),
     Char(char),
-    Cosntructor(Reference, usize, Vec<Pattern>),
+    Constructor(Reference, usize, Vec<Pattern>),
     As(Box<Pattern>),
     EffectPure(Box<Pattern>),
     EffectBind(Reference, usize, Vec<Pattern>, Box<Pattern>),
@@ -92,6 +92,7 @@ pub enum Term {
     Ref(Reference),
 
     PartialNativeApp(String, Vec<Term>),
+    PartialConstructor(Reference, usize, Vec<Term>),
 
     Constructor(Reference, usize),
     Request(Reference, usize),

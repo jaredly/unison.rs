@@ -30,6 +30,77 @@ I like that.
 
 */
 
+impl Pattern {
+    fn match_(&self, term: &Term) -> Option<Vec<Term>> {
+        match (self, term) {
+            (Pattern::Unbound, _) => Some(vec![]),
+            (Pattern::Var, t) => Some(vec![t.clone()]),
+            (Pattern::Boolean(a), Term::Boolean(b)) if a == b => Some(vec![]),
+            (Pattern::Int(a), Term::Int(b)) if a == b => Some(vec![]),
+            (Pattern::Constructor(reference, number, children), mut inner) => {
+                let mut all = vec![];
+                if children.len() > 0 {
+                    match inner {
+                        Term::PartialConstructor(r, n, pchildren)
+                            if r == reference && n == number =>
+                        {
+                            if pchildren.len() != children.len() {
+                                return None;
+                            }
+                            for i in 0..children.len() {
+                                match children[i].match_(&pchildren[i]) {
+                                    None => return None,
+                                    Some(v) => {
+                                        all.extend(v);
+                                    }
+                                }
+                            }
+                            return Some(all);
+                        }
+                        _ => return None,
+                    }
+                }
+
+                match inner {
+                    Term::Constructor(r, n) if r == reference && n == n => Some(all),
+                    _ => None,
+                }
+                //
+            }
+            _ => None,
+        }
+    }
+    fn matches(
+        &self,
+        term: &Term,
+        where_term: &Option<Box<ABT<Term>>>,
+        env: &mut Env,
+        stack: &Stack,
+    ) -> Option<Vec<Term>> {
+        let bindings = self.match_(term);
+        //let bindings = match (self, term) {
+        //    (Pattern::Unbound, _) => Some(vec![]),
+        //    (Pattern::Var, t) => Some(vec![t.clone()]),
+        //    (Pattern::Boolean(a), Term::Boolean(b)) if a == b => Some(vec![]),
+        //    (Pattern::Int(a), Term::Int(b)) if a == b => Some(vec![]),
+        //    (Pattern::Constructor(reference, number, children), Term::Constructor(breference, bnumber, bchildren)) if breference == reference && bnumber == number => {
+        //        //
+        //    }
+        //    _ => None
+        //};
+        match bindings {
+            None => None,
+            Some(bindings) => match where_term {
+                None => Some(bindings),
+                Some(inner) => match inner.eval_with_bindings(env, stack, bindings.clone()) {
+                    Term::Boolean(true) => Some(bindings),
+                    _ => None,
+                },
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Env {
     // stack: Vec<Frame>,
@@ -84,9 +155,13 @@ impl Stack {
         unreachable!("No term {} found", name);
     }
 
+    fn set(&mut self, k: String, v: Term) {
+        self.0[0].bindings.insert(0, (k, v));
+    }
+
     fn with(&self, k: String, v: Term) -> Self {
         let mut nw = self.clone();
-        nw.0[0].bindings.insert(0, (k, v));
+        nw.set(k, v);
         nw
     }
 }
@@ -110,6 +185,24 @@ impl Frame {
 
 pub trait Eval {
     fn eval(&self, env: &mut Env, stack: &Stack) -> Term;
+}
+
+impl ABT<Term> {
+    fn eval_with_bindings(&self, env: &mut Env, stack: &Stack, bindings: Vec<Term>) -> Term {
+        // let kvs = vec![];
+        let mut body = self;
+        let mut new_stack = stack.clone();
+        for binding in bindings.into_iter() {
+            match body {
+                ABT::Abs(sym, inner) => {
+                    new_stack.set(sym.text.clone(), binding);
+                    body = inner;
+                }
+                _ => unreachable!("NOP"),
+            }
+        }
+        return body.eval(env, &new_stack);
+    }
 }
 
 impl Eval for ABT<Term> {
@@ -157,44 +250,62 @@ impl Eval for Term {
                     // "Bytes.empty" => Term::BYtes(""),
                     _ => self.clone(),
                 }
-            },
+            }
 
             Term::Constructor(_, _) => self.clone(),
             Term::Request(_, _) => unimplemented!("Request {:?}", self),
             Term::Handle(contents, handler) => unimplemented!("Handle {:?}", self),
             Term::LetRec(_, values, body) => unimplemented!("LetRec {:?}", self),
-            Term::Match(arms, body) => unimplemented!("Match {:?}", self),
+            Term::Match(term, arms) => {
+                let term = term.eval(env, stack);
+                for MatchCase(pattern, where_term, body) in arms {
+                    match pattern.matches(&term, where_term, env, &stack) {
+                        None => (),
+                        Some(bindings) => {
+                            return (*body).eval_with_bindings(env, stack, bindings);
+                        }
+                    }
+                }
+                unreachable!("Nothing matched {:?}", term);
+            }
 
             Term::Ann(term, _type) => term.eval(env, stack),
             Term::Sequence(contents) => {
                 let mut res = vec![];
                 for item in contents.iter() {
                     res.push(Box::new(ABT::Tm(item.eval(env, stack))))
-                };
+                }
                 Term::Sequence(res)
-            },
+            }
             Term::If(one, two, three) => match one.eval(env, stack) {
                 Term::Boolean(true) => two.eval(env, stack),
                 Term::Boolean(false) => three.eval(env, stack),
                 _ => unreachable!("If with not a bool {:?}", self),
-            }
+            },
             Term::And(one, two) => match (one.eval(env, stack), two.eval(env, stack)) {
                 (Term::Boolean(a), Term::Boolean(b)) => Term::Boolean(a && b),
-                (a, b) => unreachable!("and not bool {:?} and {:?}", a, b)
-            }
+                (a, b) => unreachable!("and not bool {:?} and {:?}", a, b),
+            },
             Term::Or(one, two) => match (one.eval(env, stack), two.eval(env, stack)) {
                 (Term::Boolean(a), Term::Boolean(b)) => Term::Boolean(a || b),
-                (a, b) => unreachable!("or not bool {:?} and {:?}", a, b)
-            }
-            Term::Lam(contents) => Term::Lam(Box::new(ABT::Tm(contents.eval(env, stack)))),
+                (a, b) => unreachable!("or not bool {:?} and {:?}", a, b),
+            },
+            // Term::Lam(contents) => Term::Lam(Box::new(ABT::Tm(contents.eval(env, stack)))),
+            Term::Lam(_) => self.clone(),
             // Term::LetRec(
-            
             Term::App(one, two) => {
                 let one = one.eval(env, stack);
                 match one {
+                    Term::Constructor(r, u) => {
+                        Term::PartialConstructor(r, u, vec![two.eval(env, stack)])
+                    }
+                    Term::PartialConstructor(r, u, c) => {
+                        let mut c = c.clone();
+                        c.push(two.eval(env, stack));
+                        Term::PartialConstructor(r, u, c)
+                    }
                     Term::PartialNativeApp(name, body) => {
                         match (name.as_str(), body.as_slice(), &two.eval(env, stack)) {
-
                             ("Int.+", [Term::Int(a)], Term::Int(b)) => Term::Int(a + b),
                             ("Int.-", [Term::Int(a)], Term::Int(b)) => Term::Int(a - b),
                             ("Int.*", [Term::Int(a)], Term::Int(b)) => Term::Int(a * b),
@@ -208,9 +319,15 @@ impl Eval for Term {
                             ("Int.or", [Term::Int(a)], Term::Int(b)) => Term::Int(a | b),
                             ("Int.xor", [Term::Int(a)], Term::Int(b)) => Term::Int(a ^ b),
                             ("Int.mod", [Term::Int(a)], Term::Int(b)) => Term::Int(a % b),
-                            ("Int.pow", [Term::Int(a)], Term::Nat(b)) => Term::Int(a.pow(*b as u32)),
-                            ("Int.shiftLeft", [Term::Int(a)], Term::Nat(b)) => Term::Int(a >> *b as u32),
-                            ("Int.shiftRight", [Term::Int(a)], Term::Nat(b)) => Term::Int(a << *b as u32),
+                            ("Int.pow", [Term::Int(a)], Term::Nat(b)) => {
+                                Term::Int(a.pow(*b as u32))
+                            }
+                            ("Int.shiftLeft", [Term::Int(a)], Term::Nat(b)) => {
+                                Term::Int(a >> *b as u32)
+                            }
+                            ("Int.shiftRight", [Term::Int(a)], Term::Nat(b)) => {
+                                Term::Int(a << *b as u32)
+                            }
 
                             ("Nat.+", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a + b),
                             ("Nat.*", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a * b),
@@ -224,42 +341,53 @@ impl Eval for Term {
                             ("Nat.or", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a | b),
                             ("Nat.xor", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a ^ b),
                             ("Nat.mod", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a % b),
-                            ("Nat.pow", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a.pow(*b as u32)),
-                            ("Nat.shiftLeft", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a >> *b as u32),
-                            ("Nat.shiftRight", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a << *b as u32),
+                            ("Nat.pow", [Term::Nat(a)], Term::Nat(b)) => {
+                                Term::Nat(a.pow(*b as u32))
+                            }
+                            ("Nat.shiftLeft", [Term::Nat(a)], Term::Nat(b)) => {
+                                Term::Nat(a >> *b as u32)
+                            }
+                            ("Nat.shiftRight", [Term::Nat(a)], Term::Nat(b)) => {
+                                Term::Nat(a << *b as u32)
+                            }
 
                             // , ("Nat.drop", 2, DropN (Slot 1) (Slot 0))
                             // , ("Nat.sub", 2, SubN (Slot 1) (Slot 0))
                             // , ("Nat.mod", 2, ModN (Slot 1) (Slot 0))
                             // , ("Nat.pow", 2, PowN (Slot 1) (Slot 0))
-
                             ("Float.+", [Term::Float(a)], Term::Float(b)) => Term::Float(a + b),
                             ("Float.-", [Term::Float(a)], Term::Float(b)) => Term::Float(a - b),
                             ("Float.*", [Term::Float(a)], Term::Float(b)) => Term::Float(a * b),
                             ("Float./", [Term::Float(a)], Term::Float(b)) => Term::Float(a / b),
                             ("Float.<", [Term::Float(a)], Term::Float(b)) => Term::Boolean(*a < *b),
-                            ("Float.<=", [Term::Float(a)], Term::Float(b)) => Term::Boolean(*a <= *b),
+                            ("Float.<=", [Term::Float(a)], Term::Float(b)) => {
+                                Term::Boolean(*a <= *b)
+                            }
                             ("Float.>", [Term::Float(a)], Term::Float(b)) => Term::Boolean(*a > *b),
-                            ("Float.>=", [Term::Float(a)], Term::Float(b)) => Term::Boolean(*a >= *b),
-                            ("Float.==", [Term::Float(a)], Term::Float(b)) => Term::Boolean(*a == *b),
+                            ("Float.>=", [Term::Float(a)], Term::Float(b)) => {
+                                Term::Boolean(*a >= *b)
+                            }
+                            ("Float.==", [Term::Float(a)], Term::Float(b)) => {
+                                Term::Boolean(*a == *b)
+                            }
 
                             ("Universal.==", [one], two) => Term::Boolean(one == two),
                             ("Universal.>", [one], two) => Term::Boolean(one > two),
                             ("Universal.<", [one], two) => Term::Boolean(one < two),
                             ("Universal.>=", [one], two) => Term::Boolean(one >= two),
                             ("Universal.<=", [one], two) => Term::Boolean(one <= two),
-                            ("Universal.compare", [one], two) => Term::Int(
-                                if one < two {
-                                    -1
-                                } else if one > two {
-                                    1
-                                } else {
-                                    0
-                                }
-                            ),
+                            ("Universal.compare", [one], two) => Term::Int(if one < two {
+                                -1
+                            } else if one > two {
+                                1
+                            } else {
+                                0
+                            }),
                             // , ("Universal.compare", 2, CompareU (Slot 1) (Slot 0))
-
-                            (a, b, c) => unreachable!("Native app, we dont have more than two args {} - {:?} - {:?}", a, b, c),
+                            (a, b, c) => unreachable!(
+                                "Native app, we dont have more than two args {} - {:?} - {:?}",
+                                a, b, c
+                            ),
                         }
                     }
 
@@ -285,7 +413,7 @@ impl Eval for Term {
                             // , ("Nat.complement", 1, ComplementN (Slot 0))
                             // , ("Nat.leadingZeros", 1, LeadZeroN (Slot 0))
                             // , ("Nat.trailingZeros", 1, TrailZeroN (Slot 0))
-                            (builtin, two) => Term::PartialNativeApp(builtin.to_owned(), vec![two])
+                            (builtin, two) => Term::PartialNativeApp(builtin.to_owned(), vec![two]),
                         }
                     }
                     Term::Lam(contents) => match &*contents {

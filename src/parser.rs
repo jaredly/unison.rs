@@ -283,7 +283,7 @@ impl FromBuffer for Pattern {
             3 => Pattern::Int(buf.get()),
             4 => Pattern::Nat(buf.get()),
             5 => Pattern::Float(buf.get()),
-            6 => Pattern::Cosntructor(buf.get(), buf.get(), buf.get()),
+            6 => Pattern::Constructor(buf.get(), buf.get(), buf.get()),
             7 => Pattern::As(buf.get()),
             8 => Pattern::EffectPure(buf.get()),
             9 => Pattern::EffectBind(buf.get(), buf.get(), buf.get(), buf.get()),
@@ -321,6 +321,9 @@ impl std::fmt::Debug for Term {
             Term::PartialNativeApp(_, _) => f.write_str("<blank>"),
             Term::Ref(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::Constructor(i, n) => f.write_fmt(format_args!("[constructor]{:?}#{}", i, n)),
+            Term::PartialConstructor(i, n, _) => {
+                f.write_fmt(format_args!("[partial-constructor]{:?}#{}", i, n))
+            }
             Term::Request(i, n) => f.write_fmt(format_args!("[request]{:?}#{}", i, n)),
             Term::Handle(i, n) => f.write_fmt(format_args!("handle {:?} with {:?}", i, n)),
             Term::App(i, n) => f.write_fmt(format_args!("{:?} <app> {:?}", i, n)),
