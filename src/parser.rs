@@ -34,6 +34,11 @@ impl Buffer {
         self.get()
     }
 
+    pub fn get_type(&mut self) -> TypeDecl {
+        println!("Getting type");
+        self.get()
+    }
+
     pub fn get_term(&mut self) -> ABT<Term> {
         self.get()
     }
@@ -45,7 +50,10 @@ impl Buffer {
             std::any::type_name::<T>(),
             self.idx
         );
-        T::get(self)
+        self.indent += 1;
+        let res = T::get(self);
+        self.indent -= 1;
+        res
     }
 
     fn get_with_env<T: FromBufferWithEnv>(&mut self, env: &Vec<Symbol>, fvs: &Vec<Symbol>) -> T {
@@ -191,7 +199,8 @@ pub struct Hash(Vec<u8>);
 
 impl std::fmt::Debug for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        f.write_str(&base32hex::encode(&self.0))
+        f.write_str("#")?;
+        f.write_str(&base32hex::encode(&self.0[0..4]))
     }
 }
 
@@ -213,10 +222,19 @@ impl FromBuffer for Id {
     }
 }
 
-#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
+#[derive(Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
 pub enum Reference {
     Builtin(String),
     DerivedId(Id),
+}
+
+impl std::fmt::Debug for Reference {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Reference::Builtin(name) => f.write_str(name),
+            Reference::DerivedId(id) => f.write_str(&format!("{:?}", id.0)),
+        }
+    }
 }
 
 impl FromBuffer for Reference {
@@ -355,7 +373,7 @@ pub enum Type {
     IntroOuter(Box<ABT<Type>>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Term {
     Int(i64),
     Nat(u64),
@@ -395,6 +413,38 @@ pub enum Term {
     Match(Box<ABT<Term>>, Vec<MatchCase>),
     TermLink(Referent),
     TypeLink(Reference),
+}
+
+impl std::fmt::Debug for Term {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Term::Int(i) => f.write_fmt(format_args!("{}", i)),
+            Term::Nat(i) => f.write_fmt(format_args!("{}", i)),
+            Term::Float(i) => f.write_fmt(format_args!("{}", i)),
+            Term::Boolean(i) => f.write_fmt(format_args!("{}", i)),
+            Term::Text(i) => f.write_fmt(format_args!("{:?}", i)),
+            Term::Char(i) => f.write_fmt(format_args!("{:?}", i)),
+            Term::Blank => f.write_str("<blank>"),
+            Term::Ref(i) => f.write_fmt(format_args!("{:?}", i)),
+            Term::Constructor(i, n) => f.write_fmt(format_args!("[constructor]{:?}#{}", i, n)),
+            Term::Request(i, n) => f.write_fmt(format_args!("[request]{:?}#{}", i, n)),
+            Term::Handle(i, n) => f.write_fmt(format_args!("handle {:?} with {:?}", i, n)),
+            Term::App(i, n) => f.write_fmt(format_args!("{:?} <app> {:?}", i, n)),
+            Term::Ann(i, n) => f.write_fmt(format_args!("{:?} :: {:?}", i, n)),
+            Term::Sequence(i) => f.write_fmt(format_args!("{:?}", i)),
+            Term::If(i, a, b) => {
+                f.write_fmt(format_args!("if {:?} then\n{:?}\nelse\n{:?}", i, a, b))
+            }
+            Term::And(a, b) => f.write_fmt(format_args!("{:?} && {:?}", a, b)),
+            Term::Or(a, b) => f.write_fmt(format_args!("{:?} || {:?}", a, b)),
+            Term::Lam(a) => f.write_fmt(format_args!("-> {:?}", a)),
+            Term::LetRec(_, a, b) => f.write_fmt(format_args!("let(rec) {:?} in {:?}", a, b)),
+            Term::Let(_, a, b) => f.write_fmt(format_args!("let {:?} in {:?}", a, b)),
+            Term::Match(a, b) => f.write_fmt(format_args!("match {:?} with {:?}", a, b)),
+            Term::TermLink(a) => f.write_fmt(format_args!("termLink {:?}", a)),
+            Term::TypeLink(a) => f.write_fmt(format_args!("typeLink {:?}", a)),
+        }
+    }
 }
 
 trait FromBufferWithEnv {
@@ -439,7 +489,7 @@ impl<T: FromBufferWithEnv> FromBufferWithEnv for Vec<T> {
 impl FromBufferWithEnv for Type {
     fn get(buf: &mut Buffer, env: &Vec<Symbol>, fvs: &Vec<Symbol>) -> Self {
         let tag = u8::get(buf);
-        info!("Type ({})", tag);
+        info!("{}Type ({})", indent(buf.indent), tag);
         match tag {
             0 => Type::Ref(buf.get()),
             1 => Type::Arrow(buf.get_with_env(env, fvs), buf.get_with_env(env, fvs)),
@@ -641,3 +691,91 @@ impl FromBuffer for NameSegment {
         NameSegment { text: buf.get() }
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum Modifier {
+    Structural,
+    Unique(String),
+    Opaque,
+}
+
+impl FromBuffer for Modifier {
+    fn get(buf: &mut Buffer) -> Self {
+        let tag = buf.get();
+        match tag {
+            0_u8 => Modifier::Structural,
+            1_u8 => Modifier::Unique(buf.get()),
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DataDecl {
+    modifier: Modifier,
+    bound: Vec<Symbol>,
+    constructors: Vec<(Symbol, ABT<Type>)>,
+}
+
+impl FromBuffer for DataDecl {
+    fn get(buf: &mut Buffer) -> Self {
+        DataDecl {
+            modifier: buf.get(),
+            bound: buf.get(),
+            constructors: buf.get(),
+        }
+        // let tag = buf.get();
+        // match tag {
+        //     0_u8 => TypeDecl::Effect(buf.get()),
+        //     1_u8 => TypeDecl::Data(buf.get()),
+        //     _ => unreachable!()
+        // }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TypeDecl {
+    Effect(DataDecl),
+    Data(DataDecl),
+}
+
+impl FromBuffer for TypeDecl {
+    fn get(buf: &mut Buffer) -> Self {
+        let tag = buf.get();
+        match tag {
+            0_u8 => TypeDecl::Effect(buf.get()),
+            1_u8 => TypeDecl::Data(buf.get()),
+            _ => unreachable!(),
+        }
+    }
+}
+
+// (V1.getEither
+//   (V1.getEffectDeclaration getV getA)
+//   (V1.getDataDeclaration getV getA))
+// (declPath root h)
+
+// getDataDeclaration :: (MonadGet m, Ord v) => m v -> m a -> m (DataDeclaration v a)
+// getDataDeclaration getV getA = DataDeclaration.DataDeclaration <$>
+//   getModifier <*>
+//   getA <*>
+//   getList getV <*>
+//   getList (getTuple3 getA getV (getType getV getA))
+
+// getEffectDeclaration :: (MonadGet m, Ord v) => m v -> m a -> m (EffectDeclaration v a)
+// getEffectDeclaration getV getA =
+//   DataDeclaration.EffectDeclaration <$> getDataDeclaration getV getA
+
+// data Modifier = Structural | Unique Text --  | Opaque (Set Reference)
+//   deriving (Eq, Ord, Show)
+
+// data DataDeclaration v a = DataDeclaration {
+//   modifier :: Modifier,
+//   annotation :: a,
+//   bound :: [v],
+//   constructors' :: [(a, v, Type v a)]
+// } deriving (Eq, Show, Functor)
+
+// newtype EffectDeclaration v a = EffectDeclaration {
+//   toDataDecl :: DataDeclaration v a
+// } deriving (Eq,Show,Functor)

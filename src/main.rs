@@ -4,6 +4,15 @@ extern crate env_logger;
 mod base32hex;
 mod parser;
 
+fn load_type(file: &std::path::Path) -> std::io::Result<()> {
+    if !file.is_file() {
+        return Ok(());
+    }
+    let _result = parser::Buffer::from_file(file)?.get_type();
+    println!("{:?}", _result);
+    Ok(())
+}
+
 fn load_term(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
         return Ok(());
@@ -24,6 +33,9 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
 
 fn run(file: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
+    if path.parent().unwrap().parent().unwrap().ends_with("types") {
+        return load_type(path.as_path());
+    }
     if file.ends_with("compiled.ub") {
         return load_term(path.as_path());
     }
