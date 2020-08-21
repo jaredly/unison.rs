@@ -38,12 +38,13 @@ fn run_term(file: &std::path::Path) -> std::io::Result<()> {
     let hash_name = file.file_name().unwrap().to_str().unwrap();
     let res = env.load(hash_name.clone());
     use runtime::Eval;
-    res.eval(
+    let ret = res.eval(
         &mut env,
         &runtime::Stack(vec![runtime::Frame::new(hash_name.to_owned())]),
     );
     // let result = parser::Buffer::from_file(file)?.get_term();
     println!("{:?}", res);
+    println!("{:?}", ret);
     Ok(())
 }
 

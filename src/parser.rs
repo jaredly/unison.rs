@@ -191,6 +191,12 @@ impl FromBuffer for ConstructorType {
     }
 }
 
+impl Hash {
+    pub fn to_string(&self) -> String {
+        base32hex::encode(&self.0)
+    }
+}
+
 impl std::fmt::Debug for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         f.write_str("#")?;
@@ -312,6 +318,7 @@ impl std::fmt::Debug for Term {
             Term::Text(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::Char(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::Blank => f.write_str("<blank>"),
+            Term::PartialNativeApp(_, _) => f.write_str("<blank>"),
             Term::Ref(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::Constructor(i, n) => f.write_fmt(format_args!("[constructor]{:?}#{}", i, n)),
             Term::Request(i, n) => f.write_fmt(format_args!("[request]{:?}#{}", i, n)),

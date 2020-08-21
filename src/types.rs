@@ -1,43 +1,45 @@
-#[derive(Debug, Clone)]
+use std::cmp::{Eq, PartialEq, PartialOrd};
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Symbol {
     pub num: usize,
     pub text: String,
 }
 
-#[derive(Debug, Clone, Copy, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
+#[derive(Debug, Clone, Copy, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
 pub enum ConstructorType {
     Data,
     Effect,
 }
 
-#[derive(Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
+#[derive(Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
 pub enum Reference {
     Builtin(String),
     DerivedId(Id),
 }
 
-#[derive(Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
+#[derive(Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
 pub struct Hash(pub Vec<u8>);
 
-#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
+#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
 pub struct Id(pub Hash, pub usize, pub usize);
 
-#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
+#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
 pub enum Referent {
     Ref(Reference),
     Con(Reference, usize, ConstructorType),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct MatchCase(pub Pattern, pub Option<Box<ABT<Term>>>, pub Box<ABT<Term>>);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Kind {
     Star,
     Arrow(Box<Kind>, Box<Kind>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Pattern {
     Unbound,
     Var,
@@ -55,7 +57,7 @@ pub enum Pattern {
     SequenceOp(Box<Pattern>, SeqOp, Box<Pattern>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum SeqOp {
     Cons,
     Snoc,
@@ -63,7 +65,7 @@ pub enum SeqOp {
 }
 
 // Base functor for types in the Unison language
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Type {
     Ref(Reference),
     Arrow(Box<ABT<Type>>, Box<ABT<Type>>),
@@ -78,7 +80,7 @@ pub enum Type {
     IntroOuter(Box<ABT<Type>>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, PartialOrd)]
 pub enum Term {
     Int(i64),
     Nat(u64),
@@ -88,6 +90,8 @@ pub enum Term {
     Char(char),
     Blank,
     Ref(Reference),
+
+    PartialNativeApp(String, Vec<Term>),
 
     Constructor(Reference, usize),
     Request(Reference, usize),
@@ -120,7 +124,7 @@ pub enum Term {
     TypeLink(Reference),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum ABT<Content> {
     Var(Symbol),
     Cycle(Box<ABT<Content>>),
