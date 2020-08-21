@@ -1,5 +1,6 @@
 use byteorder::{BigEndian, ByteOrder};
 use log::info;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 
@@ -27,6 +28,10 @@ impl Buffer {
         self.idx += count;
         let res = &self.buf[self.idx - count..self.idx];
         res
+    }
+
+    pub fn get_branch(&mut self) -> Causal<RawBranch> {
+        self.get()
     }
 
     pub fn get_term(&mut self) -> ABT<Term> {
@@ -62,7 +67,7 @@ fn indent(n: usize) -> String {
     res
 }
 
-trait FromBuffer {
+pub trait FromBuffer {
     fn get(buf: &mut Buffer) -> Self;
 }
 
@@ -121,7 +126,7 @@ impl FromBuffer for usize {
     fn get(buf: &mut Buffer) -> Self {
         // Varint, described here https://developers.google.com/protocol-buffers/docs/encoding#varints
         let word8 = u8::get(buf);
-        info!("{}Getting usize buffer {:x}", indent(buf.indent), word8);
+        info!("{}Getting usize buffer {:08b}", indent(buf.indent), word8);
         let indicator = word8 >> 7;
 
         let res = if indicator == 0 {
@@ -141,7 +146,7 @@ impl<T: FromBuffer> FromBuffer for Vec<T> {
     fn get(buf: &mut Buffer) -> Self {
         let mut res = vec![];
         let length = usize::get(buf);
-        // info!("vec ({} elements)", length);
+        info!("{}vec ({} elements)", indent(buf.indent), length);
         for _ in 0..length {
             res.push(T::get(buf));
         }
@@ -423,6 +428,7 @@ impl<T: FromBufferWithEnv> FromBufferWithEnv for Vec<T> {
     fn get(buf: &mut Buffer, env: &Vec<Symbol>, fvs: &Vec<Symbol>) -> Self {
         let mut res = vec![];
         let length = usize::get(buf);
+        info!("{}env vec ({} elements)", indent(buf.indent), length);
         for _ in 0..length {
             res.push(T::get(buf, env, fvs));
         }
@@ -543,5 +549,87 @@ impl FromBuffer for ABT<Term> {
         let names = Vec::<Symbol>::get(buf);
         info!("{}FVS: {:?}", indent(buf.indent), names);
         buf.get_with_env(&vec![], &names)
+    }
+}
+
+impl<T: FromBuffer> FromBuffer for Causal<T> {
+    fn get(buf: &mut Buffer) -> Self {
+        let tag = buf.get();
+        match tag {
+            0_u8 => Causal::One(buf.get()),
+            1 => Causal::Cons(buf.get(), buf.get()),
+            2 => Causal::Merge(buf.get(), buf.get()),
+            _ => unreachable!("Causal tag {}", tag),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Causal<Contents: FromBuffer> {
+    One(Contents),
+    Cons(Hash, Contents),
+    Merge(Vec<Hash>, Contents),
+}
+
+#[derive(Debug, Clone)]
+pub struct RawBranch {
+    terms: Star<Referent, NameSegment>,
+    types: Star<Reference, NameSegment>,
+    children: HashMap<NameSegment, Hash>,
+    edits: HashMap<NameSegment, Hash>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Star<K: FromBuffer, V: FromBuffer> {
+    fact: Vec<K>,
+    d1: Vec<(K, V)>,
+    d2: Vec<(K, Reference)>,
+    d3: Vec<(K, (Reference, Reference))>,
+}
+
+impl<K: FromBuffer, V: FromBuffer> FromBuffer for (K, V) {
+    fn get(buf: &mut Buffer) -> Self {
+        (buf.get(), buf.get())
+    }
+}
+
+impl<K: FromBuffer, V: FromBuffer> FromBuffer for Star<K, V> {
+    fn get(buf: &mut Buffer) -> Self {
+        Star {
+            fact: buf.get(),
+            d1: buf.get(),
+            d2: buf.get(),
+            d3: buf.get(),
+        }
+    }
+}
+
+impl FromBuffer for RawBranch {
+    fn get(buf: &mut Buffer) -> Self {
+        RawBranch {
+            terms: buf.get(),
+            types: buf.get(),
+            children: buf.get(),
+            edits: buf.get(),
+        }
+    }
+}
+
+impl<K: FromBuffer + std::hash::Hash + std::cmp::Eq, V: FromBuffer> FromBuffer for HashMap<K, V> {
+    fn get(buf: &mut Buffer) -> Self {
+        use std::iter::FromIterator;
+        let items: Vec<(K, V)> = buf.get();
+        HashMap::from_iter(items.into_iter())
+    }
+}
+
+#[derive(Debug, Clone, std::cmp::Eq, std::hash::Hash, std::cmp::PartialEq)]
+pub struct NameSegment {
+    text: String,
+}
+
+impl FromBuffer for NameSegment {
+    fn get(buf: &mut Buffer) -> Self {
+        NameSegment { text: buf.get() }
     }
 }
