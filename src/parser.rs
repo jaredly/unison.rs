@@ -169,7 +169,7 @@ impl FromBuffer for Symbol {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
 pub enum ConstructorType {
     Data,
     Effect,
@@ -186,7 +186,7 @@ impl FromBuffer for ConstructorType {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
 pub struct Hash(Vec<u8>);
 
 impl std::fmt::Debug for Hash {
@@ -204,7 +204,7 @@ impl FromBuffer for Hash {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
 pub struct Id(Hash, usize, usize);
 
 impl FromBuffer for Id {
@@ -213,7 +213,7 @@ impl FromBuffer for Id {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
 pub enum Reference {
     Builtin(String),
     DerivedId(Id),
@@ -230,7 +230,7 @@ impl FromBuffer for Reference {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash)]
 pub enum Referent {
     Ref(Reference),
     Con(Reference, usize, ConstructorType),
@@ -581,10 +581,10 @@ pub struct RawBranch {
 
 #[derive(Debug, Clone)]
 pub struct Star<K: FromBuffer, V: FromBuffer> {
-    fact: Vec<K>,
-    d1: Vec<(K, V)>,
-    d2: Vec<(K, Reference)>,
-    d3: Vec<(K, (Reference, Reference))>,
+    fact: std::collections::HashSet<K>,
+    d1: HashMap<K, V>,
+    d2: HashMap<K, Reference>,
+    d3: HashMap<K, (Reference, Reference)>,
 }
 
 impl<K: FromBuffer, V: FromBuffer> FromBuffer for (K, V) {
@@ -593,7 +593,7 @@ impl<K: FromBuffer, V: FromBuffer> FromBuffer for (K, V) {
     }
 }
 
-impl<K: FromBuffer, V: FromBuffer> FromBuffer for Star<K, V> {
+impl<K: FromBuffer + std::hash::Hash + std::cmp::Eq, V: FromBuffer> FromBuffer for Star<K, V> {
     fn get(buf: &mut Buffer) -> Self {
         Star {
             fact: buf.get(),
@@ -620,6 +620,14 @@ impl<K: FromBuffer + std::hash::Hash + std::cmp::Eq, V: FromBuffer> FromBuffer f
         use std::iter::FromIterator;
         let items: Vec<(K, V)> = buf.get();
         HashMap::from_iter(items.into_iter())
+    }
+}
+
+impl<K: FromBuffer + std::hash::Hash + std::cmp::Eq> FromBuffer for std::collections::HashSet<K> {
+    fn get(buf: &mut Buffer) -> Self {
+        use std::iter::FromIterator;
+        let items: Vec<K> = buf.get();
+        std::collections::HashSet::from_iter(items.into_iter())
     }
 }
 
