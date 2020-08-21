@@ -192,6 +192,12 @@ impl RawBranch {
 }
 
 #[derive(Debug, Clone)]
+pub struct Branch {
+    pub raw: RawBranch,
+    pub children: HashMap<NameSegment, Branch>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Star<K, V> {
     pub fact: std::collections::HashSet<K>,
     pub d1: HashMap<K, V>,

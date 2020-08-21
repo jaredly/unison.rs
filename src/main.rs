@@ -54,6 +54,24 @@ fn resolve_branch(
     }
 }
 
+impl types::Branch {
+    fn load(root: &std::path::PathBuf, hash: String) -> std::io::Result<types::Branch> {
+        let mut head = root.clone();
+        head.push(hash + ".ub");
+        // println!("Yes: {:?}", head);
+        let head = parser::Buffer::from_file(head.as_path())?.get_branch();
+        let head = resolve_branch(&root, head)?;
+        let mut children = std::collections::HashMap::new();
+        for (k, v) in head.children.iter() {
+            children.insert(k.clone(), types::Branch::load(root, v.to_string())?);
+        }
+        Ok(types::Branch {
+            raw: head,
+            children,
+        })
+    }
+}
+
 fn load_full_branch(root: &std::path::Path) -> std::io::Result<types::RawBranch> {
     let root = std::path::PathBuf::from(root);
     let mut head = root.clone();
