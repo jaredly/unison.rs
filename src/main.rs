@@ -33,6 +33,20 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
 
 fn run(file: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
+    if path.ends_with("types") {
+        let entries = std::fs::read_dir(path)?
+            .map(|res| res.map(|e| e.path()))
+            .collect::<Result<Vec<_>, std::io::Error>>()?;
+
+        for mut entry in entries {
+            println!("Checking folder: {:?}", entry);
+            entry.push("compiled.ub");
+            load_type(entry.as_path())?;
+        }
+        println!("Parsed them all");
+        return Ok(());
+    }
+
     if path.parent().unwrap().parent().unwrap().ends_with("types") {
         return load_type(path.as_path());
     }
