@@ -3,6 +3,7 @@ extern crate env_logger;
 
 mod base32hex;
 mod parser;
+mod runtime;
 mod types;
 
 fn load_type(file: &std::path::Path) -> std::io::Result<()> {
@@ -32,6 +33,20 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
+fn run_term(file: &std::path::Path) -> std::io::Result<()> {
+    let mut env = runtime::Env::init(file.parent().unwrap().parent().unwrap());
+    let hash_name = file.file_name().unwrap().to_str().unwrap();
+    let res = env.load(hash_name.clone());
+    use runtime::Eval;
+    res.eval(
+        &mut env,
+        &runtime::Stack(vec![runtime::Frame::new(hash_name.to_owned())]),
+    );
+    // let result = parser::Buffer::from_file(file)?.get_term();
+    println!("{:?}", res);
+    Ok(())
+}
+
 fn run(file: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
     if path.ends_with("types") {
@@ -46,6 +61,10 @@ fn run(file: &String) -> std::io::Result<()> {
         }
         println!("Parsed them all");
         return Ok(());
+    }
+
+    if path.parent().unwrap().ends_with("terms") {
+        return run_term(path.as_path());
     }
 
     if path.parent().unwrap().parent().unwrap().ends_with("types") {
