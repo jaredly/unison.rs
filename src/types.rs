@@ -104,7 +104,8 @@ pub enum Term {
     PartialNativeApp(String, Vec<Term>),
     PartialConstructor(Reference, usize, Vec<Term>),
     ScopedFunction(Box<ABT<Term>>, String, Vec<(String, Term)>),
-    CycleFunction(Box<ABT<Term>>, String, Vec<(String, Term)>, String),
+    // CycleFunction(Box<ABT<Term>>, String, Vec<(String, Term)>, String),
+    Cycle(Box<Term>, Vec<(String, Term)>),
 
     Constructor(Reference, usize),
     Request(Reference, usize),

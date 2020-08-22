@@ -334,9 +334,6 @@ impl std::fmt::Debug for Term {
             Term::PartialNativeApp(_, _) => f.write_str("<blank>"),
             Term::Ref(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::Constructor(i, n) => f.write_fmt(format_args!("[constructor]{:?}#{}", i, n)),
-            // Term::PartialConstructor(i, n, _) => {
-            //     f.write_fmt(format_args!("[partial-constructor]{:?}#{}", i, n))
-            // }
             Term::Request(i, n) => f.write_fmt(format_args!("[request]{:?}#{}", i, n)),
             Term::Handle(i, n) => f.write_fmt(format_args!("handle {:?} with {:?}", i, n)),
             Term::App(i, n) => f.write_fmt(format_args!("{:?} <app> {:?}", i, n)),
@@ -353,6 +350,11 @@ impl std::fmt::Debug for Term {
             Term::Match(a, b) => f.write_fmt(format_args!("match {:?} with {:?}", a, b)),
             Term::TermLink(a) => f.write_fmt(format_args!("termLink {:?}", a)),
             Term::TypeLink(a) => f.write_fmt(format_args!("typeLink {:?}", a)),
+
+            Term::ScopedFunction(contents, term, bindings) => f.write_fmt(format_args!(
+                "[scoped fn | {} | {:?} | {:?} ]",
+                term, bindings, contents
+            )),
             _ => f.write_str("Something Else"),
         }
     }
