@@ -90,6 +90,7 @@ impl Eval for ABT<Term> {
                 let mut names = vec![];
                 let (values, body) = unroll_cycle(inner, &mut names);
                 let mut new_stack = stack.clone();
+                // let
                 for i in 0..names.len() {
                     let f = values[values.len() - 1 - i].eval(env, stack);
                     let f = match f {
