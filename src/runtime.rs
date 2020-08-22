@@ -52,38 +52,61 @@ impl ABT<Term> {
     }
 }
 
-// fn unroll_cycle(
-//     inner: &ABT<Term>,
-//     names: &mut Vec<String>,
-// ) -> (Vec<Box<ABT<Term>>>, Box<ABT<Term>>) {
-//     match inner {
-//         ABT::Abs(sym, inner) => {
-//             names.push(sym.text.clone());
-//             match &**inner {
-//                 ABT::Tm(Term::LetRec(_, things, body)) => (things.clone(), body.clone()),
-//                 _ => unroll_cycle(inner, names),
-//             }
-//         }
-//         _ => unreachable!("Cycle not abs"),
-//     }
-// }
+fn unroll_cycle(
+    inner: &ABT<Term>,
+    names: &mut Vec<String>,
+) -> (Vec<Box<ABT<Term>>>, Box<ABT<Term>>) {
+    match inner {
+        ABT::Abs(sym, inner) => {
+            names.push(sym.text.clone());
+            match &**inner {
+                ABT::Tm(Term::LetRec(_, things, body)) => (things.clone(), body.clone()),
+                _ => unroll_cycle(inner, names),
+            }
+        }
+        _ => unreachable!("Cycle not abs"),
+    }
+}
+/*
+
+mnetal model for recursion-
+
+you have a fn
+thta fn has a scope that it came iwth
+that scope needs to include itself
+so, when you execute the fn
+you first copy it into itself, and then go to town.
+
+yeah sounds easy enough.
+
+*/
 
 impl Eval for ABT<Term> {
     fn eval(&self, env: &mut Env, stack: &Stack) -> Term {
         match self {
             ABT::Var(sym) => stack.lookup(&sym.text),
             ABT::Cycle(inner) => {
-                // let mut names = vec![];
-                // let (values, body) = unroll_cycle(inner, &mut names);
-                // let mut new_stack = stack.clone();
-                // for i in 0..names.len() {
-                //     new_stack.set(
-                //         names[i].clone(),
-                //         values[values.len() - 1 - i].eval(env, stack),
-                //     );
+                println!("Here we have a cucle");
+                let mut names = vec![];
+                let (values, body) = unroll_cycle(inner, &mut names);
+                let mut new_stack = stack.clone();
+                for i in 0..names.len() {
+                    let f = values[values.len() - 1 - i].eval(env, stack);
+                    let f = match f {
+                        Term::ScopedFunction(contents, term, bindings) => {
+                            Term::CycleFunction(contents, term, bindings, names[i].clone())
+                        }
+                        _ => unreachable!("{:?}", f),
+                    };
+                    new_stack.set(names[i].clone(), f);
+                }
+                body.eval(env, &new_stack)
+                // env.cycles.push()
+                // match res {
+                //     Term::ScopedFunction(contents, term, bindings) =>
+                //         Term::CycleFunction(contents, term, bindings, num)
                 // }
-                // body.eval(env, stack)
-                unreachable!("");
+                // unreachable!("");
             }
             ABT::Abs(sym, inner) => unreachable!("Raw abs {}", stack.0[0].term),
             ABT::Tm(inner) => inner.eval(env, stack),
@@ -285,8 +308,31 @@ impl Eval for Term {
                             (builtin, two) => Term::PartialNativeApp(builtin.to_owned(), vec![two]),
                         }
                     }
+                    // Term::CycleFunction(names, )
+                    Term::CycleFunction(contents, term, bindings, self_name) => match &*contents {
+                        ABT::Abs(name, contents) => {
+                            println!("Evaling a cycle: {} : {:?}", self_name, contents);
+                            let two = two.eval(env, stack);
+                            let mut inner_stack = stack.with_frame(term.clone());
+                            for (k, v) in bindings.clone() {
+                                inner_stack.set(k, v);
+                            }
+                            inner_stack.set(
+                                self_name.clone(),
+                                Term::CycleFunction(
+                                    Box::new(ABT::Abs(name.clone(), contents.clone())),
+                                    term,
+                                    bindings,
+                                    self_name,
+                                ),
+                            );
+                            contents.eval(env, &inner_stack.with(name.text.clone(), two))
+                        }
+                        contents => unreachable!("Lam {:?}", contents),
+                    },
                     Term::ScopedFunction(contents, term, bindings) => match &*contents {
                         ABT::Abs(name, contents) => {
+                            println!("Evaling a fn {:?}", contents);
                             let two = two.eval(env, stack);
                             let mut inner_stack = stack.with_frame(term);
                             for (k, v) in bindings {
