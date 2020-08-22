@@ -48,41 +48,42 @@ impl ABT<Term> {
                 _ => unreachable!("NOP"),
             }
         }
-        return body.eval(env, &new_stack);
+        body.eval(env, &new_stack)
     }
 }
 
-fn unroll_cycle(
-    inner: &ABT<Term>,
-    names: &mut Vec<String>,
-) -> (Vec<Box<ABT<Term>>>, Box<ABT<Term>>) {
-    match inner {
-        ABT::Abs(sym, inner) => {
-            names.push(sym.text.clone());
-            match &**inner {
-                ABT::Tm(Term::LetRec(_, things, body)) => (things.clone(), body.clone()),
-                _ => unroll_cycle(inner, names),
-            }
-        }
-        _ => unreachable!("Cycle not abs"),
-    }
-}
+// fn unroll_cycle(
+//     inner: &ABT<Term>,
+//     names: &mut Vec<String>,
+// ) -> (Vec<Box<ABT<Term>>>, Box<ABT<Term>>) {
+//     match inner {
+//         ABT::Abs(sym, inner) => {
+//             names.push(sym.text.clone());
+//             match &**inner {
+//                 ABT::Tm(Term::LetRec(_, things, body)) => (things.clone(), body.clone()),
+//                 _ => unroll_cycle(inner, names),
+//             }
+//         }
+//         _ => unreachable!("Cycle not abs"),
+//     }
+// }
 
 impl Eval for ABT<Term> {
     fn eval(&self, env: &mut Env, stack: &Stack) -> Term {
         match self {
             ABT::Var(sym) => stack.lookup(&sym.text),
             ABT::Cycle(inner) => {
-                let mut names = vec![];
-                let (values, body) = unroll_cycle(inner, &mut names);
-                let mut new_stack = stack.clone();
-                for i in 0..names.len() {
-                    new_stack.set(
-                        names[i].clone(),
-                        values[values.len() - 1 - i].eval(env, stack),
-                    );
-                }
-                body.eval(env, stack)
+                // let mut names = vec![];
+                // let (values, body) = unroll_cycle(inner, &mut names);
+                // let mut new_stack = stack.clone();
+                // for i in 0..names.len() {
+                //     new_stack.set(
+                //         names[i].clone(),
+                //         values[values.len() - 1 - i].eval(env, stack),
+                //     );
+                // }
+                // body.eval(env, stack)
+                unreachable!("");
             }
             ABT::Abs(sym, inner) => unreachable!("Raw abs {}", stack.0[0].term),
             ABT::Tm(inner) => inner.eval(env, stack),
@@ -109,8 +110,8 @@ impl Eval for Term {
             | Term::Blank => self.clone(),
             Term::Let(_, value, contents) => match &**contents {
                 ABT::Abs(name, contents) => {
-                    let val = value.eval(env, stack);
-                    contents.eval(env, &stack.with(name.text.clone(), val))
+                    let value = value.eval(env, stack);
+                    contents.eval(env, &stack.with(name.text.clone(), value))
                 }
                 _ => unreachable!(),
             },
@@ -262,7 +263,6 @@ impl Eval for Term {
                                 0
                             }),
 
-                            // , ("Universal.compare", 2, CompareU (Slot 1) (Slot 0))
                             (a, b, c) => unreachable!(
                                 "Native app, we dont have more than two args {} - {:?} - {:?}",
                                 a, b, c
@@ -303,10 +303,3 @@ impl Eval for Term {
         }
     }
 }
-
-// What things can be moments?
-// Just function applications, I think.
-// Nothing else can be a moment.
-// So as we traverse a term, we count the function applications we encounter.
-
-// So the goodish way to do this would be with an immutable data structure, but we're just gonna clone out the wazoo
