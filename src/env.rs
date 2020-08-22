@@ -1,5 +1,6 @@
 use super::parser;
 use super::types::*;
+use log::info;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -32,7 +33,7 @@ impl Env {
                     full.push("terms");
                     full.push("#".to_owned() + hash);
                     full.push("compiled.ub");
-                    println!("Trying to load {:?}", full);
+                    info!("Trying to load {:?}", full);
                     let res = parser::Buffer::from_file(full.as_path())
                         .unwrap()
                         .get_term();
@@ -58,7 +59,7 @@ impl Stack {
     }
 
     pub fn push(&mut self, k: String, v: Term) {
-        println!(
+        info!(
             "---- Stack push({}) {} {:?}",
             self.0[0].bindings.len(),
             k,
@@ -68,7 +69,7 @@ impl Stack {
     }
 
     pub fn set(&mut self, k: String, v: Term) {
-        println!("---- Stack set({}) {} {:?}", self.0[0].bindings.len(), k, v);
+        info!("---- Stack set({}) {} {:?}", self.0[0].bindings.len(), k, v);
         self.0[0].bindings.insert(0, (k, v));
     }
 
