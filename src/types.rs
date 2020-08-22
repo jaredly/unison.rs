@@ -19,6 +19,12 @@ pub enum Reference {
     DerivedId(Id),
 }
 
+impl Reference {
+    pub fn from_hash(hash: &str) -> Self {
+        Reference::DerivedId(Id(Hash::from_string(hash), 0, 1))
+    }
+}
+
 #[derive(Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
 pub struct Hash(pub Vec<u8>);
 
@@ -97,6 +103,7 @@ pub enum Term {
     Float(f64),
     Boolean(bool),
     Text(String),
+    Bytes(Vec<u64>),
     Char(char),
     Blank,
     Ref(Reference),

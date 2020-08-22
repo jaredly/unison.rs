@@ -118,7 +118,11 @@ pub fn decode(src: &str) -> Vec<u8> {
         }
 
         result.extend(dst);
-        src = src[8..].into();
+        if src.len() > 8 {
+            src = src[8..].into();
+        } else {
+            break;
+        }
     }
 
     return result;

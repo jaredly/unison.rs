@@ -34,6 +34,16 @@ pub trait Eval {
     fn eval(&self, env: &mut Env, stack: &Stack) -> Term;
 }
 
+static option_hash: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
+
+impl From<Term> for ABT<Term> {
+    fn from(term: Term) -> Self {
+        // pub fn from_term(term: Term) -> Box<Self> {
+        ABT::Tm(term)
+        // }
+    }
+}
+
 impl ABT<Term> {
     pub fn eval_with_bindings(&self, env: &mut Env, stack: &Stack, bindings: Vec<Term>) -> Term {
         // let kvs = vec![];
@@ -124,6 +134,7 @@ impl Eval for Term {
             | Term::Char(_)
             | Term::TermLink(_)
             | Term::TypeLink(_)
+            | Term::PartialConstructor(_, _, _)
             | Term::Blank => self.clone(),
             Term::Let(_, value, contents) => match &**contents {
                 ABT::Abs(name, contents) => {
@@ -158,7 +169,10 @@ impl Eval for Term {
                         }
                     }
                 }
-                unreachable!("Nothing matched {:?}\n{:?}", term, arms);
+                unreachable!(
+                    "Nothing matched\n - value: {:?}\n - arms: {:?} - {}",
+                    term, arms, stack.0[0].term
+                );
             }
 
             Term::Ann(term, _type) => term.eval(env, stack),
@@ -225,7 +239,10 @@ impl Eval for Term {
                                 Term::Int(a << *b as u32)
                             }
 
-                            ("Nat.+", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a + b),
+                            ("Nat.+", [Term::Nat(a)], Term::Nat(b)) => {
+                                println!("Nat + {} {}", a, b);
+                                Term::Nat(a + b)
+                            }
                             ("Nat.*", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a * b),
                             ("Nat./", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a / b),
                             ("Nat.>", [Term::Nat(a)], Term::Nat(b)) => Term::Boolean(*a > *b),
@@ -280,6 +297,64 @@ impl Eval for Term {
                                 0
                             }),
 
+                            ("Text.++", [Term::Text(a)], Term::Text(b)) => {
+                                Term::Text(a.to_owned() + b)
+                            }
+                            ("Text.==", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a == b),
+                            ("Text.!=", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a != b),
+                            ("Text.<=", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a <= b),
+                            ("Text.>=", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a >= b),
+                            ("Text.>", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a > b),
+                            ("Text.<", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a < b),
+                            // , mk2 "Text.take" atn att (pure . T) (Text.take . fromIntegral)
+                            // , mk2 "Text.drop" atn att (pure . T) (Text.drop . fromIntegral)
+                            // , mk2 "Text.=="   att att (pure . B) (==)
+                            // , mk2 "Text.!="   att att (pure . B) (/=)
+                            // , mk2 "Text.<="   att att (pure . B) (<=)
+                            // , mk2 "Text.>="   att att (pure . B) (>=)
+                            // , mk2 "Text.>"    att att (pure . B) (>)
+                            // , mk2 "Text.<"    att att (pure . B) (<)
+                            ("List.at", [Term::Nat(a)], Term::Sequence(l)) => {
+                                if a < &(l.len() as u64) {
+                                    Term::PartialConstructor(
+                                        Reference::from_hash(option_hash),
+                                        1,
+                                        vec![l[*a as usize].eval(env, stack)],
+                                    )
+                                // Term::App(
+                                //     Box::new(
+                                //         Term::Constructor(Reference::from_hash(option_hash), 1)
+                                //             .into(),
+                                //     ),
+                                //     Box::new(l[*a as usize].eval(env, stack).into()),
+                                // )
+                                } else {
+                                    Term::Constructor(Reference::from_hash(option_hash), 0)
+                                }
+                            }
+                            // , mk2 "List.at" atn ats (pure . IR.maybeToOptional)
+                            //   $ Sequence.lookup
+                            //   . fromIntegral
+                            // , mk2 "List.cons" at  ats (pure . Sequence) (Sequence.<|)
+                            // , mk2 "List.snoc" ats at  (pure . Sequence) (Sequence.|>)
+                            // , mk2 "List.take" atn ats (pure . Sequence) (Sequence.take . fromIntegral)
+                            // , mk2 "List.drop" atn ats (pure . Sequence) (Sequence.drop . fromIntegral)
+                            // , mk2 "List.++"   ats ats (pure . Sequence) (<>)
+                            // , mk2 "Bytes.++"  atbs atbs (pure . Bs) (<>)
+                            // , mk2 "Bytes.take" atn atbs (pure . Bs) (\n b -> Bytes.take (fromIntegral n) b)
+                            // , mk2 "Bytes.drop" atn atbs (pure . Bs) (\n b -> Bytes.drop (fromIntegral n) b)
+                            // , mk2 "Bytes.at" atn atbs pure $ \i bs ->
+                            //   IR.maybeToOptional (N . fromIntegral <$> Bytes.at (fromIntegral i) bs)
+                            // , mk2 "Float.atan2"     atf atf (pure . F) atan2
+                            // , mk2 "Float.logBase"   atf atf (pure . F) logBase
+
+                            // -- Power Functions
+                            // , mk2 "Float.pow"       atf atf (pure . F) (**)
+                            // -- Float Utils
+                            // , mk2 "Float.max"       atf atf (pure . F) max
+                            // , mk2 "Float.min"       atf atf (pure . F) min
+
+                            // , mk2 "Debug.watch" att at id (\t v -> putStrLn (Text.unpack t) *> pure v)
                             (a, b, c) => unreachable!(
                                 "Native app, we dont have more than two args {} - {:?} - {:?}",
                                 a, b, c
@@ -298,7 +373,85 @@ impl Eval for Term {
                             ("Nat.isOdd", Term::Nat(i)) => Term::Boolean(i % 2 == 1),
                             ("Nat.toInt", Term::Nat(i)) => Term::Int(i as i64),
                             ("Boolean.not", Term::Boolean(i)) => Term::Boolean(!i),
+                            ("List.size", Term::Sequence(s)) => Term::Nat(s.len() as u64),
+                            ("Text.size", Term::Text(t)) => Term::Nat(t.len() as u64),
+                            ("Bytes.size", Term::Bytes(t)) => Term::Nat(t.len() as u64),
+                            ("Bytes.toList", Term::Bytes(t)) => Term::Sequence(
+                                t.iter().map(|t| Box::new(ABT::Tm(Term::Nat(*t)))).collect(),
+                            ),
+                            // , mk1 "Bytes.fromList" ats (pure . Bs) (\s ->
+                            //     Bytes.fromByteString (BS.pack [ fromIntegral n | N n <- toList s]))
 
+                            // , mk1 "Bytes.toList" atbs (pure . Sequence)
+                            //     (\bs -> Sequence.fromList [ N (fromIntegral n) | n <- Bytes.toWord8s bs ])
+                            // , mk1 "Bytes.flatten" atbs (pure . Bs) Bytes.flatten
+
+                            // -- Trigonometric functions
+                            // , mk1 "Float.acos"          atf (pure . F) acos
+                            // , mk1 "Float.asin"          atf (pure . F) asin
+                            // , mk1 "Float.atan"          atf (pure . F) atan
+
+                            // , mk1 "Float.cos"           atf (pure . F) cos
+                            // , mk1 "Float.sin"           atf (pure . F) sin
+                            // , mk1 "Float.tan"           atf (pure . F) tan
+
+                            // -- Hyperbolic functions
+                            // , mk1 "Float.acosh"         atf (pure . F) acosh
+                            // , mk1 "Float.asinh"         atf (pure . F) asinh
+                            // , mk1 "Float.atanh"         atf (pure . F) atanh
+                            // , mk1 "Float.cosh"          atf (pure . F) cosh
+                            // , mk1 "Float.sinh"          atf (pure . F) sinh
+                            // , mk1 "Float.tanh"          atf (pure . F) tanh
+
+                            // -- Exponential functions
+                            // , mk1 "Float.exp"           atf (pure . F) exp
+                            // , mk1 "Float.log"           atf (pure . F) log
+
+                            // , mk1 "Float.sqrt"          atf (pure . F) sqrt
+
+                            // -- Rounding and Remainder Functions
+                            // , mk1 "Float.ceiling"       atf (pure . I) ceiling
+                            // , mk1 "Float.floor"         atf (pure . I) floor
+                            // , mk1 "Float.round"         atf (pure . I) round
+                            // , mk1 "Float.truncate"      atf (pure . I) truncate
+
+                            // , mk1 "Nat.toText" atn (pure . T) (Text.pack . show)
+                            // , mk1 "Nat.fromText" att (pure . IR.maybeToOptional . fmap N) (
+                            //     (\x -> readMaybe x :: Maybe Word64) . Text.unpack)
+                            // , mk1 "Nat.toFloat" atn (pure . F) fromIntegral
+
+                            // , mk1 "Int.toText" ati (pure . T)
+                            //       (Text.pack . (\x -> if x >= 0 then ("+" <> show x) else show x))
+                            // , mk1 "Int.fromText" att (pure . IR.maybeToOptional . fmap I) $
+                            //     (\x -> readMaybe (if "+" `List.isPrefixOf` x then drop 1 x else x))
+                            //     . Text.unpack
+                            // , mk1 "Int.toFloat" ati (pure . F) fromIntegral
+                            // , mk1 "Float.abs"           atf (pure . F) abs
+                            // , mk1 "Float.toText"        atf (pure . T) (Text.pack . show)
+                            // , mk1 "Float.fromText"      att (pure . IR.maybeToOptional . fmap F) (
+                            //     (\x -> readMaybe x :: Maybe Double) . Text.unpack)
+
+                            // , mk1 "Text.size" att (pure . N) (fromIntegral . Text.length)
+                            // , mk1 "Text.uncons" att
+                            //     ( pure
+                            //     . IR.maybeToOptional
+                            //     . fmap (\(h, t) -> IR.tuple [C h, T t])
+                            //     )
+                            //     $ Text.uncons
+                            // , mk1 "Text.unsnoc" att
+                            //     ( pure
+                            //     . IR.maybeToOptional
+                            //     . fmap (\(i, l) -> IR.tuple [T i, C l])
+                            //     )
+                            //     $ Text.unsnoc
+                            // , mk1 "Text.toCharList" att (pure . Sequence)
+                            //     (Sequence.fromList . map C . Text.unpack)
+
+                            // , mk1 "Text.fromCharList" ats (pure . T)
+                            //     (\s -> Text.pack [ c | C c <- toList s ])
+
+                            // , mk1 "Char.toNat" atc (pure . N) (fromIntegral . fromEnum)
+                            // , mk1 "Char.fromNat" atn (pure . C) (toEnum . fromIntegral)
                             (builtin, two) => Term::PartialNativeApp(builtin.to_owned(), vec![two]),
                         }
                     }
@@ -328,20 +481,22 @@ impl Eval for Term {
                     },
                     Term::ScopedFunction(contents, term, bindings) => match &*contents {
                         ABT::Abs(name, contents) => {
-                            // println!("Evaling a fn {:?}", contents);
+                            println!("-> Evaling a fn {:?}", contents);
                             let two = two.eval(env, stack);
                             let mut inner_stack = stack.with_frame(term);
                             for (k, v) in bindings {
                                 inner_stack.set(k, v);
                             }
-                            contents.eval(env, &inner_stack.with(name.text.clone(), two))
+                            let res = contents.eval(env, &inner_stack.with(name.text.clone(), two));
+                            println!("<- res {:?}", res);
+                            res
                         }
                         contents => unreachable!("Lam {:?}", contents),
                     },
                     one => unreachable!("Apply top: {:?}", one),
                 }
             }
-            _ => unreachable!(),
+            _ => unreachable!("Nope {:?}", self),
         }
     }
 }

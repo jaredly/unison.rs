@@ -141,7 +141,7 @@ fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<()> {
     );
     // let result = parser::Buffer::from_file(file)?.get_term();
     println!("{:?}", res);
-    println!("{:?}", ret);
+    println!("-> {:?}", ret);
     Ok(())
 }
 

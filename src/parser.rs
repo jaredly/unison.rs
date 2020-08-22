@@ -192,6 +192,10 @@ impl FromBuffer for ConstructorType {
 }
 
 impl Hash {
+    pub fn from_string(hash: &str) -> Self {
+        let data = base32hex::decode(hash);
+        Hash(data)
+    }
     pub fn to_string(&self) -> String {
         let mut m = base32hex::encode(&self.0);
         m.pop();
@@ -329,6 +333,7 @@ impl std::fmt::Debug for Term {
             Term::Float(i) => f.write_fmt(format_args!("{}", i)),
             Term::Boolean(i) => f.write_fmt(format_args!("{}", i)),
             Term::Text(i) => f.write_fmt(format_args!("{:?}", i)),
+            Term::Bytes(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::Char(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::Blank => f.write_str("<blank>"),
             Term::PartialNativeApp(_, _) => f.write_str("<blank>"),
@@ -355,7 +360,10 @@ impl std::fmt::Debug for Term {
                 "[scoped fn | {} | {:?} | {:?} ]",
                 term, bindings, contents
             )),
-            _ => f.write_str("Something Else"),
+            Term::PartialConstructor(reference, num, args) => {
+                f.write_fmt(format_args!("[partial]{:?}#{}({:?})", reference, num, args))
+            } // _ => f.write_str("Something Else"),
+            Term::Cycle(c, d) => f.write_fmt(format_args!("🚲 {:?}", c)),
         }
     }
 }
