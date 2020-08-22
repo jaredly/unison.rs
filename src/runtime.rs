@@ -49,6 +49,7 @@ impl ABT<Term> {
         // let kvs = vec![];
         let mut body = self;
         let mut new_stack = stack.clone();
+        println!("<eval w/ bindings>");
         for binding in bindings.into_iter() {
             match body {
                 ABT::Abs(sym, inner) => {
@@ -100,6 +101,7 @@ impl Eval for ABT<Term> {
                 let (values, body) = unroll_cycle(inner, &mut names);
                 let mut new_stack = stack.clone();
                 let mut cycle_bindings = vec![];
+                println!("CYCLE {:?}", names);
                 for i in 0..names.len() {
                     let f = values[i].eval(env, stack);
                     cycle_bindings.push((names[i].clone(), f));
@@ -458,22 +460,30 @@ impl Eval for Term {
                     Term::Cycle(body, cycle_bindings) => match &*body {
                         Term::ScopedFunction(contents, term, bindings) => match &**contents {
                             ABT::Abs(name, contents) => {
-                                // println!("Evaling a fn {:?}", contents);
+                                println!("Evaling a fn w/ arg {:?}", name.text);
                                 let two = two.eval(env, stack);
                                 let mut inner_stack = stack.with_frame(term.clone());
-                                for (k, v) in bindings {
-                                    inner_stack.set(k.clone(), v.clone());
-                                }
 
+                                println!("<stack from cycle bindings>");
                                 for (k, v) in &cycle_bindings {
                                     // println!("Recycle {} {:?}", k, v);
-                                    inner_stack.set(
+                                    inner_stack.push(
                                         k.clone(),
                                         Term::Cycle(Box::new(v.clone()), cycle_bindings.clone()),
                                     );
                                 }
 
-                                contents.eval(env, &inner_stack.with(name.text.clone(), two))
+                                println!("<stack from scoped bindings>");
+                                for (k, v) in bindings {
+                                    inner_stack.push(k.clone(), v.clone());
+                                }
+                                println!("<The vbl>");
+                                let fin = inner_stack.with(name.text.clone(), two);
+                                println!("Cycle body eval with stack: {:?}", fin.0[0].bindings);
+
+                                let res = contents.eval(env, &fin);
+                                println!("<- res {:?}", res);
+                                res
                             }
                             contents => unreachable!("Lam {:?}", contents),
                         },
@@ -481,13 +491,17 @@ impl Eval for Term {
                     },
                     Term::ScopedFunction(contents, term, bindings) => match &*contents {
                         ABT::Abs(name, contents) => {
-                            println!("-> Evaling a fn {:?}", contents);
+                            println!("-> Evaling a fn (arg {})  {:?}", name.text, contents);
+                            // println!("-> Bindings")
                             let two = two.eval(env, stack);
                             let mut inner_stack = stack.with_frame(term);
+                            println!("<stack from fn bindings>");
                             for (k, v) in bindings {
-                                inner_stack.set(k, v);
+                                inner_stack.push(k, v);
                             }
-                            let res = contents.eval(env, &inner_stack.with(name.text.clone(), two));
+                            let fin = inner_stack.with(name.text.clone(), two);
+                            println!("Fn body eval with stack: {:?}", fin.0[0].bindings);
+                            let res = contents.eval(env, &fin);
                             println!("<- res {:?}", res);
                             res
                         }

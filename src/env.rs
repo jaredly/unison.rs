@@ -57,7 +57,18 @@ impl Stack {
         unreachable!("No term {} found - {}", name, self.0[0].term);
     }
 
+    pub fn push(&mut self, k: String, v: Term) {
+        println!(
+            "---- Stack push({}) {} {:?}",
+            self.0[0].bindings.len(),
+            k,
+            v
+        );
+        self.0[0].bindings.push((k, v));
+    }
+
     pub fn set(&mut self, k: String, v: Term) {
+        println!("---- Stack set({}) {} {:?}", self.0[0].bindings.len(), k, v);
         self.0[0].bindings.insert(0, (k, v));
     }
 
