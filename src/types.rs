@@ -37,14 +37,14 @@ pub enum Referent {
     Con(Reference, usize, ConstructorType),
 }
 
-impl Referent {
-    fn reference(&self) -> &Reference {
-        match self {
-            Referent::Ref(r) => r,
-            Referent::Con(r, _, _) => r,
-        }
-    }
-}
+// impl Referent {
+//     fn reference(&self) -> &Reference {
+//         match self {
+//             Referent::Ref(r) => r,
+//             Referent::Con(r, _, _) => r,
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct MatchCase(pub Pattern, pub Option<Box<ABT<Term>>>, pub Box<ABT<Term>>);
@@ -108,6 +108,7 @@ pub enum Term {
     Blank,
     Ref(Reference),
 
+    PartialFnBody(usize, Vec<(Symbol, Term)>),
     PartialNativeApp(String, Vec<Term>),
     PartialConstructor(Reference, usize, Vec<Term>),
     ScopedFunction(Box<ABT<Term>>, String, Vec<(String, Term)>),
@@ -184,13 +185,13 @@ pub enum ABT<Content> {
     Tm(Content),
 }
 
-fn indent(n: usize) -> String {
-    let mut res = "".to_owned();
-    for _ in 0..n {
-        res += "|  ";
-    }
-    res
-}
+// fn indent(n: usize) -> String {
+//     let mut res = "".to_owned();
+//     for _ in 0..n {
+//         res += "|  ";
+//     }
+//     res
+// }
 
 #[derive(Debug, Clone, std::cmp::Eq, std::hash::Hash, std::cmp::PartialEq)]
 pub struct NameSegment {

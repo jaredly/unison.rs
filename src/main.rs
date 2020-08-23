@@ -203,7 +203,7 @@ fn run(file: &String) -> std::io::Result<()> {
 
         // let root = std::path::PathBuf::from(root);
         let mut branch = types::Branch::load(&path, get_head(&path)?)?;
-        // branch.load_children(&path, true)?;
+        branch.load_children(&path, true)?;
         // Ok(branch)
 
         // let _full = load_full_branch(path.as_path())?;

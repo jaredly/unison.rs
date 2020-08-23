@@ -5,6 +5,11 @@ use std::collections::HashMap;
 // So I think we have a scope and a stack?
 #[derive(Debug, Clone)]
 pub enum IR {
+    // This means "grab the function identified by usize"
+    // but maybe this should be a Term?
+    // I mean I should make a different `Value` deal, but not
+    // just this moment
+    Fn(usize),
     // Builtin(String),
     // Push this value onto the stack
     Value(Term),
@@ -81,9 +86,16 @@ impl GlobalEnv {
         let mut cmds = IREnv::new();
         self.terms.insert(hash.to_owned(), vec![]);
         let term = self.env.load(hash);
-        println!("Loaded {}", hash);
-        println!("{:?}", term);
+        // println!("Loaded {}", hash);
+        // println!("{:?}", term);
         term.to_ir(&mut cmds, self);
+
+        // println!("[how]");
+        // for cmd in &cmds.cmds {
+        //     println!("{:?}", cmd);
+        // }
+        // println!("[---]");
+
         self.terms.insert(hash.to_owned(), cmds.cmds);
     }
 }
@@ -214,24 +226,22 @@ impl Term {
                 cmds.push(IR::Mark(done_tok));
                 cmds.push(IR::PopUpOne);
             }
+            Term::Lam(contents) => {
+                let mut sub = IREnv::new();
+                contents.to_ir(&mut sub, env);
+                // println!("[how]");
+                // for cmd in &sub.cmds {
+                //     println!("{:?}", cmd);
+                // }
+                // println!("[---]");
+                let v = env.anon_fns.len();
+                env.anon_fns.push(sub.cmds);
+                // println!("^ this was {}", v);
+                cmds.push(IR::Fn(v));
+                // let num = env.add_lambda(contents);
+            }
 
             _ => cmds.push(IR::Value(self.clone())),
-        }
-    }
-}
-
-impl Pattern {
-    pub fn to_ir(&self, cmds: &mut IREnv) {
-        // Ok, so when we're inspecting a pattern,
-        // the value under consideration is on the stack,
-        // right?
-        // BUT we need to not pop it off.
-        // except ... we do for sub-things
-        match self {
-            Unbound => cmds.push(IR::Value(Term::Boolean(true))),
-            Var => cmds.push(IR::Value(Term::Boolean(true))),
-            // ugh I need to think about this more.
-            _ => unreachable!(),
         }
     }
 }

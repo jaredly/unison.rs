@@ -1,13 +1,19 @@
-use super::ir::{GlobalEnv, IREnv, IR};
+use super::ir::{GlobalEnv, IR};
 use super::types::*;
 use log::info;
 use std::collections::HashMap;
 
-static option_hash: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
+static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
+
+#[derive(Debug, Clone)]
+enum Source {
+    Term(String),
+    Fn(usize),
+}
 
 #[derive(Debug)]
 struct Frame {
-    source: String,
+    source: Source,
     stack: Vec<Term>,
     marks: Vec<usize>,
     return_index: usize,
@@ -16,7 +22,7 @@ struct Frame {
 }
 
 impl Frame {
-    fn new(source: String, return_index: usize) -> Self {
+    fn new(source: Source, return_index: usize) -> Self {
         Frame {
             source,
             stack: vec![],
@@ -33,29 +39,29 @@ struct Stack {
     frames: Vec<Frame>,
 }
 impl Stack {
-    fn new(source: String) -> Self {
+    fn new(source: Source) -> Self {
         Stack {
             frames: vec![Frame::new(source, 0)],
         }
     }
-    fn new_frame(&mut self, return_index: usize, source: String) {
+    fn new_frame(&mut self, return_index: usize, source: Source) {
+        info!("New frame {:?}", source);
         self.frames.insert(0, Frame::new(source, return_index))
     }
-    // TODO
-    // fn replace_frame
+    // TODO : fn replace_frame
     fn push(&mut self, t: Term) {
-        println!("Stack push: {:?}", t);
+        info!("Stack push: {:?}", t);
         self.frames[0].stack.push(t);
     }
     fn pop(&mut self) -> Option<Term> {
         let t = self.frames[0].stack.pop();
-        println!("Stack pop: {:?}", t);
+        info!("Stack pop: {:?}", t);
         t
     }
     fn peek(&mut self) -> Option<&Term> {
         let l = self.frames[0].stack.len();
         if l > 0 {
-            println!("Stack peek: {:?}", self.frames[0].stack[l - 1]);
+            info!("Stack peek: {:?}", self.frames[0].stack[l - 1]);
             Some(&self.frames[0].stack[l - 1])
         } else {
             None
@@ -82,12 +88,22 @@ impl Stack {
 
 #[allow(while_true)]
 pub fn eval(env: GlobalEnv, hash: &str) -> Term {
-    let mut stack = Stack::new(hash.to_owned());
-    let mut cmds: &Vec<IR> = env.terms.get(hash).unwrap(); //.clone();
+    info!("[- ENV -]");
+    for (k, v) in env.terms.iter() {
+        info!("] Term {}", k);
+        for i in v {
+            info!(". {:?}", i)
+        }
+    }
+    for (i, v) in env.anon_fns.iter().enumerate() {
+        info!("] Fn({})", i);
+        for i in v {
+            info!(". {:?}", i)
+        }
+    }
 
-    // for c in &cmds {
-    //     println!("{:?}", c);
-    // }
+    let mut stack = Stack::new(Source::Term(hash.to_owned()));
+    let mut cmds: &Vec<IR> = env.terms.get(hash).unwrap();
 
     let mut marks = HashMap::new();
     for i in 0..cmds.len() {
@@ -101,25 +117,59 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
 
     let mut idx = 0;
 
-    while true {
+    // let mut n = 0;
+
+    while idx < cmds.len() {
+        // n += 1;
+        // if n > 100 {
+        //     break;
+        // }
+
         let cmd = &cmds[idx];
+        // info!("... Ok {} : {:?}", idx, cmd);
         match cmd.eval(&mut stack, &mut idx, &marks) {
-            None => (),
-            Some(hash) => {
-                println!("Jumping to {:?}", hash);
-                stack.new_frame(idx, hash.to_string());
-                cmds = env.terms.get(&stack.frames[0].source).unwrap();
+            Ret::Nothing => (),
+            Ret::FnCall(fnid, bindings, arg) => {
+                stack.new_frame(idx, Source::Fn(fnid));
+                stack.frames[0].bindings = bindings;
+                stack.frames[0].stack.push(arg);
+                cmds = &env.anon_fns[fnid];
+                // // cmds = env.anon_fns.get(&hash.to_string()).unwrap();
+                // info!("[Fn Instructions - {}]", fnid);
+                // for cmd in cmds {
+                //     info!("{:?}", cmd);
+                // }
+                idx = 0;
+            }
+            Ret::Term(hash) => {
+                // info!("Jumping to {:?}", hash);
+                stack.new_frame(idx, Source::Term(hash.to_string()));
+                cmds = env.terms.get(&hash.to_string()).unwrap();
+                // info!("[Term Instructions]");
+                // for cmd in cmds {
+                //     info!("{:?}", cmd);
+                // }
                 idx = 0;
             }
         }
         if idx >= cmds.len() {
             if stack.frames.len() > 1 {
+                // info!("<<-- jump down");
                 idx = stack.frames[0].return_index;
                 let value = stack.pop().unwrap();
                 stack.frames.remove(0);
-                println!("Going back to {}", stack.frames[0].source);
-                stack.push(value);
-                cmds = env.terms.get(&stack.frames[0].source).unwrap();
+                match stack.frames[0].source.clone() {
+                    Source::Term(hash) => {
+                        // info!("Going back to {}", hash);
+                        stack.push(value);
+                        cmds = env.terms.get(&hash).unwrap();
+                    }
+                    Source::Fn(fnid) => {
+                        // info!("Going back to fn {}", fnid);
+                        stack.push(value);
+                        cmds = &env.anon_fns[fnid];
+                    }
+                }
             } else {
                 break;
             }
@@ -143,8 +193,14 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
     //         }
     //     }
     // }
-    println!("Final stack: {:?}", stack);
+    info!("Final stack: {:?}", stack);
     stack.pop().unwrap()
+}
+
+enum Ret {
+    FnCall(usize, Vec<(Symbol, Term)>, Term),
+    Term(Hash),
+    Nothing,
 }
 
 impl IR {
@@ -154,7 +210,7 @@ impl IR {
         stack: &mut Stack,
         idx: &mut usize,
         marks: &HashMap<usize, usize>,
-    ) -> Option<Hash> {
+    ) -> Ret {
         match self {
             IR::MarkBindings => {
                 let ln = stack.frames[0].bindings.len();
@@ -174,7 +230,7 @@ impl IR {
                     Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
                         // Jump!
                         *idx += 1;
-                        return Some(hash.clone());
+                        return Ret::Term(hash.clone());
                         // let value = env.terms.get(&hash.to_string()).clone();
                         // stack.push_frame(idx, hash.to_string());
                         // *idx = 0;
@@ -214,10 +270,19 @@ impl IR {
                 stack.frames[0].bindings.insert(0, (symbol.clone(), v));
                 *idx += 1;
             }
+            IR::Fn(i) => {
+                stack.push(Term::PartialFnBody(*i, stack.frames[0].bindings.clone()));
+                *idx += 1;
+            }
             IR::Call => {
+                info!("Call");
                 let arg = stack.pop().unwrap();
                 let f = stack.pop().unwrap();
                 match f {
+                    Term::PartialFnBody(fnint, bindings) => {
+                        *idx += 1;
+                        return Ret::FnCall(fnint, bindings, arg);
+                    }
                     Term::Ref(Reference::Builtin(builtin)) => {
                         let res = match (builtin.as_str(), &arg) {
                             ("Int.increment", Term::Int(i)) => Some(Term::Int(i + 1)),
@@ -347,7 +412,7 @@ impl IR {
                             ("List.at", [Term::Nat(a)], Term::Sequence(l)) => {
                                 if a < &(l.len() as u64) {
                                     Term::PartialConstructor(
-                                        Reference::from_hash(option_hash),
+                                        Reference::from_hash(OPTION_HASH),
                                         1,
                                         vec![match &*l[*a as usize] {
                                             ABT::Tm(term) => term.clone(),
@@ -362,7 +427,7 @@ impl IR {
                                 //     Box::new(l[*a as usize].eval(env, stack).into()),
                                 // )
                                 } else {
-                                    Term::Constructor(Reference::from_hash(option_hash), 0)
+                                    Term::Constructor(Reference::from_hash(OPTION_HASH), 0)
                                 }
                             }
                             // , mk2 "List.at" atn ats (pure . IR.maybeToOptional)
@@ -466,6 +531,6 @@ impl IR {
                 *idx += 1;
             }
         }
-        None
+        Ret::Nothing
     }
 }

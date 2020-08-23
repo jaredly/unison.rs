@@ -35,7 +35,7 @@ pub trait Eval {
     fn eval(&self, env: &mut Env, stack: &Stack) -> Term;
 }
 
-static option_hash: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
+static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 
 impl From<Term> for ABT<Term> {
     fn from(term: Term) -> Self {
@@ -160,8 +160,8 @@ impl Eval for Term {
 
             Term::Constructor(_, _) => self.clone(),
             Term::Request(_, _) => unimplemented!("Request {:?}", self),
-            Term::Handle(contents, handler) => unimplemented!("Handle {:?}", self),
-            Term::LetRec(_, values, body) => unimplemented!("LetRec {:?}", self),
+            Term::Handle(_contents, _handler) => unimplemented!("Handle {:?}", self),
+            Term::LetRec(_, _values, _body) => unimplemented!("LetRec {:?}", self),
             Term::Match(term, arms) => {
                 let term = term.eval(env, stack);
                 for MatchCase(pattern, where_term, body) in arms {
@@ -320,7 +320,7 @@ impl Eval for Term {
                             ("List.at", [Term::Nat(a)], Term::Sequence(l)) => {
                                 if a < &(l.len() as u64) {
                                     Term::PartialConstructor(
-                                        Reference::from_hash(option_hash),
+                                        Reference::from_hash(OPTION_HASH),
                                         1,
                                         vec![l[*a as usize].eval(env, stack)],
                                     )
@@ -332,7 +332,7 @@ impl Eval for Term {
                                 //     Box::new(l[*a as usize].eval(env, stack).into()),
                                 // )
                                 } else {
-                                    Term::Constructor(Reference::from_hash(option_hash), 0)
+                                    Term::Constructor(Reference::from_hash(OPTION_HASH), 0)
                                 }
                             }
                             // , mk2 "List.at" atn ats (pure . IR.maybeToOptional)
