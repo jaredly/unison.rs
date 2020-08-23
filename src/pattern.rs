@@ -79,7 +79,49 @@ impl Pattern {
                         None
                     }
                 }
-                _ => None,
+                SeqOp::Concat => match (&**one, &**two) {
+                    (Pattern::SequenceLiteral(patterns), two) => {
+                        if contents.len() >= patterns.len() {
+                            match one.match_(&Term::Sequence(contents[0..patterns.len()].to_vec()))
+                            {
+                                None => None,
+                                Some(mut ones) => {
+                                    match two.match_(&Term::Sequence(
+                                        contents[patterns.len()..].to_vec(),
+                                    )) {
+                                        None => None,
+                                        Some(twos) => {
+                                            ones.extend(twos);
+                                            Some(ones)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    (_, Pattern::SequenceLiteral(patterns)) => {
+                        if contents.len() >= patterns.len() {
+                            let split = contents.len() - patterns.len();
+                            match one.match_(&Term::Sequence(contents[0..split].to_vec())) {
+                                None => None,
+                                Some(mut ones) => {
+                                    match two.match_(&Term::Sequence(contents[split..].to_vec())) {
+                                        None => None,
+                                        Some(twos) => {
+                                            ones.extend(twos);
+                                            Some(ones)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    _ => unreachable!(),
+                },
             },
             (Pattern::Constructor(reference, number, children), inner) => {
                 let mut all = vec![];

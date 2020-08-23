@@ -347,7 +347,8 @@ impl IR {
                 let value = stack.peek().unwrap();
                 match pattern.match_(&value) {
                     None => stack.push(Term::Boolean(false)),
-                    Some(bindings) => {
+                    Some(mut bindings) => {
+                        bindings.reverse();
                         if *has_where {
                             for term in &bindings {
                                 stack.push(term.clone());
