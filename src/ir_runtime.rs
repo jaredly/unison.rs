@@ -1,4 +1,4 @@
-use super::ir::{IREnv, IR};
+use super::ir::{GlobalEnv, IREnv, IR};
 use super::types::*;
 use log::info;
 use std::collections::HashMap;
@@ -6,42 +6,83 @@ use std::collections::HashMap;
 static option_hash: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 
 #[derive(Debug)]
-struct Stack(Vec<Term>, Vec<usize>);
+struct Frame {
+    source: String,
+    stack: Vec<Term>,
+    marks: Vec<usize>,
+    return_index: usize,
+    bindings: Vec<(Symbol, Term)>,
+    binding_marks: Vec<usize>,
+}
+
+impl Frame {
+    fn new(source: String, return_index: usize) -> Self {
+        Frame {
+            source,
+            stack: vec![],
+            marks: vec![],
+            return_index,
+            bindings: vec![],
+            binding_marks: vec![],
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Stack {
+    frames: Vec<Frame>,
+}
 impl Stack {
+    fn new(source: String) -> Self {
+        Stack {
+            frames: vec![Frame::new(source, 0)],
+        }
+    }
+    fn new_frame(&mut self, return_index: usize, source: String) {
+        self.frames.insert(0, Frame::new(source, return_index))
+    }
+    // TODO
+    // fn replace_frame
     fn push(&mut self, t: Term) {
         println!("Stack push: {:?}", t);
-        self.0.push(t);
+        self.frames[0].stack.push(t);
     }
     fn pop(&mut self) -> Option<Term> {
-        let t = self.0.pop();
+        let t = self.frames[0].stack.pop();
         println!("Stack pop: {:?}", t);
         t
     }
     fn peek(&mut self) -> Option<&Term> {
-        let l = self.0.len();
+        let l = self.frames[0].stack.len();
         if l > 0 {
-            println!("Stack peek: {:?}", self.0[l - 1]);
-            Some(&self.0[l - 1])
+            println!("Stack peek: {:?}", self.frames[0].stack[l - 1]);
+            Some(&self.frames[0].stack[l - 1])
         } else {
             None
         }
     }
     fn pop_to_mark(&mut self) {
-        let mark = self.1.pop().unwrap();
-        while self.0.len() > mark {
-            self.0.pop();
+        let mark = self.frames[0].marks.pop().unwrap();
+        while self.frames[0].stack.len() > mark {
+            self.frames[0].stack.pop();
         }
     }
     fn mark(&mut self) {
-        self.1.push(self.0.len());
+        let ln = self.frames[0].stack.len();
+        self.frames[0].marks.push(ln);
+    }
+    fn clear_mark(&mut self) {
+        self.frames[0].marks.pop();
+    }
+    fn pop_up(&mut self) {
+        let ln = self.frames[0].stack.len();
+        self.frames[0].stack.remove(ln - 2);
     }
 }
 
-pub fn eval(ir_env: IREnv) -> Term {
-    let mut stack = Stack(vec![], vec![]);
-    let mut bindings = vec![];
-    let mut binding_marks = vec![];
-    let cmds = ir_env.cmds;
+pub fn eval(env: GlobalEnv, hash: &str) -> Term {
+    let mut stack = Stack::new(hash.to_owned());
+    let mut cmds: Vec<IR> = env.terms.get(hash).unwrap().clone();
 
     for c in &cmds {
         println!("{:?}", c);
@@ -58,16 +99,38 @@ pub fn eval(ir_env: IREnv) -> Term {
     }
 
     let mut idx = 0;
-    while idx < cmds.len() {
+
+    while true {
         let cmd = &cmds[idx];
-        cmd.eval(
-            &mut bindings,
-            &mut binding_marks,
-            &mut stack,
-            &mut idx,
-            &marks,
-        );
+        match cmd.eval(&env, &mut stack, &mut idx, &marks) {
+            None => (),
+            Some(hash) => {
+                // JUMPPP
+                // cmds =
+            }
+        }
+        if idx >= cmds.len() {
+            break;
+        }
     }
+
+    // while idx < cmds.len() {
+    //     let cmd = &cmds[idx];
+    //     match cmd.eval(
+    //         &env,
+    //         &mut bindings,
+    //         &mut binding_marks,
+    //         &mut stack,
+    //         &mut idx,
+    //         &marks,
+    //     ) {
+    //         None => (),
+    //         Some(hash) => {
+    //             // JUMPPP
+    //             // cmds =
+    //         }
+    //     }
+    // }
     println!("Final stack: {:?}", stack);
     stack.pop().unwrap()
 }
@@ -75,46 +138,67 @@ pub fn eval(ir_env: IREnv) -> Term {
 impl IR {
     fn eval(
         &self,
-        bindings: &mut Vec<(Symbol, Term)>,
-        binding_marks: &mut Vec<usize>,
+        env: &GlobalEnv,
         stack: &mut Stack,
         idx: &mut usize,
         marks: &HashMap<usize, usize>,
-    ) {
+    ) -> Option<Hash> {
         match self {
             IR::MarkBindings => {
-                binding_marks.push(bindings.len());
+                let ln = stack.frames[0].bindings.len();
+                stack.frames[0].binding_marks.push(ln);
                 *idx += 1;
             }
             IR::PopBindings => {
-                let mark = binding_marks.pop().unwrap();
+                let mark = stack.frames[0].binding_marks.pop().unwrap();
                 // lol there's probably a better way
-                while bindings.len() > mark {
-                    bindings.remove(0);
+                while stack.frames[0].bindings.len() > mark {
+                    stack.frames[0].bindings.remove(0);
                 }
                 *idx += 1;
             }
             IR::Value(term) => {
-                stack.push(term.clone());
-                *idx += 1;
+                match term {
+                    Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
+                        // Jump!
+                        return Some(hash.clone());
+                        // let value = env.terms.get(&hash.to_string()).clone();
+                        // stack.push_frame(idx, hash.to_string());
+                        // *idx = 0;
+                        // cmds = value;
+                        // JUMP!
+                    }
+                    _ => {
+                        stack.push(term.clone());
+                        *idx += 1;
+                    }
+                };
             }
-            IR::Ref(Reference::DerivedId(_)) => {
-                unimplemented!();
-            }
-            IR::Ref(reference) => {
-                stack.push(Term::Ref(reference.clone()));
-                *idx += 1;
-            }
-            IR::PushSym(symbol) => match bindings.iter().find(|(k, _)| symbol.text == k.text) {
-                None => unreachable!("Vbl not found {}", symbol.text),
-                Some((_, v)) => {
-                    stack.push(v.clone());
-                    *idx += 1;
+            // IR::Reference()
+            // IR::Ref(hash) => {
+            //     stack.push(Term::Ref(Reference::))
+            //     // let res = env.load(&hash.to_string());
+            // }
+            // IR::Builtin(name) => {
+            //     stack.push(Term::Ref(Reference::Builtin(name.clone())));
+            //     *idx += 1;
+            // }
+            IR::PushSym(symbol) => {
+                match stack.frames[0]
+                    .bindings
+                    .iter()
+                    .find(|(k, _)| symbol.text == k.text)
+                {
+                    None => unreachable!("Vbl not found {}", symbol.text),
+                    Some((_, v)) => {
+                        stack.push(v.clone());
+                        *idx += 1;
+                    }
                 }
-            },
+            }
             IR::PopAndName(symbol) => {
                 let v = stack.pop().unwrap();
-                bindings.insert(0, (symbol.clone(), v));
+                stack.frames[0].bindings.insert(0, (symbol.clone(), v));
                 *idx += 1;
             }
             IR::Call => {
@@ -340,7 +424,7 @@ impl IR {
                 *idx += 1;
             }
             IR::ClearStackMark => {
-                stack.1.pop();
+                stack.clear_mark();
                 *idx += 1;
             }
             IR::PatternMatch(pattern, has_where) => {
@@ -364,9 +448,11 @@ impl IR {
             }
             IR::PatternMatchFail => unreachable!("Pattern match failure!"),
             IR::PopUpOne => {
-                stack.0.remove(stack.0.len() - 2);
+                stack.pop_up();
+                // stack.0.remove(stack.0.len() - 2);
                 *idx += 1;
             }
         }
+        None
     }
 }

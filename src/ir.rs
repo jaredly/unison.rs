@@ -1,10 +1,11 @@
+use super::env;
 use super::types::*;
+use std::collections::HashMap;
 
 // So I think we have a scope and a stack?
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum IR {
-    // Lookup this reference, and push it onto the stack
-    Ref(Reference),
+    // Builtin(String),
     // Push this value onto the stack
     Value(Term),
     // lookup the symbol, and push it onto the stack
@@ -43,18 +44,47 @@ pub enum IR {
 }
 
 impl ABT<Term> {
-    pub fn to_ir(&self, cmds: &mut IREnv) {
+    pub fn to_ir(&self, cmds: &mut IREnv, env: &mut GlobalEnv) {
         match self {
             ABT::Var(symbol) => cmds.push(IR::PushSym(symbol.clone())),
-            ABT::Tm(term) => term.to_ir(cmds),
+            ABT::Tm(term) => term.to_ir(cmds, env),
             ABT::Cycle(_) => unimplemented!(),
             ABT::Abs(name, body) => {
                 cmds.push(IR::MarkBindings);
                 cmds.push(IR::PopAndName(name.clone()));
-                body.to_ir(cmds);
+                body.to_ir(cmds, env);
                 cmds.push(IR::PopBindings);
             }
         }
+    }
+}
+
+pub struct GlobalEnv {
+    pub env: env::Env,
+    pub terms: HashMap<String, Vec<IR>>,
+    pub anon_fns: Vec<Vec<IR>>, // I think?
+}
+
+impl GlobalEnv {
+    pub fn new(env: env::Env) -> Self {
+        GlobalEnv {
+            env,
+            terms: HashMap::new(),
+            anon_fns: vec![],
+        }
+    }
+    pub fn load(&mut self, hash: &str) {
+        if self.terms.contains_key(hash) {
+            // Already loaded
+            return;
+        }
+        let mut cmds = IREnv::new();
+        self.terms.insert(hash.to_owned(), vec![]);
+        let term = self.env.load(hash);
+        println!("Loaded {}", hash);
+        println!("{:?}", term);
+        term.to_ir(&mut cmds, self);
+        self.terms.insert(hash.to_owned(), cmds.cmds);
     }
 }
 
@@ -82,39 +112,43 @@ impl IREnv {
 }
 
 impl Term {
-    pub fn to_ir(&self, cmds: &mut IREnv) {
+    pub fn to_ir(&self, cmds: &mut IREnv, env: &mut GlobalEnv) {
         match self {
-            Term::Ref(reference) => cmds.push(IR::Ref(reference.clone())),
+            Term::Ref(Reference::Builtin(name)) => cmds.push(IR::Value(self.clone())),
+            Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
+                env.load(&hash.to_string());
+                cmds.push(IR::Value(self.clone()))
+            }
             Term::App(one, two) => {
-                one.to_ir(cmds);
-                two.to_ir(cmds);
+                one.to_ir(cmds, env);
+                two.to_ir(cmds, env);
                 cmds.push(IR::Call)
             }
-            Term::Ann(term, _) => term.to_ir(cmds),
+            Term::Ann(term, _) => term.to_ir(cmds, env),
             Term::Sequence(terms) => {
                 let ln = terms.len();
                 for inner in terms {
-                    inner.to_ir(cmds);
+                    inner.to_ir(cmds, env);
                 }
                 cmds.push(IR::Seq(ln))
             }
             Term::If(cond, yes, no) => {
                 let no_tok = cmds.mark();
                 let done_tok = cmds.mark();
-                cond.to_ir(cmds);
+                cond.to_ir(cmds, env);
                 cmds.push(IR::If(no_tok));
-                yes.to_ir(cmds);
+                yes.to_ir(cmds, env);
                 cmds.push(IR::JumpTo(done_tok));
                 cmds.push(IR::Mark(no_tok));
-                no.to_ir(cmds);
+                no.to_ir(cmds, env);
                 cmds.push(IR::Mark(done_tok));
             }
             Term::And(a, b) => {
                 let fail_tok = cmds.mark();
                 let done_tok = cmds.mark();
-                a.to_ir(cmds);
+                a.to_ir(cmds, env);
                 cmds.push(IR::If(fail_tok));
-                b.to_ir(cmds);
+                b.to_ir(cmds, env);
                 cmds.push(IR::If(fail_tok));
                 cmds.push(IR::Value(Term::Boolean(true)));
                 cmds.push(IR::JumpTo(done_tok));
@@ -127,11 +161,11 @@ impl Term {
                 let fail_tok = cmds.mark();
                 let b_tok = cmds.mark();
                 let done_tok = cmds.mark();
-                a.to_ir(cmds);
+                a.to_ir(cmds, env);
                 cmds.push(IR::If(b_tok));
                 cmds.push(IR::JumpTo(good_tok));
                 cmds.push(IR::Mark(b_tok));
-                b.to_ir(cmds);
+                b.to_ir(cmds, env);
                 cmds.push(IR::If(fail_tok));
 
                 cmds.push(IR::Mark(good_tok));
@@ -144,12 +178,12 @@ impl Term {
                 cmds.push(IR::Mark(done_tok));
             }
             Term::Let(_, v, body) => {
-                v.to_ir(cmds);
-                body.to_ir(cmds);
+                v.to_ir(cmds, env);
+                body.to_ir(cmds, env);
             }
             Term::Match(item, arms) => {
                 let done_tok = cmds.mark();
-                item.to_ir(cmds);
+                item.to_ir(cmds, env);
                 // erm how do I say "here's the next one"
                 let mut next_tok = cmds.mark();
                 for MatchCase(pattern, cond, body) in arms {
@@ -164,13 +198,13 @@ impl Term {
                             cmds.push(IR::MarkStack);
                             cmds.push(IR::PatternMatch(pattern.clone(), true));
                             cmds.push(IR::IfAndPopStack(next_tok));
-                            cond.to_ir(cmds);
+                            cond.to_ir(cmds, env);
                             cmds.push(IR::IfAndPopStack(next_tok));
                             cmds.push(IR::ClearStackMark);
                         }
                     }
 
-                    body.to_ir(cmds);
+                    body.to_ir(cmds, env);
                     cmds.push(IR::JumpTo(done_tok));
 
                     cmds.push(IR::Mark(next_tok));

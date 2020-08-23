@@ -133,19 +133,20 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
 
 fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<()> {
     println!("Running {:?} - {}", terms_path, hash);
-    let mut env = env::Env::init(terms_path.parent().unwrap());
-    let res = env.load(hash);
-    println!("{:?}", res);
-    let mut ir_env = ir::IREnv::new();
-    res.to_ir(&mut ir_env);
-    let ret = ir_runtime::eval(ir_env);
+    let env = env::Env::init(terms_path.parent().unwrap());
+    // let res = env.load(hash);
+    // println!("{:?}", res);
+    let mut ir_env = ir::GlobalEnv::new(env);
+    ir_env.load(hash);
+    // res.to_ir(&mut ir_env, &mut env);
+    let ret = ir_runtime::eval(ir_env, hash);
     // use runtime::Eval;
     // let ret = res.eval(
     //     &mut env,
     //     &env::Stack(vec![env::Frame::new(hash.to_owned())]),
     // );
     // let result = parser::Buffer::from_file(file)?.get_term();
-    println!("{:?}", res);
+    // println!("{:?}", res);
     println!("-> {:?}", ret);
     Ok(())
 }
