@@ -80,13 +80,14 @@ impl Stack {
     }
 }
 
+#[allow(while_true)]
 pub fn eval(env: GlobalEnv, hash: &str) -> Term {
     let mut stack = Stack::new(hash.to_owned());
-    let mut cmds: Vec<IR> = env.terms.get(hash).unwrap().clone();
+    let mut cmds: &Vec<IR> = env.terms.get(hash).unwrap(); //.clone();
 
-    for c in &cmds {
-        println!("{:?}", c);
-    }
+    // for c in &cmds {
+    //     println!("{:?}", c);
+    // }
 
     let mut marks = HashMap::new();
     for i in 0..cmds.len() {
@@ -102,15 +103,24 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
 
     while true {
         let cmd = &cmds[idx];
-        match cmd.eval(&env, &mut stack, &mut idx, &marks) {
+        match cmd.eval(&mut stack, &mut idx, &marks) {
             None => (),
             Some(hash) => {
-                // JUMPPP
-                // cmds =
+                stack.new_frame(idx, hash.to_string());
+                cmds = env.terms.get(&stack.frames[0].source).unwrap();
+                idx = 0;
             }
         }
         if idx >= cmds.len() {
-            break;
+            if stack.frames.len() > 1 {
+                idx = stack.frames[0].return_index;
+                let value = stack.pop().unwrap();
+                stack.frames.pop();
+                stack.push(value);
+                cmds = env.terms.get(&stack.frames[0].source).unwrap();
+            } else {
+                break;
+            }
         }
     }
 
@@ -138,7 +148,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
 impl IR {
     fn eval(
         &self,
-        env: &GlobalEnv,
+        // env: &GlobalEnv,
         stack: &mut Stack,
         idx: &mut usize,
         marks: &HashMap<usize, usize>,
@@ -161,6 +171,7 @@ impl IR {
                 match term {
                     Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
                         // Jump!
+                        *idx += 1;
                         return Some(hash.clone());
                         // let value = env.terms.get(&hash.to_string()).clone();
                         // stack.push_frame(idx, hash.to_string());
