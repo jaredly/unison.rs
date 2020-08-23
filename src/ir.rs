@@ -95,14 +95,14 @@ impl Term {
                 let done_tok = cmds.mark();
                 cond.to_ir(cmds);
                 cmds.push(IR::If(no_tok));
-                cmds.push(IR::MarkBindings);
+                // cmds.push(IR::MarkBindings);
                 yes.to_ir(cmds);
-                cmds.push(IR::PopBindings);
+                // cmds.push(IR::PopBindings);
                 cmds.push(IR::JumpTo(done_tok));
                 cmds.push(IR::Mark(no_tok));
-                cmds.push(IR::MarkBindings);
+                // cmds.push(IR::MarkBindings);
                 no.to_ir(cmds);
-                cmds.push(IR::PopBindings);
+                // cmds.push(IR::PopBindings);
                 cmds.push(IR::Mark(done_tok));
             }
             Term::And(a, b) => {
@@ -141,7 +141,9 @@ impl Term {
             }
             Term::Let(_, v, body) => {
                 v.to_ir(cmds);
+                cmds.push(IR::MarkBindings);
                 body.to_ir(cmds);
+                cmds.push(IR::PopBindings);
             }
             Term::Match(item, arms) => {
                 let done_tok = cmds.mark();

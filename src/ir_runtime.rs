@@ -21,6 +21,7 @@ impl Stack {
 pub fn eval(ir_env: IREnv) -> Term {
     let mut stack = Stack(vec![]);
     let mut bindings = vec![];
+    let mut binding_marks = vec![];
     let cmds = ir_env.cmds;
 
     for c in &cmds {
@@ -40,7 +41,13 @@ pub fn eval(ir_env: IREnv) -> Term {
     let mut idx = 0;
     while idx < cmds.len() {
         let cmd = &cmds[idx];
-        cmd.eval(&mut bindings, &mut stack, &mut idx, &marks);
+        cmd.eval(
+            &mut bindings,
+            &mut binding_marks,
+            &mut stack,
+            &mut idx,
+            &marks,
+        );
     }
     stack.pop().unwrap()
 }
@@ -49,11 +56,24 @@ impl IR {
     fn eval(
         &self,
         bindings: &mut Vec<(Symbol, Term)>,
+        binding_marks: &mut Vec<usize>,
         stack: &mut Stack,
         idx: &mut usize,
         marks: &HashMap<usize, usize>,
     ) {
         match self {
+            IR::MarkBindings => {
+                binding_marks.push(bindings.len());
+                *idx += 1;
+            }
+            IR::PopBindings => {
+                let mark = binding_marks.pop().unwrap();
+                // lol there's probably a better way
+                while bindings.len() > mark {
+                    bindings.remove(0);
+                }
+                *idx += 1;
+            }
             IR::Value(term) => {
                 stack.push(term.clone());
                 *idx += 1;
@@ -266,7 +286,7 @@ impl IR {
                 let mut v = vec![];
                 for _ in 0..*num {
                     // TODO would be nice to ditch the wrappings
-                    v.push(Box::new(stack.pop().unwrap().into()))
+                    v.insert(0, Box::new(stack.pop().unwrap().into()))
                 }
                 stack.push(Term::Sequence(v));
                 *idx += 1;
