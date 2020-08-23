@@ -106,6 +106,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
         match cmd.eval(&mut stack, &mut idx, &marks) {
             None => (),
             Some(hash) => {
+                println!("Jumping to {:?}", hash);
                 stack.new_frame(idx, hash.to_string());
                 cmds = env.terms.get(&stack.frames[0].source).unwrap();
                 idx = 0;
@@ -115,7 +116,8 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
             if stack.frames.len() > 1 {
                 idx = stack.frames[0].return_index;
                 let value = stack.pop().unwrap();
-                stack.frames.pop();
+                stack.frames.remove(0);
+                println!("Going back to {}", stack.frames[0].source);
                 stack.push(value);
                 cmds = env.terms.get(&stack.frames[0].source).unwrap();
             } else {
