@@ -3,6 +3,7 @@ use super::types::*;
 // So I think we have a scope and a stack?
 #[derive(Debug)]
 pub enum IR {
+    // Lookup this reference, and push it onto the stack
     Ref(Reference),
     // Push this value onto the stack
     Value(Term),
@@ -25,11 +26,17 @@ pub enum IR {
     // And,
     // Or,
     // Dup, // duplicate the top item - might not need it
-    // Pop,
+    PopUpOne,
     // for cleaning up after blocks
     MarkBindings,
     PopBindings,
+    // Match the given pattern.
+    // If the "has_where" flag is true, bound variables
+    // will be pushed onto the stack twice
+    PatternMatch(Pattern, bool),
+    PatternMatchFail,
     MarkStack,
+    ClearStackMark,
     // if false, then pop up to the stack mark.
     // if true, the following code will bind those vbls, its fine.
     IfAndPopStack(usize),
@@ -42,9 +49,10 @@ impl ABT<Term> {
             ABT::Tm(term) => term.to_ir(cmds),
             ABT::Cycle(_) => unimplemented!(),
             ABT::Abs(name, body) => {
+                cmds.push(IR::MarkBindings);
                 cmds.push(IR::PopAndName(name.clone()));
                 body.to_ir(cmds);
-                // unreachable!("Abs should have been handled? I think?")
+                cmds.push(IR::PopBindings);
             }
         }
     }
@@ -95,14 +103,10 @@ impl Term {
                 let done_tok = cmds.mark();
                 cond.to_ir(cmds);
                 cmds.push(IR::If(no_tok));
-                // cmds.push(IR::MarkBindings);
                 yes.to_ir(cmds);
-                // cmds.push(IR::PopBindings);
                 cmds.push(IR::JumpTo(done_tok));
                 cmds.push(IR::Mark(no_tok));
-                // cmds.push(IR::MarkBindings);
                 no.to_ir(cmds);
-                // cmds.push(IR::PopBindings);
                 cmds.push(IR::Mark(done_tok));
             }
             Term::And(a, b) => {
@@ -141,9 +145,7 @@ impl Term {
             }
             Term::Let(_, v, body) => {
                 v.to_ir(cmds);
-                cmds.push(IR::MarkBindings);
                 body.to_ir(cmds);
-                cmds.push(IR::PopBindings);
             }
             Term::Match(item, arms) => {
                 let done_tok = cmds.mark();
@@ -151,33 +153,32 @@ impl Term {
                 // erm how do I say "here's the next one"
                 let mut next_tok = cmds.mark();
                 for MatchCase(pattern, cond, body) in arms {
-                    cmds.push(IR::MarkBindings);
-                    // this'll do the bindings I think?
-                    // or actually maybe not
-                    // the cmds body will do that.
-                    // which means .. the body needs to
-                    // not? yeah maybe I can prevent that.
-                    pattern.to_ir(cmds);
-                    cmds.push(IR::If(next_tok));
                     match cond {
-                        None => (),
+                        None => {
+                            cmds.push(IR::PatternMatch(pattern.clone(), false));
+                            cmds.push(IR::If(next_tok));
+                        }
                         Some(cond) => {
+                            // TODO should I have an ID with these,
+                            // to catch me of I pop the stack too much?
+                            cmds.push(IR::MarkStack);
+                            cmds.push(IR::PatternMatch(pattern.clone(), true));
+                            cmds.push(IR::IfAndPopStack(next_tok));
                             cond.to_ir(cmds);
-                            cmds.push(IR::If(next_tok))
+                            cmds.push(IR::IfAndPopStack(next_tok));
+                            cmds.push(IR::ClearStackMark);
                         }
                     }
 
-                    // TODO need to prevent the body
-                    // from popping off more, we have
-                    // already done the bindings folks
                     body.to_ir(cmds);
-                    cmds.push(IR::PopBindings);
                     cmds.push(IR::JumpTo(done_tok));
 
                     cmds.push(IR::Mark(next_tok));
                     next_tok = cmds.mark();
                 }
+                cmds.push(IR::PatternMatchFail);
                 cmds.push(IR::Mark(done_tok));
+                cmds.push(IR::PopUpOne);
             }
 
             _ => cmds.push(IR::Value(self.clone())),

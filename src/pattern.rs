@@ -8,6 +8,7 @@ impl Pattern {
             (Pattern::Var, t) => Some(vec![t.clone()]),
             (Pattern::Boolean(a), Term::Boolean(b)) if a == b => Some(vec![]),
             (Pattern::Int(a), Term::Int(b)) if a == b => Some(vec![]),
+            (Pattern::Nat(a), Term::Nat(b)) if a == b => Some(vec![]),
             (Pattern::Float(a), Term::Float(b)) if a == b => Some(vec![]),
             (Pattern::Text(a), Term::Text(b)) if a == b => Some(vec![]),
             (Pattern::Char(a), Term::Char(b)) if a == b => Some(vec![]),

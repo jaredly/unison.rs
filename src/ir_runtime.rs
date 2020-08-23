@@ -5,7 +5,8 @@ use std::collections::HashMap;
 
 static option_hash: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 
-struct Stack(Vec<Term>);
+#[derive(Debug)]
+struct Stack(Vec<Term>, Vec<usize>);
 impl Stack {
     fn push(&mut self, t: Term) {
         println!("Stack push: {:?}", t);
@@ -16,10 +17,28 @@ impl Stack {
         println!("Stack pop: {:?}", t);
         t
     }
+    fn peek(&mut self) -> Option<&Term> {
+        let l = self.0.len();
+        if l > 0 {
+            println!("Stack peek: {:?}", self.0[l - 1]);
+            Some(&self.0[l - 1])
+        } else {
+            None
+        }
+    }
+    fn pop_to_mark(&mut self) {
+        let mark = self.1.pop().unwrap();
+        while self.0.len() > mark {
+            self.0.pop();
+        }
+    }
+    fn mark(&mut self) {
+        self.1.push(self.0.len());
+    }
 }
 
 pub fn eval(ir_env: IREnv) -> Term {
-    let mut stack = Stack(vec![]);
+    let mut stack = Stack(vec![], vec![]);
     let mut bindings = vec![];
     let mut binding_marks = vec![];
     let cmds = ir_env.cmds;
@@ -49,6 +68,7 @@ pub fn eval(ir_env: IREnv) -> Term {
             &marks,
         );
     }
+    println!("Final stack: {:?}", stack);
     stack.pop().unwrap()
 }
 
@@ -306,7 +326,44 @@ impl IR {
                 }
                 Some(contents) => unreachable!("If pop not bool: {:?}", contents),
             },
-            _ => {
+            IR::IfAndPopStack(mark) => match stack.pop() {
+                None => unreachable!("If pop"),
+                Some(Term::Boolean(true)) => *idx += 1,
+                Some(Term::Boolean(false)) => {
+                    *idx = *marks.get(mark).unwrap();
+                    stack.pop_to_mark();
+                }
+                Some(contents) => unreachable!("If pop not bool: {:?}", contents),
+            },
+            IR::MarkStack => {
+                stack.mark();
+                *idx += 1;
+            }
+            IR::ClearStackMark => {
+                stack.1.pop();
+                *idx += 1;
+            }
+            IR::PatternMatch(pattern, has_where) => {
+                let value = stack.peek().unwrap();
+                match pattern.match_(&value) {
+                    None => stack.push(Term::Boolean(false)),
+                    Some(bindings) => {
+                        if *has_where {
+                            for term in &bindings {
+                                stack.push(term.clone());
+                            }
+                        }
+                        for term in bindings {
+                            stack.push(term);
+                        }
+                        stack.push(Term::Boolean(true))
+                    }
+                }
+                *idx += 1;
+            }
+            IR::PatternMatchFail => unreachable!("Pattern match failure!"),
+            IR::PopUpOne => {
+                stack.0.remove(stack.0.len() - 2);
                 *idx += 1;
             }
         }

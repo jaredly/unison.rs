@@ -137,7 +137,7 @@ fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<()> {
     let res = env.load(hash);
     println!("{:?}", res);
     let mut ir_env = ir::IREnv::new();
-    let ir = res.to_ir(&mut ir_env);
+    res.to_ir(&mut ir_env);
     let ret = ir_runtime::eval(ir_env);
     // use runtime::Eval;
     // let ret = res.eval(
