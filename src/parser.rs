@@ -363,8 +363,8 @@ impl std::fmt::Debug for Term {
             Term::PartialConstructor(reference, num, args) => {
                 f.write_fmt(format_args!("[partial]{:?}#{}({:?})", reference, num, args))
             } // _ => f.write_str("Something Else"),
-            Term::Cycle(c, d) => f.write_fmt(format_args!("🚲 {:?}", c)),
-            Term::CycleFnBody(a, c, d) => f.write_fmt(format_args!("🚲 ({}) {:?}", a, c)),
+            Term::Cycle(c, _d) => f.write_fmt(format_args!("🚲 {:?}", c)),
+            Term::CycleFnBody(a, c, _d) => f.write_fmt(format_args!("🚲 ({}) {:?}", a, c)),
             Term::PartialFnBody(n, c) => f.write_fmt(format_args!("fn {} {:?}", n, c)),
         }
     }

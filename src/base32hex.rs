@@ -53,7 +53,7 @@ pub fn encode(mut src: &[u8]) -> String {
     dst.join("")
 }
 
-fn getHexValue(hexes: &str, value: &str) -> u8 {
+fn get_hex_value(hexes: &str, value: &str) -> u8 {
     hexes.find(value).unwrap() as u8
 }
 
@@ -81,7 +81,7 @@ pub fn decode(src: &str) -> Vec<u8> {
                 src_len = i;
                 break;
             } else {
-                dbuf[i] = getHexValue(hexes, char);
+                dbuf[i] = get_hex_value(hexes, char);
             }
         }
 

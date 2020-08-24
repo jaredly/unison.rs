@@ -1,4 +1,4 @@
-use std::cmp::{Eq, PartialEq, PartialOrd};
+use std::cmp::{PartialEq, PartialOrd};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -101,6 +101,7 @@ pub enum Type {
     IntroOuter(Box<ABT<Type>>),
 }
 
+#[allow(dead_code)]
 #[derive(Clone, PartialEq, PartialOrd)]
 pub enum Term {
     Int(i64),
@@ -204,6 +205,7 @@ pub struct NameSegment {
     pub text: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Modifier {
     Structural,

@@ -94,7 +94,7 @@ fn unroll_cycle(
 pub struct GlobalEnv {
     pub env: env::Env,
     pub terms: HashMap<String, Vec<IR>>,
-    pub anon_fns: Vec<Vec<IR>>, // I think?
+    pub anon_fns: Vec<(String, Vec<IR>)>, // I think?
 }
 
 impl GlobalEnv {
@@ -110,7 +110,7 @@ impl GlobalEnv {
             // Already loaded
             return;
         }
-        let mut cmds = IREnv::new();
+        let mut cmds = IREnv::new(hash.to_owned());
         self.terms.insert(hash.to_owned(), vec![]);
         let term = self.env.load(hash);
         // println!("Loaded {}", hash);
@@ -125,23 +125,25 @@ impl GlobalEnv {
 
         self.terms.insert(hash.to_owned(), cmds.cmds);
     }
-    pub fn add_fn(&mut self, contents: &ABT<Term>) -> usize {
-        let mut sub = IREnv::new();
+    pub fn add_fn(&mut self, hash: String, contents: &ABT<Term>) -> usize {
+        let mut sub = IREnv::new(hash.clone());
         contents.to_ir(&mut sub, self);
         let v = self.anon_fns.len();
-        self.anon_fns.push(sub.cmds);
+        self.anon_fns.push((hash, sub.cmds));
         v
     }
 }
 
 pub struct IREnv {
+    pub term: String,
     pub cmds: Vec<IR>,
     pub counter: usize,
 }
 
 impl IREnv {
-    pub fn new() -> Self {
+    pub fn new(term: String) -> Self {
         IREnv {
+            term,
             cmds: vec![],
             counter: 0,
         }
@@ -260,7 +262,7 @@ impl Term {
                 cmds.push(IR::PopUpOne);
             }
             Term::Lam(contents) => {
-                let v = env.add_fn(&**contents);
+                let v = env.add_fn(cmds.term.clone(), &**contents);
                 cmds.push(IR::Fn(v));
             }
 

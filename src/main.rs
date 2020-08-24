@@ -151,22 +151,6 @@ fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_term_(terms_path: &std::path::Path, hash: &str) -> std::io::Result<()> {
-    println!("Running {:?} - {}", terms_path, hash);
-    let mut env = env::Env::init(terms_path.parent().unwrap());
-    // let hash_name = file.file_name().unwrap().to_str().unwrap();
-    let res = env.load(hash);
-    use runtime::Eval;
-    let ret = res.eval(
-        &mut env,
-        &env::Stack(vec![env::Frame::new(hash.to_owned())]),
-    );
-    // let result = parser::Buffer::from_file(file)?.get_term();
-    println!("{:?}", res);
-    println!("-> {:?}", ret);
-    Ok(())
-}
-
 fn path_with(path: &std::path::Path, part: &str) -> std::path::PathBuf {
     let mut m = std::path::PathBuf::from(path);
     m.push(part);
@@ -200,7 +184,7 @@ fn run(file: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
 
     if path.ends_with("paths") {
-        let base = path.parent().unwrap();
+        // let base = path.parent().unwrap();
 
         // let root = std::path::PathBuf::from(root);
         let mut branch = types::Branch::load(&path, get_head(&path)?)?;

@@ -8,7 +8,7 @@ static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8j
 #[derive(Debug, Clone)]
 enum Source {
     Term(String),
-    Fn(usize),
+    Fn(usize, String),
 }
 
 #[derive(Debug)]
@@ -111,7 +111,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
     }
     for (i, v) in env.anon_fns.iter().enumerate() {
         info!("] Fn({})", i);
-        for i in v {
+        for i in &v.1 {
             info!(". {:?}", i)
         }
     }
@@ -141,14 +141,15 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
         // }
 
         let cmd = &cmds[idx];
-        // info!("... Ok {} : {:?}", idx, cmd);
+        info!("----- <{}>    {:?}", idx, cmd);
         match cmd.eval(&mut stack, &mut idx, &marks) {
             Ret::Nothing => (),
             Ret::FnCall(fnid, bindings, arg) => {
-                stack.new_frame(idx, Source::Fn(fnid));
+                stack.new_frame(idx, Source::Fn(fnid, env.anon_fns[fnid].0.clone()));
+                println!("^ fn call with {:?}", arg);
                 stack.frames[0].bindings = bindings;
                 stack.frames[0].stack.push(arg);
-                cmds = &env.anon_fns[fnid];
+                cmds = &env.anon_fns[fnid].1;
                 marks = make_marks(&cmds);
                 // // cmds = env.anon_fns.get(&hash.to_string()).unwrap();
                 // info!("[Fn Instructions - {}]", fnid);
@@ -181,10 +182,10 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                         stack.push(value);
                         cmds = env.terms.get(&hash).unwrap();
                     }
-                    Source::Fn(fnid) => {
+                    Source::Fn(fnid, _) => {
                         // info!("Going back to fn {}", fnid);
                         stack.push(value);
-                        cmds = &env.anon_fns[fnid];
+                        cmds = &env.anon_fns[fnid].1;
                     }
                 }
                 marks = make_marks(&cmds);
@@ -271,17 +272,16 @@ impl IR {
             //     *idx += 1;
             // }
             IR::PushSym(symbol) => {
-                match stack.frames[0]
+                let v = match stack.frames[0]
                     .bindings
                     .iter()
                     .find(|(k, _)| symbol.text == k.text)
                 {
                     None => unreachable!("Vbl not found {}", symbol.text),
-                    Some((_, v)) => {
-                        stack.push(v.clone());
-                        *idx += 1;
-                    }
-                }
+                    Some((_, v)) => v.clone(),
+                };
+                stack.push(v);
+                *idx += 1;
             }
             IR::PopAndName(symbol) => {
                 let v = stack.pop().unwrap();
@@ -382,6 +382,7 @@ impl IR {
                                 stack.push(Term::PartialNativeApp(builtin, vec![arg.clone()]));
                             }
                         }
+                        *idx += 1;
                     }
                     Term::PartialNativeApp(name, args) => {
                         let res = match (name.as_str(), args.as_slice(), &arg) {
@@ -533,10 +534,11 @@ impl IR {
                             ),
                         };
                         stack.push(res);
+                        *idx += 1;
                     }
                     term => unimplemented!("Call {:?}", term),
                 };
-                *idx += 1;
+                // *idx += 1;
             }
             IR::Seq(num) => {
                 let mut v = vec![];
