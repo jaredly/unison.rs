@@ -126,7 +126,7 @@ impl IREnv {
 impl Term {
     pub fn to_ir(&self, cmds: &mut IREnv, env: &mut GlobalEnv) {
         match self {
-            Term::Ref(Reference::Builtin(name)) => cmds.push(IR::Value(self.clone())),
+            Term::Ref(Reference::Builtin(_)) => cmds.push(IR::Value(self.clone())),
             Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
                 env.load(&hash.to_string());
                 cmds.push(IR::Value(self.clone()))
@@ -196,7 +196,6 @@ impl Term {
             Term::Match(item, arms) => {
                 let done_tok = cmds.mark();
                 item.to_ir(cmds, env);
-                // erm how do I say "here's the next one"
                 let mut next_tok = cmds.mark();
                 for MatchCase(pattern, cond, body) in arms {
                     match cond {

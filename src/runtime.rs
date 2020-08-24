@@ -1,7 +1,4 @@
-use std::collections::HashMap;
-
 use super::env::*;
-use super::parser;
 use super::types::*;
 use log::info;
 
@@ -115,7 +112,7 @@ impl Eval for ABT<Term> {
                 }
                 body.eval(env, &new_stack)
             }
-            ABT::Abs(sym, inner) => unreachable!("Raw abs {}", stack.0[0].term),
+            ABT::Abs(_sym, _inner) => unreachable!("Raw abs {}", stack.0[0].term),
             ABT::Tm(inner) => inner.eval(env, stack),
         }
     }
