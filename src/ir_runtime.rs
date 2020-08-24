@@ -332,6 +332,16 @@ impl IR {
                 let arg = stack.pop().unwrap();
                 let f = stack.pop().unwrap();
                 match f {
+                    Term::Constructor(r, u) => {
+                        stack.push(Term::PartialConstructor(r, u, vec![arg]));
+                        *idx += 1;
+                    }
+                    Term::PartialConstructor(r, u, c) => {
+                        let mut c = c.clone();
+                        c.push(arg);
+                        stack.push(Term::PartialConstructor(r, u, c));
+                        *idx += 1;
+                    }
                     Term::CycleFnBody(fnint, mut bindings, mutuals) => {
                         *idx += 1;
                         let copy = bindings.clone();
@@ -524,7 +534,7 @@ impl IR {
                         };
                         stack.push(res);
                     }
-                    _ => unimplemented!(),
+                    term => unimplemented!("Call {:?}", term),
                 };
                 *idx += 1;
             }

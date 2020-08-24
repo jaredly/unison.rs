@@ -58,27 +58,9 @@ impl ABT<Term> {
             ABT::Cycle(inner) => {
                 let mut names = vec![];
                 let (values, body) = unroll_cycle(inner, &mut names);
-                // let mut mutuals = vec![];
                 for i in 0..names.len() {
-                    // match values[i] {
-                    // }
                     values[i].to_ir(cmds, env);
-                    // let v = env.add_fn(&*values[i]);
-                    // mutuals.push((
-                    //     Symbol {
-                    //         text: names[i].clone(),
-                    //         num: 0,
-                    //     },
-                    //     v,
-                    // ));
                 }
-                // for i in 0..names.len() {
-                //     cmds.push(IR::CycleFn(mutuals[i].1, mutuals.clone()));
-                //     cmds.push(IR::PopAndName(Symbol {
-                //         text: names[i].clone(),
-                //         num: 0,
-                //     }));
-                // }
                 names.reverse();
                 cmds.push(IR::Cycle(names));
                 body.to_ir(cmds, env);

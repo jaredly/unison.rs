@@ -188,7 +188,8 @@ fn run_test(root: &str) -> std::io::Result<()> {
     for k in keys {
         if k[k.len() - 1] == "test" {
             println!("{:?}", k);
-            run_term_(&terms, &all_terms.get(&k).unwrap().to_string())?;
+            run_term(&terms, &all_terms.get(&k).unwrap().to_string())?;
+            // run_term_(&terms, &all_terms.get(&k).unwrap().to_string())?;
         }
     }
 
