@@ -1,10 +1,16 @@
+use serde_derive::{Deserialize, Serialize};
 use std::cmp::{PartialEq, PartialOrd};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub struct Symbol {
     pub num: usize,
     pub text: String,
+}
+impl std::fmt::Debug for Symbol {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fmt.write_fmt(format_args!("🔣{}", self.text))
+    }
 }
 impl Symbol {
     pub fn new(text: String) -> Self {
@@ -12,13 +18,25 @@ impl Symbol {
     }
 }
 
-#[derive(Debug, Clone, Copy, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    std::cmp::Eq,
+    std::cmp::PartialEq,
+    std::hash::Hash,
+    PartialOrd,
+)]
 pub enum ConstructorType {
     Data,
     Effect,
 }
 
-#[derive(Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
+#[derive(
+    Serialize, Deserialize, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd,
+)]
 pub enum Reference {
     Builtin(String),
     DerivedId(Id),
@@ -30,13 +48,33 @@ impl Reference {
     }
 }
 
-#[derive(Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
+#[derive(
+    Serialize, Deserialize, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd,
+)]
 pub struct Hash(pub Vec<u8>);
 
-#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    std::cmp::Eq,
+    std::cmp::PartialEq,
+    std::hash::Hash,
+    PartialOrd,
+)]
 pub struct Id(pub Hash, pub usize, pub usize);
 
-#[derive(Debug, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    std::cmp::Eq,
+    std::cmp::PartialEq,
+    std::hash::Hash,
+    PartialOrd,
+)]
 pub enum Referent {
     Ref(Reference),
     Con(Reference, usize, ConstructorType),
@@ -51,16 +89,16 @@ pub enum Referent {
 //     }
 // }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
 pub struct MatchCase(pub Pattern, pub Option<Box<ABT<Term>>>, pub Box<ABT<Term>>);
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
 pub enum Kind {
     Star,
     Arrow(Box<Kind>, Box<Kind>),
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
 pub enum Pattern {
     Unbound,
     Var,
@@ -78,7 +116,7 @@ pub enum Pattern {
     SequenceOp(Box<Pattern>, SeqOp, Box<Pattern>),
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
 pub enum SeqOp {
     Cons,
     Snoc,
@@ -86,7 +124,7 @@ pub enum SeqOp {
 }
 
 // Base functor for types in the Unison language
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
 pub enum Type {
     Ref(Reference),
     Arrow(Box<ABT<Type>>, Box<ABT<Type>>),
@@ -102,7 +140,7 @@ pub enum Type {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub enum Term {
     Int(i64),
     Nat(u64),
@@ -184,7 +222,7 @@ pub enum Term {
 //     }
 // }
 
-#[derive(Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub enum ABT<Content> {
     Var(Symbol),
     Cycle(Box<ABT<Content>>),
@@ -200,40 +238,42 @@ pub enum ABT<Content> {
 //     res
 // }
 
-#[derive(Debug, Clone, std::cmp::Eq, std::hash::Hash, std::cmp::PartialEq)]
+#[derive(
+    Serialize, Deserialize, Debug, Clone, std::cmp::Eq, std::hash::Hash, std::cmp::PartialEq,
+)]
 pub struct NameSegment {
     pub text: String,
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Modifier {
     Structural,
     Unique(String),
     Opaque,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum TypeDecl {
     Effect(DataDecl),
     Data(DataDecl),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DataDecl {
     pub modifier: Modifier,
     pub bound: Vec<Symbol>,
     pub constructors: Vec<(Symbol, ABT<Type>)>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Causal<Contents> {
     One(Contents),
     Cons(Hash, Contents),
     Merge(Vec<Hash>, Contents),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RawBranch {
     pub terms: Star<Referent, NameSegment>,
     pub types: Star<Reference, NameSegment>,
@@ -250,14 +290,14 @@ impl RawBranch {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Branch {
     pub raw: RawBranch,
     pub children: HashMap<NameSegment, Branch>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Star<K, V> {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Star<K: std::hash::Hash + std::cmp::Eq + Clone, V> {
     pub fact: std::collections::HashSet<K>,
     pub d1: HashMap<K, V>,
     pub d2: HashMap<K, Reference>,

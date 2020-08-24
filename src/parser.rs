@@ -336,7 +336,7 @@ impl std::fmt::Debug for Term {
             Term::Bytes(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::Char(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::Blank => f.write_str("<blank>"),
-            Term::PartialNativeApp(_, _) => f.write_str("<blank>"),
+            Term::PartialNativeApp(name, _) => f.write_fmt(format_args!("partial({})", name)),
             Term::Ref(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::Constructor(i, n) => f.write_fmt(format_args!("[constructor]{:?}#{}", i, n)),
             Term::Request(i, n) => f.write_fmt(format_args!("[request]{:?}#{}", i, n)),
@@ -361,7 +361,7 @@ impl std::fmt::Debug for Term {
                 term, bindings, contents
             )),
             Term::PartialConstructor(reference, num, args) => {
-                f.write_fmt(format_args!("[partial]{:?}#{}({:?})", reference, num, args))
+                f.write_fmt(format_args!("[partial]{:?}-{}({:?})", reference, num, args))
             } // _ => f.write_str("Something Else"),
             Term::Cycle(c, _d) => f.write_fmt(format_args!("🚲 {:?}", c)),
             Term::CycleFnBody(a, c, _d) => f.write_fmt(format_args!("🚲 ({}) {:?}", a, c)),
@@ -531,7 +531,9 @@ impl<K: FromBuffer, V: FromBuffer> FromBuffer for (K, V) {
     }
 }
 
-impl<K: FromBuffer + std::hash::Hash + std::cmp::Eq, V: FromBuffer> FromBuffer for Star<K, V> {
+impl<K: FromBuffer + std::hash::Hash + std::cmp::Eq + Clone, V: FromBuffer> FromBuffer
+    for Star<K, V>
+{
     fn get(buf: &mut Buffer) -> Self {
         Star {
             fact: buf.get(),

@@ -40,22 +40,35 @@ struct Stack {
 }
 impl Stack {
     fn new(source: Source) -> Self {
+        info!("{})> Initial frame {:?}", 0, source);
         Stack {
             frames: vec![Frame::new(source, 0)],
         }
     }
     fn new_frame(&mut self, return_index: usize, source: Source) {
-        info!("New frame {:?}", source);
+        info!("{} | ----> New frame {:?}", self.frames.len(), source);
         self.frames.insert(0, Frame::new(source, return_index))
+    }
+    fn pop_frame(&mut self) -> (usize, Term) {
+        let idx = self.frames[0].return_index;
+        let value = self.pop().unwrap();
+        self.frames.remove(0);
+        info!(
+            "{} | <---- Return to idx {} with value {:?}",
+            self.frames.len(),
+            idx,
+            value
+        );
+        (idx, value)
     }
     // TODO : fn replace_frame
     fn push(&mut self, t: Term) {
-        info!("Stack push: {:?}", t);
+        info!("{} | Stack push: {:?}", self.frames.len(), t);
         self.frames[0].stack.push(t);
     }
     fn pop(&mut self) -> Option<Term> {
         let t = self.frames[0].stack.pop();
-        info!("Stack pop: {:?}", t);
+        info!("{} | Stack pop: {:?}", self.frames.len(), t);
         t
     }
     fn peek(&mut self) -> Option<&Term> {
@@ -110,7 +123,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
         }
     }
     for (i, v) in env.anon_fns.iter().enumerate() {
-        info!("] Fn({})", i);
+        info!("] Fn({}) : {}", i, v.0);
         for i in &v.1 {
             info!(". {:?}", i)
         }
@@ -146,7 +159,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
             Ret::Nothing => (),
             Ret::FnCall(fnid, bindings, arg) => {
                 stack.new_frame(idx, Source::Fn(fnid, env.anon_fns[fnid].0.clone()));
-                println!("^ fn call with {:?}", arg);
+                info!("^ fn call with {:?}", arg);
                 stack.frames[0].bindings = bindings;
                 stack.frames[0].stack.push(arg);
                 cmds = &env.anon_fns[fnid].1;
@@ -170,12 +183,14 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 idx = 0;
             }
         }
-        if idx >= cmds.len() {
+        // Multi-pop
+        while idx >= cmds.len() {
             if stack.frames.len() > 1 {
                 // info!("<<-- jump down");
-                idx = stack.frames[0].return_index;
-                let value = stack.pop().unwrap();
-                stack.frames.remove(0);
+                let (idx1, value) = stack.pop_frame();
+                idx = idx1;
+                // stack.pop_frame();
+                // stack.frames.remove(0);
                 match stack.frames[0].source.clone() {
                     Source::Term(hash) => {
                         // info!("Going back to {}", hash);
@@ -190,10 +205,13 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 }
                 marks = make_marks(&cmds);
             } else {
+                info!("Got only one frame left, and idx is larger than the cmds len");
                 break;
             }
         }
     }
+
+    println!("All done I guess; {} {}", idx, cmds.len());
 
     // while idx < cmds.len() {
     //     let cmd = &cmds[idx];
@@ -302,7 +320,11 @@ impl IR {
                             mutuals.push((Symbol::new(name.clone()), fnint));
                             items.push((name, fnint, bindings));
                         }
-                        _ => unreachable!(),
+                        _ => {
+                            stack.frames[0]
+                                .bindings
+                                .push((Symbol::new(name.clone()), v));
+                        }
                     }
                 }
                 for (name, fnint, bindings) in items {
@@ -367,6 +389,7 @@ impl IR {
                             ("Nat.isEvent", Term::Nat(i)) => Some(Term::Boolean(i % 2 == 0)),
                             ("Nat.isOdd", Term::Nat(i)) => Some(Term::Boolean(i % 2 == 1)),
                             ("Nat.toInt", Term::Nat(i)) => Some(Term::Int(*i as i64)),
+                            ("Nat.toText", Term::Nat(i)) => Some(Term::Text(i.to_string())),
                             ("Boolean.not", Term::Boolean(i)) => Some(Term::Boolean(!i)),
                             ("List.size", Term::Sequence(s)) => Some(Term::Nat(s.len() as u64)),
                             ("Text.size", Term::Text(t)) => Some(Term::Nat(t.len() as u64)),
@@ -386,8 +409,12 @@ impl IR {
                     }
                     Term::PartialNativeApp(name, args) => {
                         let res = match (name.as_str(), args.as_slice(), &arg) {
-                            ("Int.+", [Term::Int(a)], Term::Int(b)) => Term::Int(a + b),
-                            ("Int.-", [Term::Int(a)], Term::Int(b)) => Term::Int(a - b),
+                            ("Int.+", [Term::Int(a)], Term::Int(b)) => {
+                                Term::Int(a.wrapping_add(*b))
+                            }
+                            ("Int.-", [Term::Int(a)], Term::Int(b)) => {
+                                Term::Int(a.wrapping_sub(*b))
+                            }
                             ("Int.*", [Term::Int(a)], Term::Int(b)) => Term::Int(a * b),
                             ("Int./", [Term::Int(a)], Term::Int(b)) => Term::Int(a / b),
                             ("Int.<", [Term::Int(a)], Term::Int(b)) => Term::Boolean(*a < *b),
@@ -434,6 +461,13 @@ impl IR {
                                 Term::Nat(a << *b as u32)
                             }
 
+                            ("Nat.drop", [Term::Nat(a)], Term::Nat(b)) => {
+                                if b >= a {
+                                    Term::Nat(0)
+                                } else {
+                                    Term::Nat(a - b)
+                                }
+                            }
                             // , ("Nat.drop", 2, DropN (Slot 1) (Slot 0))
                             // , ("Nat.sub", 2, SubN (Slot 1) (Slot 0))
                             // , ("Nat.mod", 2, ModN (Slot 1) (Slot 0))
@@ -494,25 +528,33 @@ impl IR {
                                             _ => unreachable!(),
                                         }],
                                     )
-                                // Term::App(
-                                //     Box::new(
-                                //         Term::Constructor(Reference::from_hash(option_hash), 1)
-                                //             .into(),
-                                //     ),
-                                //     Box::new(l[*a as usize].eval(env, stack).into()),
-                                // )
                                 } else {
                                     Term::Constructor(Reference::from_hash(OPTION_HASH), 0)
                                 }
                             }
-                            // , mk2 "List.at" atn ats (pure . IR.maybeToOptional)
-                            //   $ Sequence.lookup
-                            //   . fromIntegral
-                            // , mk2 "List.cons" at  ats (pure . Sequence) (Sequence.<|)
-                            // , mk2 "List.snoc" ats at  (pure . Sequence) (Sequence.|>)
-                            // , mk2 "List.take" atn ats (pure . Sequence) (Sequence.take . fromIntegral)
-                            // , mk2 "List.drop" atn ats (pure . Sequence) (Sequence.drop . fromIntegral)
-                            // , mk2 "List.++"   ats ats (pure . Sequence) (<>)
+                            ("List.cons", [value], Term::Sequence(l)) => {
+                                let mut l = l.clone();
+                                l.insert(0, Box::new(value.clone().into()));
+                                Term::Sequence(l)
+                            }
+                            ("List.snoc", [Term::Sequence(l)], value) => {
+                                let mut l = l.clone();
+                                l.push(Box::new(value.clone().into()));
+                                Term::Sequence(l)
+                            }
+                            ("List.take", [Term::Nat(n)], Term::Sequence(l)) => {
+                                let l = l[0..*n as usize].to_vec();
+                                Term::Sequence(l)
+                            }
+                            ("List.drop", [Term::Nat(n)], Term::Sequence(l)) => {
+                                let l = l[*n as usize..].to_vec();
+                                Term::Sequence(l)
+                            }
+                            ("List.++", [Term::Sequence(l0)], Term::Sequence(l1)) => {
+                                let mut l = l0.clone();
+                                l.extend(l1.clone());
+                                Term::Sequence(l)
+                            }
                             // , mk2 "Bytes.++"  atbs atbs (pure . Bs) (<>)
                             // , mk2 "Bytes.take" atn atbs (pure . Bs) (\n b -> Bytes.take (fromIntegral n) b)
                             // , mk2 "Bytes.drop" atn atbs (pure . Bs) (\n b -> Bytes.drop (fromIntegral n) b)
@@ -560,7 +602,7 @@ impl IR {
                 None => unreachable!("If pop"),
                 Some(Term::Boolean(true)) => *idx += 1,
                 Some(Term::Boolean(false)) => {
-                    println!("If jumping to {}", mark);
+                    info!("If jumping to {}", mark);
                     *idx = *marks.get(mark).unwrap();
                 }
                 Some(contents) => unreachable!("If pop not bool: {:?}", contents),
