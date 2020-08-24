@@ -11,6 +11,8 @@ pub enum IR {
     // just this moment
     Fn(usize),
     // Builtin(String),
+    Cycle(Vec<String>),
+    // CycleFn(usize, Vec<(Symbol, usize)>),
     // Push this value onto the stack
     Value(Term),
     // lookup the symbol, and push it onto the stack
@@ -53,7 +55,34 @@ impl ABT<Term> {
         match self {
             ABT::Var(symbol) => cmds.push(IR::PushSym(symbol.clone())),
             ABT::Tm(term) => term.to_ir(cmds, env),
-            ABT::Cycle(_) => unimplemented!(),
+            ABT::Cycle(inner) => {
+                let mut names = vec![];
+                let (values, body) = unroll_cycle(inner, &mut names);
+                // let mut mutuals = vec![];
+                for i in 0..names.len() {
+                    // match values[i] {
+                    // }
+                    values[i].to_ir(cmds, env);
+                    // let v = env.add_fn(&*values[i]);
+                    // mutuals.push((
+                    //     Symbol {
+                    //         text: names[i].clone(),
+                    //         num: 0,
+                    //     },
+                    //     v,
+                    // ));
+                }
+                // for i in 0..names.len() {
+                //     cmds.push(IR::CycleFn(mutuals[i].1, mutuals.clone()));
+                //     cmds.push(IR::PopAndName(Symbol {
+                //         text: names[i].clone(),
+                //         num: 0,
+                //     }));
+                // }
+                names.reverse();
+                cmds.push(IR::Cycle(names));
+                body.to_ir(cmds, env);
+            }
             ABT::Abs(name, body) => {
                 cmds.push(IR::MarkBindings);
                 cmds.push(IR::PopAndName(name.clone()));
@@ -61,6 +90,22 @@ impl ABT<Term> {
                 cmds.push(IR::PopBindings);
             }
         }
+    }
+}
+
+fn unroll_cycle(
+    inner: &ABT<Term>,
+    names: &mut Vec<String>,
+) -> (Vec<Box<ABT<Term>>>, Box<ABT<Term>>) {
+    match inner {
+        ABT::Abs(sym, inner) => {
+            names.push(sym.text.clone());
+            match &**inner {
+                ABT::Tm(Term::LetRec(_, things, body)) => (things.clone(), body.clone()),
+                _ => unroll_cycle(inner, names),
+            }
+        }
+        _ => unreachable!("Cycle not abs"),
     }
 }
 
@@ -97,6 +142,13 @@ impl GlobalEnv {
         // println!("[---]");
 
         self.terms.insert(hash.to_owned(), cmds.cmds);
+    }
+    pub fn add_fn(&mut self, contents: &ABT<Term>) -> usize {
+        let mut sub = IREnv::new();
+        contents.to_ir(&mut sub, self);
+        let v = self.anon_fns.len();
+        self.anon_fns.push(sub.cmds);
+        v
     }
 }
 
@@ -226,18 +278,8 @@ impl Term {
                 cmds.push(IR::PopUpOne);
             }
             Term::Lam(contents) => {
-                let mut sub = IREnv::new();
-                contents.to_ir(&mut sub, env);
-                // println!("[how]");
-                // for cmd in &sub.cmds {
-                //     println!("{:?}", cmd);
-                // }
-                // println!("[---]");
-                let v = env.anon_fns.len();
-                env.anon_fns.push(sub.cmds);
-                // println!("^ this was {}", v);
+                let v = env.add_fn(&**contents);
                 cmds.push(IR::Fn(v));
-                // let num = env.add_lambda(contents);
             }
 
             _ => cmds.push(IR::Value(self.clone())),

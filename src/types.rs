@@ -6,6 +6,11 @@ pub struct Symbol {
     pub num: usize,
     pub text: String,
 }
+impl Symbol {
+    pub fn new(text: String) -> Self {
+        Symbol { text, num: 0 }
+    }
+}
 
 #[derive(Debug, Clone, Copy, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd)]
 pub enum ConstructorType {
@@ -108,6 +113,7 @@ pub enum Term {
     Blank,
     Ref(Reference),
 
+    CycleFnBody(usize, Vec<(Symbol, Term)>, Vec<(Symbol, usize)>),
     PartialFnBody(usize, Vec<(Symbol, Term)>),
     PartialNativeApp(String, Vec<Term>),
     PartialConstructor(Reference, usize, Vec<Term>),

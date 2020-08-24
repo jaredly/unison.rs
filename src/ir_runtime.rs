@@ -86,6 +86,20 @@ impl Stack {
     }
 }
 
+fn make_marks(cmds: &[IR]) -> HashMap<usize, usize> {
+    let mut marks = HashMap::new();
+    for i in 0..cmds.len() {
+        match &cmds[i] {
+            IR::Mark(m) => {
+                marks.insert(*m, i);
+            }
+            _ => (),
+        }
+    }
+
+    marks
+}
+
 #[allow(while_true)]
 pub fn eval(env: GlobalEnv, hash: &str) -> Term {
     info!("[- ENV -]");
@@ -105,15 +119,16 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
     let mut stack = Stack::new(Source::Term(hash.to_owned()));
     let mut cmds: &Vec<IR> = env.terms.get(hash).unwrap();
 
-    let mut marks = HashMap::new();
-    for i in 0..cmds.len() {
-        match &cmds[i] {
-            IR::Mark(m) => {
-                marks.insert(*m, i);
-            }
-            _ => (),
-        }
-    }
+    let mut marks = make_marks(&cmds);
+    // let mut marks = HashMap::new();
+    // for i in 0..cmds.len() {
+    //     match &cmds[i] {
+    //         IR::Mark(m) => {
+    //             marks.insert(*m, i);
+    //         }
+    //         _ => (),
+    //     }
+    // }
 
     let mut idx = 0;
 
@@ -134,6 +149,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 stack.frames[0].bindings = bindings;
                 stack.frames[0].stack.push(arg);
                 cmds = &env.anon_fns[fnid];
+                marks = make_marks(&cmds);
                 // // cmds = env.anon_fns.get(&hash.to_string()).unwrap();
                 // info!("[Fn Instructions - {}]", fnid);
                 // for cmd in cmds {
@@ -145,6 +161,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 // info!("Jumping to {:?}", hash);
                 stack.new_frame(idx, Source::Term(hash.to_string()));
                 cmds = env.terms.get(&hash.to_string()).unwrap();
+                marks = make_marks(&cmds);
                 // info!("[Term Instructions]");
                 // for cmd in cmds {
                 //     info!("{:?}", cmd);
@@ -170,6 +187,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                         cmds = &env.anon_fns[fnid];
                     }
                 }
+                marks = make_marks(&cmds);
             } else {
                 break;
             }
@@ -274,11 +292,57 @@ impl IR {
                 stack.push(Term::PartialFnBody(*i, stack.frames[0].bindings.clone()));
                 *idx += 1;
             }
+            IR::Cycle(names) => {
+                let mut mutuals = vec![];
+                let mut items = vec![];
+                for name in names {
+                    let v = stack.pop().unwrap();
+                    match v {
+                        Term::PartialFnBody(fnint, bindings) => {
+                            mutuals.push((Symbol::new(name.clone()), fnint));
+                            items.push((name, fnint, bindings));
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                for (name, fnint, bindings) in items {
+                    stack.frames[0].bindings.push((
+                        Symbol::new(name.clone()),
+                        Term::CycleFnBody(fnint, bindings, mutuals.clone()),
+                    ))
+                }
+
+                // stack.push(Term::CycleFnBody(
+                //     *i,
+                //     stack.frames[0].bindings.clone(),
+                //     mutuals.clone(),
+                // ));
+                *idx += 1;
+            }
+            // IR::CycleFn(i, mutuals) => {
+            //     stack.push(Term::CycleFnBody(
+            //         *i,
+            //         stack.frames[0].bindings.clone(),
+            //         mutuals.clone(),
+            //     ));
+            //     *idx += 1;
+            // }
             IR::Call => {
                 info!("Call");
                 let arg = stack.pop().unwrap();
                 let f = stack.pop().unwrap();
                 match f {
+                    Term::CycleFnBody(fnint, mut bindings, mutuals) => {
+                        *idx += 1;
+                        let copy = bindings.clone();
+                        for (k, v) in &mutuals {
+                            bindings.push((
+                                k.clone(),
+                                Term::CycleFnBody(*v, copy.clone(), mutuals.clone()),
+                            ))
+                        }
+                        return Ret::FnCall(fnint, bindings, arg);
+                    }
                     Term::PartialFnBody(fnint, bindings) => {
                         *idx += 1;
                         return Ret::FnCall(fnint, bindings, arg);
@@ -484,6 +548,7 @@ impl IR {
                 None => unreachable!("If pop"),
                 Some(Term::Boolean(true)) => *idx += 1,
                 Some(Term::Boolean(false)) => {
+                    println!("If jumping to {}", mark);
                     *idx = *marks.get(mark).unwrap();
                 }
                 Some(contents) => unreachable!("If pop not bool: {:?}", contents),
