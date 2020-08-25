@@ -4,6 +4,28 @@ use super::types::*;
 impl Pattern {
     pub fn match_(&self, term: &Term) -> Option<Vec<Term>> {
         match (self, term) {
+            (Pattern::EffectPure(_), Term::RequestWithContinuation(_, _, _, _, _)) => None,
+            (Pattern::EffectPure(pattern), Term::RequestPure(inner)) => pattern.match_(inner),
+            (
+                Pattern::EffectBind(reference, number, args, kont),
+                Term::RequestWithContinuation(tref, tnum, targs, tidx, tkont),
+            ) if reference == tref && number == tnum && args.len() == targs.len() => {
+                let mut all = vec![];
+                for i in 0..args.len() {
+                    match args[i].match_(&targs[i]) {
+                        None => return None,
+                        Some(inner) => {
+                            all.extend(inner);
+                        }
+                    }
+                }
+                match &**kont {
+                    Pattern::Unbound => (),
+                    Pattern::Var => all.push(Term::Continuation(*tidx, tkont.clone())),
+                    _ => unreachable!("Can't match on a continuation"),
+                }
+                Some(all)
+            }
             (Pattern::Unbound, _) => Some(vec![]),
             (Pattern::Var, t) => Some(vec![t.clone()]),
             (Pattern::Boolean(a), Term::Boolean(b)) if a == b => Some(vec![]),

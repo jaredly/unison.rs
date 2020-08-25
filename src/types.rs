@@ -160,6 +160,7 @@ pub enum Term {
     // CycleFunction(Box<ABT<Term>>, String, Vec<(String, Term)>, String),
     Cycle(Box<Term>, Vec<(String, Term)>),
 
+    Continuation(usize, Vec<super::ir_runtime::Frame>),
     Constructor(Reference, usize),
     Request(Reference, usize),
     RequestPure(Box<Term>),
