@@ -1,21 +1,23 @@
 use super::ir::{GlobalEnv, IR};
 use super::types::*;
 use log::info;
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 
-#[derive(Debug, Clone)]
-enum Source {
+#[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Serialize, Deserialize)]
+pub enum Source {
     Term(String),
     Fn(usize, String),
 }
 
-#[derive(Debug)]
-struct Frame {
+#[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Serialize, Deserialize)]
+pub struct Frame {
     source: Source,
     stack: Vec<Term>,
     marks: Vec<usize>,
+    handler: Option<usize>,
     return_index: usize,
     bindings: Vec<(Symbol, Term)>,
     binding_marks: Vec<usize>,
@@ -27,6 +29,7 @@ impl Frame {
             source,
             stack: vec![],
             marks: vec![],
+            handler: None,
             return_index,
             bindings: vec![],
             binding_marks: vec![],
@@ -45,10 +48,49 @@ impl Stack {
             frames: vec![Frame::new(source, 0)],
         }
     }
+
     fn new_frame(&mut self, return_index: usize, source: Source) {
         info!("{} | ----> New frame {:?}", self.frames.len(), source);
         self.frames.insert(0, Frame::new(source, return_index))
     }
+
+    fn clone_frame(&mut self, return_index: usize) {
+        info!("{} | ----> Clone frame", self.frames.len());
+        self.frames.insert(0, self.frames[0].clone());
+        self.frames[0].return_index = return_index;
+    }
+
+    // TODO there should be a way to ... get back .. to the thing ... that we wanted ...
+    fn back_again_to_handler(&mut self) -> (usize, Vec<Frame>) {
+        let mut frames = vec![];
+        self.frames.remove(0); // ignore the current one, it was a clone anyway
+        while self.frames[0].handler == None {
+            frames.push(self.frames.remove(0));
+            if self.frames.len() == 0 {
+                unreachable!("Unhandled effect thrown")
+            }
+        }
+        frames.push(self.frames[0].clone());
+        let idx = self.frames[0].handler.unwrap();
+        self.frames[0].handler = None;
+        (idx, frames)
+    }
+
+    // TODO there should be a way to ... get back .. to the thing ... that we wanted ...
+    fn back_to_handler(&mut self) -> (usize, Vec<Frame>) {
+        let mut frames = vec![];
+        while self.frames[0].handler == None {
+            frames.push(self.frames.remove(0));
+            if self.frames.len() == 0 {
+                unreachable!("Unhandled effect thrown")
+            }
+        }
+        frames.push(self.frames[0].clone());
+        let idx = self.frames[0].handler.unwrap();
+        self.frames[0].handler = None;
+        (idx, frames)
+    }
+
     fn pop_frame(&mut self) -> (usize, Term) {
         let idx = self.frames[0].return_index;
         let value = self.pop().unwrap();
@@ -157,6 +199,49 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
         info!("----- <{}>    {:?}", idx, cmd);
         match cmd.eval(&mut stack, &mut idx, &marks) {
             Ret::Nothing => (),
+            Ret::Handle(mark) => {
+                idx += 1;
+                let mark_idx = *marks.get(&mark).unwrap();
+                stack.frames[0].handler = Some(mark_idx);
+                stack.clone_frame(mark_idx);
+                stack.frames[0].handler = None;
+            }
+            Ret::ReRequest(kind, number, args, final_index, mut frames) => {
+                let (nidx, saved_frames) = stack.back_again_to_handler();
+                frames.extend(saved_frames);
+                idx = nidx;
+                stack.push(Term::RequestWithContinuation(
+                    kind,
+                    number,
+                    args,
+                    final_index,
+                    frames,
+                ))
+            }
+            Ret::Request(kind, number, args) => {
+                let final_index = idx;
+                // So, the continuation will always contain the top level, even if the handler is on the top level.
+                // So we can't just "pop" things, unfortunately.
+                // Right?
+                // Or. ... maybe we should add a new frame when we pass through a handler?
+                // hrm, yeah, seems like if we want to be able to keep stack variables the way they were ...
+                // ok, so we add a new frame, that's a clone of the old frame, hm.
+                // Which means, every frame will have at most one handler.
+                let (nidx, saved_frames) = stack.back_to_handler();
+                idx = nidx;
+                info!(
+                    "Jumping back {} frames to {:?}",
+                    saved_frames.len(),
+                    stack.frames[0].source
+                );
+                stack.push(Term::RequestWithContinuation(
+                    kind,
+                    number,
+                    args,
+                    final_index,
+                    saved_frames,
+                ))
+            }
             Ret::FnCall(fnid, bindings, arg) => {
                 stack.new_frame(idx, Source::Fn(fnid, env.anon_fns[fnid].0.clone()));
                 info!("^ fn call with {:?}", arg);
@@ -181,6 +266,25 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 //     info!("{:?}", cmd);
                 // }
                 idx = 0;
+            }
+            Ret::HandlePure => {
+                let (idx1, value) = stack.pop_frame();
+                idx = idx1;
+                // stack.pop_frame();
+                // stack.frames.remove(0);
+                match stack.frames[0].source.clone() {
+                    Source::Term(hash) => {
+                        // info!("Going back to {}", hash);
+                        stack.push(value);
+                        cmds = env.terms.get(&hash).unwrap();
+                    }
+                    Source::Fn(fnid, _) => {
+                        // info!("Going back to fn {}", fnid);
+                        stack.push(value);
+                        cmds = &env.anon_fns[fnid].1;
+                    }
+                }
+                marks = make_marks(&cmds);
             }
         }
         // Multi-pop
@@ -238,6 +342,10 @@ enum Ret {
     FnCall(usize, Vec<(Symbol, Term)>, Term),
     Term(Hash),
     Nothing,
+    Request(Reference, usize, Vec<Term>),
+    ReRequest(Reference, usize, Vec<Term>, usize, Vec<Frame>),
+    Handle(usize),
+    HandlePure,
 }
 
 impl IR {
@@ -254,6 +362,21 @@ impl IR {
                 stack.frames[0].binding_marks.push(ln);
                 *idx += 1;
             }
+            IR::Swap => {
+                let one = stack.pop().unwrap();
+                let two = stack.pop().unwrap();
+                stack.push(one);
+                stack.push(two);
+                *idx += 1;
+            }
+            IR::Handle(mark) => return Ret::Handle(*mark),
+            IR::HandlePure => {
+                let v = stack.pop().unwrap();
+                stack.push(Term::RequestPure(Box::new(v)));
+                // *idx += 1;
+                return Ret::HandlePure;
+                // return Ret::RequestPure(v);
+            }
             IR::PopBindings => {
                 let mark = stack.frames[0].binding_marks.pop().unwrap();
                 // lol there's probably a better way
@@ -262,8 +385,13 @@ impl IR {
                 }
                 *idx += 1;
             }
+            // IR::Value(Term::Request(constructor, num))
             IR::Value(term) => {
                 match term {
+                    Term::Request(a, b) => {
+                        *idx += 1;
+                        return Ret::Request(a.clone(), *b, vec![]);
+                    }
                     Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
                         // Jump!
                         *idx += 1;
@@ -354,6 +482,15 @@ impl IR {
                 let arg = stack.pop().unwrap();
                 let f = stack.pop().unwrap();
                 match f {
+                    Term::RequestWithArgs(r, i, n, mut args) => {
+                        *idx += 1;
+                        args.push(arg);
+                        if args.len() == n {
+                            return Ret::Request(r, i, args);
+                        }
+                        info!("- request - {:?} - {}", args, n);
+                        stack.push(Term::RequestWithArgs(r, i, n, args));
+                    }
                     Term::Constructor(r, u) => {
                         stack.push(Term::PartialConstructor(r, u, vec![arg]));
                         *idx += 1;
@@ -643,7 +780,15 @@ impl IR {
                 }
                 *idx += 1;
             }
-            IR::PatternMatchFail => unreachable!("Pattern match failure!"),
+            IR::PatternMatchFail => {
+                let value = stack.pop().unwrap();
+                match value {
+                    Term::RequestWithContinuation(req, i, args, back_idx, frames) => {
+                        return Ret::ReRequest(req, i, args, back_idx, frames)
+                    }
+                    _ => unreachable!("Pattern match failure! {:?}", value),
+                }
+            }
             IR::PopUpOne => {
                 stack.pop_up();
                 // stack.0.remove(stack.0.len() - 2);

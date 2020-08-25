@@ -185,10 +185,26 @@ fn run(file: &String) -> std::io::Result<()> {
 
     if path.ends_with("paths") {
         // let base = path.parent().unwrap();
+        let cache = std::path::PathBuf::from(".tests-cache");
 
+        let branch = if cache.as_path().exists() {
+            println!("Using cache");
+            let mut buf = vec![];
+            use std::io::Read;
+            let mut file = std::fs::File::open(cache)?;
+            file.read_to_end(&mut buf)?;
+            bincode::deserialize(&buf).unwrap()
+        } else {
+            let mut branch = types::Branch::load(&path, get_head(&path)?)?;
+            branch.load_children(&path, true)?;
+            let buf = bincode::serialize(&branch).unwrap();
+            use std::io::Write;
+            let mut file = std::fs::File::create(cache)?;
+            file.write_all(&buf)?;
+            branch
+        };
         // let root = std::path::PathBuf::from(root);
-        let mut branch = types::Branch::load(&path, get_head(&path)?)?;
-        branch.load_children(&path, true)?;
+
         // Ok(branch)
 
         // let _full = load_full_branch(path.as_path())?;

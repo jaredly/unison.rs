@@ -9,6 +9,7 @@ pub struct Env {
     pub root: std::path::PathBuf,
     pub raw_cache: HashMap<String, ABT<Term>>,
     pub cache: HashMap<String, Term>,
+    pub type_cache: HashMap<String, TypeDecl>,
 }
 
 impl Env {
@@ -20,6 +21,25 @@ impl Env {
             root: std::path::PathBuf::from(root),
             raw_cache: HashMap::new(),
             cache: HashMap::new(),
+            type_cache: HashMap::new(),
+        }
+    }
+
+    pub fn load_type(&mut self, hash: &str) -> TypeDecl {
+        match self.type_cache.get(hash) {
+            Some(v) => v.clone(),
+            None => {
+                let mut full = self.root.clone();
+                full.push("types");
+                full.push("#".to_owned() + hash);
+                full.push("compiled.ub");
+                info!("Trying to load {:?}", full);
+                let res = parser::Buffer::from_file(full.as_path())
+                    .unwrap()
+                    .get_type();
+                self.type_cache.insert(hash.to_owned(), res.clone());
+                res
+            }
         }
     }
 

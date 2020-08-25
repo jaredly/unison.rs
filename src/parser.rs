@@ -328,6 +328,11 @@ impl<Inner: std::fmt::Debug> std::fmt::Debug for ABT<Inner> {
 impl std::fmt::Debug for Term {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Term::RequestWithArgs(i, n, _, _) => f.write_fmt(format_args!("req<{:?} - {}>", i, n)),
+            Term::RequestWithContinuation(i, n, _, _, _) => {
+                f.write_fmt(format_args!("req+cont<{:?} - {}>", i, n))
+            }
+            Term::RequestPure(i) => f.write_fmt(format_args!("pure<{:?}>", i)),
             Term::Int(i) => f.write_fmt(format_args!("{}", i)),
             Term::Nat(i) => f.write_fmt(format_args!("{}", i)),
             Term::Float(i) => f.write_fmt(format_args!("{}", i)),
@@ -342,7 +347,7 @@ impl std::fmt::Debug for Term {
             Term::Request(i, n) => f.write_fmt(format_args!("[request]{:?}#{}", i, n)),
             Term::Handle(i, n) => f.write_fmt(format_args!("handle {:?} with {:?}", i, n)),
             Term::App(i, n) => f.write_fmt(format_args!("{:?} <app> {:?}", i, n)),
-            Term::Ann(i, n) => f.write_fmt(format_args!("{:?} :: {:?}", i, n)),
+            Term::Ann(i, n) => f.write_fmt(format_args!("t- {:?} :: {:?} -t", i, n)),
             Term::Sequence(i) => f.write_fmt(format_args!("{:?}", i)),
             Term::If(i, a, b) => {
                 f.write_fmt(format_args!("if {:?} then\n{:?}\nelse\n{:?}", i, a, b))

@@ -162,6 +162,16 @@ pub enum Term {
 
     Constructor(Reference, usize),
     Request(Reference, usize),
+    RequestPure(Box<Term>),
+    RequestWithArgs(Reference, usize, usize, Vec<Term>),
+    RequestWithContinuation(
+        Reference,
+        usize,
+        Vec<Term>,
+        usize,
+        Vec<super::ir_runtime::Frame>,
+    ),
+
     Handle(Box<ABT<Term>>, Box<ABT<Term>>),
     App(Box<ABT<Term>>, Box<ABT<Term>>),
     Ann(Box<ABT<Term>>, ABT<Type>),

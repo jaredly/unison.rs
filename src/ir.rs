@@ -5,6 +5,8 @@ use std::collections::HashMap;
 // So I think we have a scope and a stack?
 #[derive(Debug, Clone)]
 pub enum IR {
+    Handle(usize), // indicate that there's a handler at `usize`
+    HandlePure,
     // This means "grab the function identified by usize"
     // but maybe this should be a Term?
     // I mean I should make a different `Value` deal, but not
@@ -21,6 +23,8 @@ pub enum IR {
     PopAndName(Symbol),
     // pop the top two values off the stack, call the first with the second
     Call,
+    // Swap the top two values
+    Swap,
     // Pop the top N values from the stack, assemble into a seq
     Seq(usize),
     JumpTo(usize),
@@ -94,6 +98,7 @@ fn unroll_cycle(
 pub struct GlobalEnv {
     pub env: env::Env,
     pub terms: HashMap<String, Vec<IR>>,
+    pub types: HashMap<String, TypeDecl>,
     pub anon_fns: Vec<(String, Vec<IR>)>, // I think?
 }
 
@@ -102,9 +107,22 @@ impl GlobalEnv {
         GlobalEnv {
             env,
             terms: HashMap::new(),
+            types: HashMap::new(),
             anon_fns: vec![],
         }
     }
+
+    pub fn get_type(&mut self, hash: String) -> TypeDecl {
+        match self.types.get(&hash) {
+            Some(v) => v.clone(),
+            None => {
+                let res = self.env.load_type(&hash);
+                self.types.insert(hash, res.clone());
+                res
+            }
+        }
+    }
+
     pub fn load(&mut self, hash: &str) {
         if self.terms.contains_key(hash) {
             // Already loaded
@@ -162,6 +180,36 @@ impl IREnv {
 impl Term {
     pub fn to_ir(&self, cmds: &mut IREnv, env: &mut GlobalEnv) {
         match self {
+            Term::Handle(handler, expr) => {
+                /*
+                Ok, here's the deal
+                the happy path is:
+
+                HandleMark 'Handle -> this would add a handle mark *to the current stack frame*.
+                                      they need to travel with the frames.
+                expr.to_ir
+                WrapAsEffectPure (takes the thing on the stack, wraps it)
+                'Handle <-- ok at this point we need to *clear* the 'Handle that's on the frame,
+                            because it shouldn't be used twice.
+                // here we expect the Request-dealio to be on the stack, right?
+                [ handler stuff ]
+                // Ok if we're pattern matching on a Request, we can know that we need to re-throw it if it fails.
+                'Done
+
+                */
+
+                let handle_mk = cmds.mark();
+                cmds.push(IR::Handle(handle_mk));
+                expr.to_ir(cmds, env);
+                cmds.push(IR::HandlePure);
+                cmds.push(IR::Mark(handle_mk));
+                handler.to_ir(cmds, env);
+                cmds.push(IR::Swap);
+                cmds.push(IR::Call);
+
+                let done_mk = cmds.mark();
+                cmds.push(IR::Mark(done_mk));
+            }
             Term::Ref(Reference::Builtin(_)) => cmds.push(IR::Value(self.clone())),
             Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
                 env.load(&hash.to_string());
@@ -265,8 +313,48 @@ impl Term {
                 let v = env.add_fn(cmds.term.clone(), &**contents);
                 cmds.push(IR::Fn(v));
             }
+            Term::Request(Reference::Builtin(name), _) => {
+                unimplemented!("Builtin Effect! I dont know the arity: {}", name);
+            }
+            Term::Request(Reference::DerivedId(id), number) => {
+                let t = env.get_type(id.0.to_string());
+                match t {
+                    TypeDecl::Effect(DataDecl { constructors, .. }) => {
+                        let args = calc_args(&constructors[*number].1);
+                        // if args == 0 {
+                        //     cmds.push(IR::Value(Term::Request(
+                        //         Reference::DerivedId(id.clone()),
+                        //         *number,
+                        //     )))
+                        // } else {
+                        cmds.push(IR::Value(Term::RequestWithArgs(
+                            Reference::DerivedId(id.clone()),
+                            *number,
+                            args,
+                            // ok, this is useless allocation if there are no
+                            vec![],
+                        )))
+                        // }
+                    }
+                    _ => unimplemented!("ok"),
+                }
+            }
 
             _ => cmds.push(IR::Value(self.clone())),
         }
+    }
+}
+
+fn calc_args(t: &ABT<Type>) -> usize {
+    match t {
+        ABT::Tm(t) => match t {
+            Type::Effect(_, _) => 0,
+            Type::Arrow(_, inner) => 1 + calc_args(&*inner),
+            Type::Forall(inner) => calc_args(inner),
+            _ => unimplemented!("Unexpected element of a request {:?}", t),
+        },
+        ABT::Abs(_, inner) => calc_args(inner),
+        ABT::Cycle(inner) => calc_args(inner),
+        _ => unimplemented!("Unexpected ABT"),
     }
 }
