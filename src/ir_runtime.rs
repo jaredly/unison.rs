@@ -61,36 +61,38 @@ impl Stack {
     }
 
     // TODO there should be a way to ... get back .. to the thing ... that we wanted ...
-    fn back_again_to_handler(&mut self) -> (usize, Vec<Frame>) {
+    fn back_again_to_handler(&mut self) -> Option<(usize, Vec<Frame>)> {
         let mut frames = vec![];
         self.frames.remove(0); // ignore the current one, it was a clone anyway
         while self.frames[0].handler == None {
             frames.push(self.frames.remove(0));
             if self.frames.len() == 0 {
-                unreachable!("Unhandled effect thrown")
+                // unreachable!("Unhandled effect thrown: {:?}",)
+                return None;
             }
         }
-        frames.extend(self.frames.clone());
-        // frames.push(self.frames[0].clone());
+        // frames.extend(self.frames.clone());
+        // frames.push(self.frames[0].clone()); // TODO change return pointer I think?
         let idx = self.frames[0].handler.unwrap();
         self.frames[0].handler = None;
-        (idx, frames)
+        Some((idx, frames))
     }
 
     // TODO there should be a way to ... get back .. to the thing ... that we wanted ...
-    fn back_to_handler(&mut self) -> (usize, Vec<Frame>) {
+    fn back_to_handler(&mut self) -> Option<(usize, Vec<Frame>)> {
         let mut frames = vec![];
         while self.frames[0].handler == None {
             frames.push(self.frames.remove(0));
             if self.frames.len() == 0 {
-                unreachable!("Unhandled effect thrown")
+                // unreachable!("Unhandled effect thrown")
+                return None;
             }
         }
-        frames.extend(self.frames.clone());
-        // frames.push(self.frames[0].clone());
+        // frames.extend(self.frames.clone());
+        // frames.push(self.frames[0].clone()); // TODO change return pointer I think?
         let idx = self.frames[0].handler.unwrap();
         self.frames[0].handler = None;
-        (idx, frames)
+        Some((idx, frames))
     }
 
     fn pop_frame(&mut self) -> (usize, Term) {
@@ -98,10 +100,11 @@ impl Stack {
         let value = self.pop().unwrap();
         self.frames.remove(0);
         info!(
-            "{} | <---- Return to idx {} with value {:?}",
+            "{} | <---- Return to idx {} with value {:?} - {:?}",
             self.frames.len(),
             idx,
-            value
+            value,
+            self.frames[0].source
         );
         (idx, value)
     }
@@ -165,12 +168,14 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
         for (n, i) in v.iter().enumerate() {
             info!("({}) {:?}", n, i);
         }
+        info!("\n");
     }
     for (i, v) in env.anon_fns.iter().enumerate() {
         info!("] Fn({}) : {}", i, v.0);
         for (n, i) in v.1.iter().enumerate() {
             info!("({}) {:?}", n, i)
         }
+        info!("\n");
     }
 
     let mut stack = Stack::new(Source::Term(hash.to_owned()));
@@ -204,21 +209,25 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
             Ret::Handle(mark) => {
                 idx += 1;
                 let mark_idx = *marks.get(&mark).unwrap();
+                info!("Setting handle, mark {} - idx {}", mark, mark_idx);
                 stack.frames[0].handler = Some(mark_idx);
                 stack.clone_frame(mark_idx);
                 stack.frames[0].handler = None;
             }
-            Ret::Continue(kidx, frames, arg) => {
-                info!(
-                    "** CONTINUE ** ({}) {} with {:?} - {:?}",
-                    kidx,
-                    frames.len(),
-                    arg,
-                    frames[0].source
-                );
-                stack.frames = frames;
+            Ret::Continue(kidx, mut frames, arg) => {
+                info!("** CONTINUE ** ({}) {} with {:?}", kidx, frames.len(), arg,);
+                let last = frames.len() - 1;
+                frames[last].return_index = idx; // ok I think this is the return pointer?
+                stack.frames = {
+                    frames.extend(stack.frames);
+                    frames
+                };
+                // stack.frames = frames;
                 for frame in &stack.frames {
-                    info!("> {:?}", frame.source);
+                    info!(
+                        "> {:?} : returning to index {} below",
+                        frame.source, frame.return_index
+                    );
                 }
                 idx = kidx;
                 stack.push(arg);
@@ -233,9 +242,22 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 // well let's just clone everything to start, because why not I guess?
             }
             Ret::ReRequest(kind, number, args, final_index, mut frames) => {
-                let (nidx, saved_frames) = stack.back_again_to_handler();
+                let (nidx, saved_frames) = match stack.back_again_to_handler() {
+                    None => unreachable!("Unhandled ReRequest: {:?} / {}", kind, number),
+                    Some((a, b)) => (a, b),
+                };
                 frames.extend(saved_frames);
                 idx = nidx;
+                info!(
+                    "Handling a bubbled request : {} - {:?}",
+                    idx, stack.frames[0].source
+                );
+
+                match stack.frames[0].source.clone() {
+                    Source::Term(hash) => cmds = env.terms.get(&hash).unwrap(),
+                    Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
+                };
+
                 stack.push(Term::RequestWithContinuation(
                     kind,
                     number,
@@ -253,13 +275,21 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 // hrm, yeah, seems like if we want to be able to keep stack variables the way they were ...
                 // ok, so we add a new frame, that's a clone of the old frame, hm.
                 // Which means, every frame will have at most one handler.
-                let (nidx, saved_frames) = stack.back_to_handler();
+                let (nidx, saved_frames) = match stack.back_to_handler() {
+                    None => unreachable!("Unhandled Request: {:?} / {}", kind, number),
+                    Some((a, b)) => (a, b),
+                };
                 idx = nidx;
                 info!(
-                    "Jumping back {} frames to {:?}",
-                    saved_frames.len(),
-                    stack.frames[0].source
+                    "Jumping back to idx {} to {:?}",
+                    idx, stack.frames[0].source
                 );
+
+                match stack.frames[0].source.clone() {
+                    Source::Term(hash) => cmds = env.terms.get(&hash).unwrap(),
+                    Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
+                };
+
                 stack.push(Term::RequestWithContinuation(
                     kind,
                     number,
@@ -334,7 +364,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
         }
     }
 
-    println!("All done I guess; {} {}", idx, cmds.len());
+    // println!("All done I guess; {} {}", idx, cmds.len());
 
     // while idx < cmds.len() {
     //     let cmd = &cmds[idx];
@@ -392,7 +422,11 @@ impl IR {
             IR::Handle(mark) => return Ret::Handle(*mark),
             IR::HandlePure => {
                 let v = stack.pop().unwrap();
-                stack.push(Term::RequestPure(Box::new(v)));
+                let v = match v {
+                    Term::RequestPure(_) => v,
+                    _ => Term::RequestPure(Box::new(v)),
+                };
+                stack.push(v);
                 // *idx += 1;
                 return Ret::HandlePure;
                 // return Ret::RequestPure(v);
@@ -506,7 +540,10 @@ impl IR {
                 let arg = stack.pop().unwrap();
                 let f = stack.pop().unwrap();
                 match f {
-                    Term::Continuation(kidx, frames) => return Ret::Continue(kidx, frames, arg),
+                    Term::Continuation(kidx, frames) => {
+                        *idx += 1;
+                        return Ret::Continue(kidx, frames, arg);
+                    }
                     Term::RequestWithArgs(r, i, n, mut args) => {
                         *idx += 1;
                         args.push(arg);
@@ -555,6 +592,17 @@ impl IR {
                             ("Boolean.not", Term::Boolean(i)) => Some(Term::Boolean(!i)),
                             ("List.size", Term::Sequence(s)) => Some(Term::Nat(s.len() as u64)),
                             ("Text.size", Term::Text(t)) => Some(Term::Nat(t.len() as u64)),
+                            ("Text.toCharList", Term::Text(t)) => Some(Term::Sequence(
+                                t.chars().map(|c| Box::new(Term::Char(c).into())).collect(),
+                            )),
+                            ("Text.fromCharList", Term::Sequence(l)) => Some(Term::Text({
+                                l.iter()
+                                    .map(|c| match &**c {
+                                        ABT::Tm(Term::Char(c)) => c,
+                                        _ => unreachable!("Not a char"),
+                                    })
+                                    .collect()
+                            })),
                             ("Bytes.size", Term::Bytes(t)) => Some(Term::Nat(t.len() as u64)),
                             ("Bytes.toList", Term::Bytes(t)) => Some(Term::Sequence(
                                 t.iter().map(|t| Box::new(ABT::Tm(Term::Nat(*t)))).collect(),
@@ -709,8 +757,12 @@ impl IR {
                                 Term::Sequence(l)
                             }
                             ("List.drop", [Term::Nat(n)], Term::Sequence(l)) => {
-                                let l = l[*n as usize..].to_vec();
-                                Term::Sequence(l)
+                                if *n as usize >= l.len() {
+                                    Term::Sequence(vec![])
+                                } else {
+                                    let l = l[*n as usize..].to_vec();
+                                    Term::Sequence(l)
+                                }
                             }
                             ("List.++", [Term::Sequence(l0)], Term::Sequence(l1)) => {
                                 let mut l = l0.clone();
@@ -809,7 +861,8 @@ impl IR {
                 let value = stack.pop().unwrap();
                 match value {
                     Term::RequestWithContinuation(req, i, args, back_idx, frames) => {
-                        return Ret::ReRequest(req, i, args, back_idx, frames)
+                        info!("Bubbling up a continuation {:?} # {}", req, i);
+                        return Ret::ReRequest(req, i, args, back_idx, frames);
                     }
                     _ => unreachable!("Pattern match failure! {:?}", value),
                 }

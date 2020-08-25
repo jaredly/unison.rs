@@ -206,7 +206,7 @@ impl Hash {
 impl std::fmt::Debug for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         f.write_str("#")?;
-        f.write_str(&base32hex::encode(&self.0[0..4]))
+        f.write_str(&base32hex::encode(&self.0)[0..10])
     }
 }
 

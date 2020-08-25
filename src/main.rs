@@ -131,7 +131,7 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<()> {
+fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<types::Term> {
     println!("Running {:?} - {}", terms_path, hash);
     let env = env::Env::init(terms_path.parent().unwrap());
     // let res = env.load(hash);
@@ -147,8 +147,7 @@ fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<()> {
     // );
     // let result = parser::Buffer::from_file(file)?.get_term();
     // println!("{:?}", res);
-    println!("-> {:?}", ret);
-    Ok(())
+    Ok(ret)
 }
 
 fn path_with(path: &std::path::Path, part: &str) -> std::path::PathBuf {
@@ -171,8 +170,35 @@ fn run_test(root: &str) -> std::io::Result<()> {
     keys.sort();
     for k in keys {
         if k[k.len() - 1] == "test" {
-            println!("{:?}", k);
-            run_term(&terms, &all_terms.get(&k).unwrap().to_string())?;
+            println!("--> {:?}", k.join("."));
+            let hash = all_terms.get(&k).unwrap().to_string();
+            let ret = run_term(&terms, &hash)?;
+            use types::*;
+            match ret {
+                Term::Sequence(results) => {
+                    for result in results {
+                        match *result {
+                            ABT::Tm(Term::PartialConstructor(
+                                Reference::DerivedId(Id(chash, _, _)),
+                                num,
+                                contents,
+                            )) if chash.to_string().starts_with("vmc06s") => {
+                                if num == 0 {
+                                    // failed!
+                                    println!("Test {} failed! {:?}", hash, contents);
+                                    return Ok(());
+                                } else {
+                                    println!(". Test result passed");
+                                }
+                            }
+                            item => println!("Sequence item, not a `Result`: {:?}", item),
+                        }
+                    }
+                }
+                ret => println!("Test result, not a sequence: {:?}", ret),
+            }
+            println!("<-- all passed");
+            // println!("-> {:?}", ret);
             // run_term_(&terms, &all_terms.get(&k).unwrap().to_string())?;
         }
     }
@@ -240,10 +266,12 @@ fn run(file: &String) -> std::io::Result<()> {
     }
 
     if path.parent().unwrap().ends_with("terms") {
-        return run_term(
+        let ret = run_term(
             path.parent().unwrap(),
             &path.file_name().unwrap().to_str().unwrap()[1..],
         );
+        println!("-> {:?}", ret);
+        return Ok(());
     }
 
     if path.parent().unwrap().parent().unwrap().ends_with("types") {
