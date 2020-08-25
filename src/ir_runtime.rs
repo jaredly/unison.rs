@@ -70,7 +70,8 @@ impl Stack {
                 unreachable!("Unhandled effect thrown")
             }
         }
-        frames.push(self.frames[0].clone());
+        frames.extend(self.frames.clone());
+        // frames.push(self.frames[0].clone());
         let idx = self.frames[0].handler.unwrap();
         self.frames[0].handler = None;
         (idx, frames)
@@ -85,7 +86,8 @@ impl Stack {
                 unreachable!("Unhandled effect thrown")
             }
         }
-        frames.push(self.frames[0].clone());
+        frames.extend(self.frames.clone());
+        // frames.push(self.frames[0].clone());
         let idx = self.frames[0].handler.unwrap();
         self.frames[0].handler = None;
         (idx, frames)
@@ -160,14 +162,14 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
     info!("[- ENV -]");
     for (k, v) in env.terms.iter() {
         info!("] Term {}", k);
-        for i in v {
-            info!(". {:?}", i)
+        for (n, i) in v.iter().enumerate() {
+            info!("({}) {:?}", n, i);
         }
     }
     for (i, v) in env.anon_fns.iter().enumerate() {
         info!("] Fn({}) : {}", i, v.0);
-        for i in &v.1 {
-            info!(". {:?}", i)
+        for (n, i) in v.1.iter().enumerate() {
+            info!("({}) {:?}", n, i)
         }
     }
 
@@ -205,6 +207,30 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 stack.frames[0].handler = Some(mark_idx);
                 stack.clone_frame(mark_idx);
                 stack.frames[0].handler = None;
+            }
+            Ret::Continue(kidx, frames, arg) => {
+                info!(
+                    "** CONTINUE ** ({}) {} with {:?} - {:?}",
+                    kidx,
+                    frames.len(),
+                    arg,
+                    frames[0].source
+                );
+                stack.frames = frames;
+                for frame in &stack.frames {
+                    info!("> {:?}", frame.source);
+                }
+                idx = kidx;
+                stack.push(arg);
+                match stack.frames[0].source.clone() {
+                    Source::Term(hash) => cmds = env.terms.get(&hash).unwrap(),
+                    Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
+                }
+                marks = make_marks(&cmds);
+                // umm
+                // ok, so do we need to clone the absolutely whole stack?
+                // Or .. is it just "when we go down a level, we need to clone"
+                // well let's just clone everything to start, because why not I guess?
             }
             Ret::ReRequest(kind, number, args, final_index, mut frames) => {
                 let (nidx, saved_frames) = stack.back_again_to_handler();
@@ -272,18 +298,11 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 idx = idx1;
                 // stack.pop_frame();
                 // stack.frames.remove(0);
+                stack.push(value);
                 match stack.frames[0].source.clone() {
-                    Source::Term(hash) => {
-                        // info!("Going back to {}", hash);
-                        stack.push(value);
-                        cmds = env.terms.get(&hash).unwrap();
-                    }
-                    Source::Fn(fnid, _) => {
-                        // info!("Going back to fn {}", fnid);
-                        stack.push(value);
-                        cmds = &env.anon_fns[fnid].1;
-                    }
-                }
+                    Source::Term(hash) => cmds = env.terms.get(&hash).unwrap(),
+                    Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
+                };
                 marks = make_marks(&cmds);
             }
         }
@@ -346,6 +365,7 @@ enum Ret {
     ReRequest(Reference, usize, Vec<Term>, usize, Vec<Frame>),
     Handle(usize),
     HandlePure,
+    Continue(usize, Vec<Frame>, Term),
 }
 
 impl IR {
@@ -391,6 +411,10 @@ impl IR {
                     Term::Request(a, b) => {
                         *idx += 1;
                         return Ret::Request(a.clone(), *b, vec![]);
+                    }
+                    Term::RequestWithArgs(a, b, n, args) if *n == args.len() => {
+                        *idx += 1;
+                        return Ret::Request(a.clone(), *b, args.clone());
                     }
                     Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
                         // Jump!
@@ -482,6 +506,7 @@ impl IR {
                 let arg = stack.pop().unwrap();
                 let f = stack.pop().unwrap();
                 match f {
+                    Term::Continuation(kidx, frames) => return Ret::Continue(kidx, frames, arg),
                     Term::RequestWithArgs(r, i, n, mut args) => {
                         *idx += 1;
                         args.push(arg);
