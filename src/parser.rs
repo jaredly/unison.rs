@@ -71,7 +71,7 @@ impl Buffer {
     }
 
     pub fn get_type(&mut self) -> TypeDecl {
-        println!("Getting type");
+        // println!("Getting type");
         self.get()
     }
 
@@ -600,6 +600,7 @@ impl FromBuffer for Modifier {
 
 impl FromBuffer for DataDecl {
     fn get(buf: &mut Buffer) -> Self {
+        // println!("getting a datadecl");
         DataDecl {
             modifier: buf.get(),
             bound: buf.get(),

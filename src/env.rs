@@ -33,7 +33,7 @@ impl Env {
                 full.push("types");
                 full.push("#".to_owned() + hash);
                 full.push("compiled.ub");
-                info!("Trying to load {:?}", full);
+                info!("Trying to load type {:?}", full);
                 let res = parser::Buffer::from_file(full.as_path())
                     .unwrap()
                     .get_type();

@@ -194,12 +194,34 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
 
     let mut idx = 0;
 
-    // let mut n = 0;
+    let mut n = 0;
+
+    // let mut longest = 10;
+    // let mut last = std::time::Instant::now();
+
+    let start = std::time::Instant::now();
 
     while idx < cmds.len() {
-        // n += 1;
-        // if n > 100 {
-        //     break;
+        // let t = last.elapsed().as_millis();
+        // if t > longest {
+        //     longest = t;
+        //     println!("Longest {}", t);
+        // }
+        // last = std::time::Instant::now();
+        if n % 100 == 0 {
+            if start.elapsed().as_secs() > 20 {
+                return Term::Text("Ran out of time".to_owned());
+            }
+        }
+
+        n += 1;
+        // if n % 300 == 0 {
+        //     println!("{}", n);
+        // }
+        // print!(".");
+        // if n > 10_000 {
+        //     println!("\n< > < > Sorry folks < > < >\n");
+        //     return Term::Int(0);
         // }
 
         let cmd = &cmds[idx];
@@ -336,6 +358,13 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 marks = make_marks(&cmds);
             }
         }
+
+        // let time = start.elapsed().as_millis();
+        // if time > 5 {
+        //     println!("Took: {}", time);
+        //     println!("{:?}", cmd);
+        // }
+
         // Multi-pop
         while idx >= cmds.len() {
             if stack.frames.len() > 1 {
