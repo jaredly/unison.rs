@@ -169,17 +169,7 @@ pub enum Value {
         Vec<super::ir_runtime::Frame>,
     ),
 
-    // Handle(Box<Value>, Box<Value>),
-    // App(Box<Value>, Box<Value>),
-    // Ann(Box<Value>, ABT<Type>),
     Sequence(Vec<Value>),
-    // If(Box<Value>, Box<Value>, Box<Value>),
-    // And(Box<Value>, Box<Value>),
-    // Or(Box<Value>, Box<Value>),
-    // Lam(Box<Value>),
-    // LetRec(bool, Vec<Box<Value>>, Box<Value>),
-    // Let(bool, Box<Value>, Box<Value>),
-    // Match(Box<Value>, Vec<MatchCase>),
     TermLink(Referent),
     TypeLink(Reference),
 }
@@ -195,27 +185,8 @@ pub enum Term {
     Char(char),
     Blank,
     Ref(Reference),
-
-    // CycleFnBody(usize, Vec<(Symbol, Term)>, Vec<(Symbol, usize)>),
-    // PartialFnBody(usize, Vec<(Symbol, Term)>),
-    // PartialNativeApp(String, Vec<Term>),
-    // PartialConstructor(Reference, usize, Vec<Term>),
-    // ScopedFunction(Box<ABT<Term>>, String, Vec<(String, Term)>),
-    // // CycleFunction(Box<ABT<Term>>, String, Vec<(String, Term)>, String),
-    // Cycle(Box<Term>, Vec<(String, Term)>),
-
-    // Continuation(usize, Vec<super::ir_runtime::Frame>),
     Constructor(Reference, usize),
     Request(Reference, usize),
-    // RequestPure(Box<Term>),
-    // RequestWithArgs(Reference, usize, usize, Vec<Term>),
-    // RequestWithContinuation(
-    //     Reference,
-    //     usize,
-    //     Vec<Term>,
-    //     usize,
-    //     Vec<super::ir_runtime::Frame>,
-    // ),
     Handle(Box<ABT<Term>>, Box<ABT<Term>>),
     App(Box<ABT<Term>>, Box<ABT<Term>>),
     Ann(Box<ABT<Term>>, ABT<Type>),
@@ -245,37 +216,6 @@ pub enum Term {
     TypeLink(Reference),
 }
 
-// impl Term {
-//     fn walk<F>(&self, f: F) where F: Fn(&Term) -> () {
-//         f(self);
-//         match self {
-//             Match(a, b) =>
-//             Handle(Box<ABT<Term>>, Box<ABT<Term>>),
-//             App(Box<ABT<Term>>, Box<ABT<Term>>),
-//             Ann(Box<ABT<Term>>, ABT<Type>),
-//             Sequence(Vec<Box<ABT<Term>>>),
-//             If(Box<ABT<Term>>, Box<ABT<Term>>, Box<ABT<Term>>),
-//             And(Box<ABT<Term>>, Box<ABT<Term>>),
-//             Or(Box<ABT<Term>>, Box<ABT<Term>>),
-//             Lam(Box<ABT<Term>>),
-//             //   -- Note: let rec blocks have an outer ABT.Cycle which introduces as many
-//             //   -- variables as there are bindings
-//             LetRec(bool, a, b) => {
-//                 for m in a {
-//                     m.walk(f);
-//                 }
-//                 b.walk(f);
-//             }
-//             //   -- Note: first parameter is the binding, second is the expression which may refer
-//             //   -- to this let bound variable. Constructed as `Let b (abs v e)`
-//             Let(bool, a, b) => {
-//                 a.walk(f); b.walk(f);
-//             }
-//             ScopedFunction(a, _, _) => a.walk(f)
-//         }
-//     }
-// }
-
 #[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub enum ABT<Content> {
     Var(Symbol),
@@ -283,14 +223,6 @@ pub enum ABT<Content> {
     Abs(Symbol, Box<ABT<Content>>),
     Tm(Content),
 }
-
-// fn indent(n: usize) -> String {
-//     let mut res = "".to_owned();
-//     for _ in 0..n {
-//         res += "|  ";
-//     }
-//     res
-// }
 
 #[derive(
     Serialize, Deserialize, Debug, Clone, std::cmp::Eq, std::hash::Hash, std::cmp::PartialEq,
