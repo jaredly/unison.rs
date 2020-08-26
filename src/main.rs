@@ -7,7 +7,6 @@ mod ir;
 mod ir_runtime;
 mod parser;
 mod pattern;
-mod runtime;
 mod types;
 
 fn load_type(file: &std::path::Path) -> std::io::Result<()> {
@@ -131,7 +130,7 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<types::Term> {
+fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<types::Value> {
     let last = std::time::Instant::now();
     println!("Running {:?} - {}", terms_path, hash);
     let env = env::Env::init(terms_path.parent().unwrap());
@@ -185,14 +184,14 @@ fn run_test(root: &str) -> std::io::Result<()> {
             let ret = run_term(&terms, &hash)?;
             use types::*;
             match ret {
-                Term::Sequence(results) => {
+                Value::Sequence(results) => {
                     for result in results {
-                        match *result {
-                            ABT::Tm(Term::PartialConstructor(
+                        match result {
+                            Value::PartialConstructor(
                                 Reference::DerivedId(Id(chash, _, _)),
                                 num,
                                 contents,
-                            )) if chash.to_string().starts_with("vmc06s") => {
+                            ) if chash.to_string().starts_with("vmc06s") => {
                                 if num == 0 {
                                     // failed!
                                     println!("Test {} failed! {:?}", hash, contents);

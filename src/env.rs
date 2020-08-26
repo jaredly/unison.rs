@@ -68,57 +68,9 @@ impl Env {
 #[derive(Clone, Debug)]
 pub struct Stack(pub Vec<Frame>);
 
-impl Stack {
-    pub fn lookup(&self, name: &str) -> Term {
-        for (n, term) in &self.0[0].bindings {
-            if n == name {
-                return term.clone();
-            }
-        }
-        unreachable!("No term {} found - {}", name, self.0[0].term);
-    }
-
-    pub fn push(&mut self, k: String, v: Term) {
-        info!(
-            "---- Stack push({}) {} {:?}",
-            self.0[0].bindings.len(),
-            k,
-            v
-        );
-        self.0[0].bindings.push((k, v));
-    }
-
-    pub fn set(&mut self, k: String, v: Term) {
-        info!("---- Stack set({}) {} {:?}", self.0[0].bindings.len(), k, v);
-        self.0[0].bindings.insert(0, (k, v));
-    }
-
-    pub fn with(&self, k: String, v: Term) -> Self {
-        let mut nw = self.clone();
-        nw.set(k, v);
-        nw
-    }
-
-    pub fn with_frame(&self, hash: String) -> Self {
-        let mut nw = self.clone();
-        nw.0.insert(0, Frame::new(hash));
-        nw
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Frame {
     pub term: String, // TODO Hash
     pub moment: usize,
     pub bindings: Vec<(String, Term)>,
-}
-
-impl Frame {
-    pub fn new(term: String) -> Self {
-        Frame {
-            term,
-            moment: 0,
-            bindings: vec![],
-        }
-    }
 }

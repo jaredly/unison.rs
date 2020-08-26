@@ -16,7 +16,7 @@ pub enum IR {
     Cycle(Vec<String>),
     // CycleFn(usize, Vec<(Symbol, usize)>),
     // Push this value onto the stack
-    Value(Term),
+    Value(Value),
     // lookup the symbol, and push it onto the stack
     PushSym(Symbol),
     // pop the top value off the stack and give it a name
@@ -210,10 +210,10 @@ impl Term {
                 let done_mk = cmds.mark();
                 cmds.push(IR::Mark(done_mk));
             }
-            Term::Ref(Reference::Builtin(_)) => cmds.push(IR::Value(self.clone())),
+            Term::Ref(Reference::Builtin(_)) => cmds.push(IR::Value(self.clone().into())),
             Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
                 env.load(&hash.to_string());
-                cmds.push(IR::Value(self.clone()))
+                cmds.push(IR::Value(self.clone().into()))
             }
             Term::App(one, two) => {
                 one.to_ir(cmds, env);
@@ -246,10 +246,10 @@ impl Term {
                 cmds.push(IR::If(fail_tok));
                 b.to_ir(cmds, env);
                 cmds.push(IR::If(fail_tok));
-                cmds.push(IR::Value(Term::Boolean(true)));
+                cmds.push(IR::Value(Value::Boolean(true)));
                 cmds.push(IR::JumpTo(done_tok));
                 cmds.push(IR::Mark(fail_tok));
-                cmds.push(IR::Value(Term::Boolean(false)));
+                cmds.push(IR::Value(Value::Boolean(false)));
                 cmds.push(IR::Mark(done_tok));
             }
             Term::Or(a, b) => {
@@ -265,11 +265,11 @@ impl Term {
                 cmds.push(IR::If(fail_tok));
 
                 cmds.push(IR::Mark(good_tok));
-                cmds.push(IR::Value(Term::Boolean(true)));
+                cmds.push(IR::Value(Value::Boolean(true)));
                 cmds.push(IR::JumpTo(done_tok));
 
                 cmds.push(IR::Mark(fail_tok));
-                cmds.push(IR::Value(Term::Boolean(false)));
+                cmds.push(IR::Value(Value::Boolean(false)));
 
                 cmds.push(IR::Mark(done_tok));
             }
@@ -327,7 +327,7 @@ impl Term {
                         //         *number,
                         //     )))
                         // } else {
-                        cmds.push(IR::Value(Term::RequestWithArgs(
+                        cmds.push(IR::Value(Value::RequestWithArgs(
                             Reference::DerivedId(id.clone()),
                             *number,
                             args,
@@ -340,7 +340,7 @@ impl Term {
                 }
             }
 
-            _ => cmds.push(IR::Value(self.clone())),
+            _ => cmds.push(IR::Value(self.clone().into())),
         }
     }
 }

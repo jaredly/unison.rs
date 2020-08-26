@@ -8,18 +8,18 @@ static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8j
 
 #[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Serialize, Deserialize)]
 pub enum Source {
-    Term(String),
+    Value(String),
     Fn(usize, String),
 }
 
 #[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Serialize, Deserialize)]
 pub struct Frame {
     source: Source,
-    stack: Vec<Term>,
+    stack: Vec<Value>,
     marks: Vec<usize>,
     handler: Option<usize>,
     return_index: usize,
-    bindings: Vec<(Symbol, Term)>,
+    bindings: Vec<(Symbol, Value)>,
     binding_marks: Vec<usize>,
 }
 
@@ -95,7 +95,7 @@ impl Stack {
         Some((idx, frames))
     }
 
-    fn pop_frame(&mut self) -> (usize, Term) {
+    fn pop_frame(&mut self) -> (usize, Value) {
         let idx = self.frames[0].return_index;
         let value = self.pop().unwrap();
         self.frames.remove(0);
@@ -109,16 +109,16 @@ impl Stack {
         (idx, value)
     }
     // TODO : fn replace_frame
-    fn push(&mut self, t: Term) {
+    fn push(&mut self, t: Value) {
         info!("{} | Stack push: {:?}", self.frames.len(), t);
         self.frames[0].stack.push(t);
     }
-    fn pop(&mut self) -> Option<Term> {
+    fn pop(&mut self) -> Option<Value> {
         let t = self.frames[0].stack.pop();
         info!("{} | Stack pop: {:?}", self.frames.len(), t);
         t
     }
-    fn peek(&mut self) -> Option<&Term> {
+    fn peek(&mut self) -> Option<&Value> {
         let l = self.frames[0].stack.len();
         if l > 0 {
             info!("Stack peek: {:?}", self.frames[0].stack[l - 1]);
@@ -161,10 +161,10 @@ fn make_marks(cmds: &[IR]) -> HashMap<usize, usize> {
 }
 
 #[allow(while_true)]
-pub fn eval(env: GlobalEnv, hash: &str) -> Term {
+pub fn eval(env: GlobalEnv, hash: &str) -> Value {
     info!("[- ENV -]");
     for (k, v) in env.terms.iter() {
-        info!("] Term {}", k);
+        info!("] Value {}", k);
         for (n, i) in v.iter().enumerate() {
             info!("({}) {:?}", n, i);
         }
@@ -178,7 +178,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
         info!("\n");
     }
 
-    let mut stack = Stack::new(Source::Term(hash.to_owned()));
+    let mut stack = Stack::new(Source::Value(hash.to_owned()));
     let mut cmds: &Vec<IR> = env.terms.get(hash).unwrap();
 
     let mut marks = make_marks(&cmds);
@@ -210,7 +210,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
         // last = std::time::Instant::now();
         if n % 100 == 0 {
             if start.elapsed().as_secs() > 20 {
-                return Term::Text("Ran out of time".to_owned());
+                return Value::Text("Ran out of time".to_owned());
             }
         }
 
@@ -221,7 +221,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
         // print!(".");
         // if n > 10_000 {
         //     println!("\n< > < > Sorry folks < > < >\n");
-        //     return Term::Int(0);
+        //     return Value::Int(0);
         // }
 
         let cmd = &cmds[idx];
@@ -254,7 +254,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 idx = kidx;
                 stack.push(arg);
                 match stack.frames[0].source.clone() {
-                    Source::Term(hash) => cmds = env.terms.get(&hash).unwrap(),
+                    Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
                 }
                 marks = make_marks(&cmds);
@@ -276,11 +276,11 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 );
 
                 match stack.frames[0].source.clone() {
-                    Source::Term(hash) => cmds = env.terms.get(&hash).unwrap(),
+                    Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
                 };
 
-                stack.push(Term::RequestWithContinuation(
+                stack.push(Value::RequestWithContinuation(
                     kind,
                     number,
                     args,
@@ -308,11 +308,11 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 );
 
                 match stack.frames[0].source.clone() {
-                    Source::Term(hash) => cmds = env.terms.get(&hash).unwrap(),
+                    Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
                 };
 
-                stack.push(Term::RequestWithContinuation(
+                stack.push(Value::RequestWithContinuation(
                     kind,
                     number,
                     args,
@@ -334,12 +334,12 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 // }
                 idx = 0;
             }
-            Ret::Term(hash) => {
+            Ret::Value(hash) => {
                 // info!("Jumping to {:?}", hash);
-                stack.new_frame(idx, Source::Term(hash.to_string()));
+                stack.new_frame(idx, Source::Value(hash.to_string()));
                 cmds = env.terms.get(&hash.to_string()).unwrap();
                 marks = make_marks(&cmds);
-                // info!("[Term Instructions]");
+                // info!("[Value Instructions]");
                 // for cmd in cmds {
                 //     info!("{:?}", cmd);
                 // }
@@ -352,7 +352,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 // stack.frames.remove(0);
                 stack.push(value);
                 match stack.frames[0].source.clone() {
-                    Source::Term(hash) => cmds = env.terms.get(&hash).unwrap(),
+                    Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
                 };
                 marks = make_marks(&cmds);
@@ -374,7 +374,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
                 // stack.pop_frame();
                 // stack.frames.remove(0);
                 match stack.frames[0].source.clone() {
-                    Source::Term(hash) => {
+                    Source::Value(hash) => {
                         // info!("Going back to {}", hash);
                         stack.push(value);
                         cmds = env.terms.get(&hash).unwrap();
@@ -417,14 +417,14 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Term {
 }
 
 enum Ret {
-    FnCall(usize, Vec<(Symbol, Term)>, Term),
-    Term(Hash),
+    FnCall(usize, Vec<(Symbol, Value)>, Value),
+    Value(Hash),
     Nothing,
-    Request(Reference, usize, Vec<Term>),
-    ReRequest(Reference, usize, Vec<Term>, usize, Vec<Frame>),
+    Request(Reference, usize, Vec<Value>),
+    ReRequest(Reference, usize, Vec<Value>, usize, Vec<Frame>),
     Handle(usize),
     HandlePure,
-    Continue(usize, Vec<Frame>, Term),
+    Continue(usize, Vec<Frame>, Value),
 }
 
 impl IR {
@@ -452,8 +452,8 @@ impl IR {
             IR::HandlePure => {
                 let v = stack.pop().unwrap();
                 let v = match v {
-                    Term::RequestPure(_) => v,
-                    _ => Term::RequestPure(Box::new(v)),
+                    Value::RequestPure(_) => v,
+                    _ => Value::RequestPure(Box::new(v)),
                 };
                 stack.push(v);
                 // *idx += 1;
@@ -468,21 +468,21 @@ impl IR {
                 }
                 *idx += 1;
             }
-            // IR::Value(Term::Request(constructor, num))
+            // IR::Value(Value::Request(constructor, num))
             IR::Value(term) => {
                 match term {
-                    Term::Request(a, b) => {
+                    Value::Request(a, b) => {
                         *idx += 1;
                         return Ret::Request(a.clone(), *b, vec![]);
                     }
-                    Term::RequestWithArgs(a, b, n, args) if *n == args.len() => {
+                    Value::RequestWithArgs(a, b, n, args) if *n == args.len() => {
                         *idx += 1;
                         return Ret::Request(a.clone(), *b, args.clone());
                     }
-                    Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
+                    Value::Ref(Reference::DerivedId(Id(hash, _, _))) => {
                         // Jump!
                         *idx += 1;
-                        return Ret::Term(hash.clone());
+                        return Ret::Value(hash.clone());
                         // let value = env.terms.get(&hash.to_string()).clone();
                         // stack.push_frame(idx, hash.to_string());
                         // *idx = 0;
@@ -497,11 +497,11 @@ impl IR {
             }
             // IR::Reference()
             // IR::Ref(hash) => {
-            //     stack.push(Term::Ref(Reference::))
+            //     stack.push(Value::Ref(Reference::))
             //     // let res = env.load(&hash.to_string());
             // }
             // IR::Builtin(name) => {
-            //     stack.push(Term::Ref(Reference::Builtin(name.clone())));
+            //     stack.push(Value::Ref(Reference::Builtin(name.clone())));
             //     *idx += 1;
             // }
             IR::PushSym(symbol) => {
@@ -522,7 +522,7 @@ impl IR {
                 *idx += 1;
             }
             IR::Fn(i) => {
-                stack.push(Term::PartialFnBody(*i, stack.frames[0].bindings.clone()));
+                stack.push(Value::PartialFnBody(*i, stack.frames[0].bindings.clone()));
                 *idx += 1;
             }
             IR::Cycle(names) => {
@@ -531,7 +531,7 @@ impl IR {
                 for name in names {
                     let v = stack.pop().unwrap();
                     match v {
-                        Term::PartialFnBody(fnint, bindings) => {
+                        Value::PartialFnBody(fnint, bindings) => {
                             mutuals.push((Symbol::new(name.clone()), fnint));
                             items.push((name, fnint, bindings));
                         }
@@ -545,11 +545,11 @@ impl IR {
                 for (name, fnint, bindings) in items {
                     stack.frames[0].bindings.push((
                         Symbol::new(name.clone()),
-                        Term::CycleFnBody(fnint, bindings, mutuals.clone()),
+                        Value::CycleFnBody(fnint, bindings, mutuals.clone()),
                     ))
                 }
 
-                // stack.push(Term::CycleFnBody(
+                // stack.push(Value::CycleFnBody(
                 //     *i,
                 //     stack.frames[0].bindings.clone(),
                 //     mutuals.clone(),
@@ -557,7 +557,7 @@ impl IR {
                 *idx += 1;
             }
             // IR::CycleFn(i, mutuals) => {
-            //     stack.push(Term::CycleFnBody(
+            //     stack.push(Value::CycleFnBody(
             //         *i,
             //         stack.frames[0].bindings.clone(),
             //         mutuals.clone(),
@@ -569,170 +569,174 @@ impl IR {
                 let arg = stack.pop().unwrap();
                 let f = stack.pop().unwrap();
                 match f {
-                    Term::Continuation(kidx, frames) => {
+                    Value::Continuation(kidx, frames) => {
                         *idx += 1;
                         return Ret::Continue(kidx, frames, arg);
                     }
-                    Term::RequestWithArgs(r, i, n, mut args) => {
+                    Value::RequestWithArgs(r, i, n, mut args) => {
                         *idx += 1;
                         args.push(arg);
                         if args.len() == n {
                             return Ret::Request(r, i, args);
                         }
                         info!("- request - {:?} - {}", args, n);
-                        stack.push(Term::RequestWithArgs(r, i, n, args));
+                        stack.push(Value::RequestWithArgs(r, i, n, args));
                     }
-                    Term::Constructor(r, u) => {
-                        stack.push(Term::PartialConstructor(r, u, vec![arg]));
+                    Value::Constructor(r, u) => {
+                        stack.push(Value::PartialConstructor(r, u, vec![arg]));
                         *idx += 1;
                     }
-                    Term::PartialConstructor(r, u, c) => {
+                    Value::PartialConstructor(r, u, c) => {
                         let mut c = c.clone();
                         c.push(arg);
-                        stack.push(Term::PartialConstructor(r, u, c));
+                        stack.push(Value::PartialConstructor(r, u, c));
                         *idx += 1;
                     }
-                    Term::CycleFnBody(fnint, mut bindings, mutuals) => {
+                    Value::CycleFnBody(fnint, mut bindings, mutuals) => {
                         *idx += 1;
                         let copy = bindings.clone();
                         for (k, v) in &mutuals {
                             bindings.push((
                                 k.clone(),
-                                Term::CycleFnBody(*v, copy.clone(), mutuals.clone()),
+                                Value::CycleFnBody(*v, copy.clone(), mutuals.clone()),
                             ))
                         }
                         return Ret::FnCall(fnint, bindings, arg);
                     }
-                    Term::PartialFnBody(fnint, bindings) => {
+                    Value::PartialFnBody(fnint, bindings) => {
                         *idx += 1;
                         return Ret::FnCall(fnint, bindings, arg);
                     }
-                    Term::Ref(Reference::Builtin(builtin)) => {
+                    Value::Ref(Reference::Builtin(builtin)) => {
                         let res = match (builtin.as_str(), &arg) {
-                            ("Int.increment", Term::Int(i)) => Some(Term::Int(i + 1)),
-                            ("Int.negate", Term::Int(i)) => Some(Term::Int(-i)),
-                            ("Int.isEven", Term::Int(i)) => Some(Term::Boolean(i % 2 == 0)),
-                            ("Int.isOdd", Term::Int(i)) => Some(Term::Boolean(i % 2 == 1)),
-                            ("Nat.increment", Term::Nat(i)) => Some(Term::Nat(i + 1)),
-                            ("Nat.isEvent", Term::Nat(i)) => Some(Term::Boolean(i % 2 == 0)),
-                            ("Nat.isOdd", Term::Nat(i)) => Some(Term::Boolean(i % 2 == 1)),
-                            ("Nat.toInt", Term::Nat(i)) => Some(Term::Int(*i as i64)),
-                            ("Nat.toText", Term::Nat(i)) => Some(Term::Text(i.to_string())),
-                            ("Boolean.not", Term::Boolean(i)) => Some(Term::Boolean(!i)),
-                            ("List.size", Term::Sequence(s)) => Some(Term::Nat(s.len() as u64)),
-                            ("Text.size", Term::Text(t)) => Some(Term::Nat(t.len() as u64)),
-                            ("Text.toCharList", Term::Text(t)) => Some(Term::Sequence(
-                                t.chars().map(|c| Box::new(Term::Char(c).into())).collect(),
-                            )),
-                            ("Text.fromCharList", Term::Sequence(l)) => Some(Term::Text({
+                            ("Int.increment", Value::Int(i)) => Some(Value::Int(i + 1)),
+                            ("Int.negate", Value::Int(i)) => Some(Value::Int(-i)),
+                            ("Int.isEven", Value::Int(i)) => Some(Value::Boolean(i % 2 == 0)),
+                            ("Int.isOdd", Value::Int(i)) => Some(Value::Boolean(i % 2 == 1)),
+                            ("Nat.increment", Value::Nat(i)) => Some(Value::Nat(i + 1)),
+                            ("Nat.isEvent", Value::Nat(i)) => Some(Value::Boolean(i % 2 == 0)),
+                            ("Nat.isOdd", Value::Nat(i)) => Some(Value::Boolean(i % 2 == 1)),
+                            ("Nat.toInt", Value::Nat(i)) => Some(Value::Int(*i as i64)),
+                            ("Nat.toText", Value::Nat(i)) => Some(Value::Text(i.to_string())),
+                            ("Boolean.not", Value::Boolean(i)) => Some(Value::Boolean(!i)),
+                            ("List.size", Value::Sequence(s)) => Some(Value::Nat(s.len() as u64)),
+                            ("Text.size", Value::Text(t)) => Some(Value::Nat(t.len() as u64)),
+                            ("Text.toCharList", Value::Text(t)) => {
+                                Some(Value::Sequence(t.chars().map(|c| Value::Char(c)).collect()))
+                            }
+                            ("Text.fromCharList", Value::Sequence(l)) => Some(Value::Text({
                                 l.iter()
-                                    .map(|c| match &**c {
-                                        ABT::Tm(Term::Char(c)) => c,
+                                    .map(|c| match c {
+                                        Value::Char(c) => c,
                                         _ => unreachable!("Not a char"),
                                     })
                                     .collect()
                             })),
-                            ("Bytes.size", Term::Bytes(t)) => Some(Term::Nat(t.len() as u64)),
-                            ("Bytes.toList", Term::Bytes(t)) => Some(Term::Sequence(
-                                t.iter().map(|t| Box::new(ABT::Tm(Term::Nat(*t)))).collect(),
-                            )),
+                            ("Bytes.size", Value::Bytes(t)) => Some(Value::Nat(t.len() as u64)),
+                            ("Bytes.toList", Value::Bytes(t)) => {
+                                Some(Value::Sequence(t.iter().map(|t| Value::Nat(*t)).collect()))
+                            }
                             _ => None,
                         };
                         match res {
                             Some(v) => stack.push(v),
                             None => {
-                                stack.push(Term::PartialNativeApp(builtin, vec![arg.clone()]));
+                                stack.push(Value::PartialNativeApp(builtin, vec![arg.clone()]));
                             }
                         }
                         *idx += 1;
                     }
-                    Term::PartialNativeApp(name, args) => {
+                    Value::PartialNativeApp(name, args) => {
                         let res = match (name.as_str(), args.as_slice(), &arg) {
-                            ("Int.+", [Term::Int(a)], Term::Int(b)) => {
-                                Term::Int(a.wrapping_add(*b))
+                            ("Int.+", [Value::Int(a)], Value::Int(b)) => {
+                                Value::Int(a.wrapping_add(*b))
                             }
-                            ("Int.-", [Term::Int(a)], Term::Int(b)) => {
-                                Term::Int(a.wrapping_sub(*b))
+                            ("Int.-", [Value::Int(a)], Value::Int(b)) => {
+                                Value::Int(a.wrapping_sub(*b))
                             }
-                            ("Int.*", [Term::Int(a)], Term::Int(b)) => Term::Int(a * b),
-                            ("Int./", [Term::Int(a)], Term::Int(b)) => Term::Int(a / b),
-                            ("Int.<", [Term::Int(a)], Term::Int(b)) => Term::Boolean(*a < *b),
-                            ("Int.<=", [Term::Int(a)], Term::Int(b)) => Term::Boolean(*a <= *b),
-                            ("Int.>", [Term::Int(a)], Term::Int(b)) => Term::Boolean(*a > *b),
-                            ("Int.>=", [Term::Int(a)], Term::Int(b)) => Term::Boolean(*a >= *b),
-                            ("Int.==", [Term::Int(a)], Term::Int(b)) => Term::Boolean(*a == *b),
-                            ("Int.and", [Term::Int(a)], Term::Int(b)) => Term::Int(a & b),
-                            ("Int.or", [Term::Int(a)], Term::Int(b)) => Term::Int(a | b),
-                            ("Int.xor", [Term::Int(a)], Term::Int(b)) => Term::Int(a ^ b),
-                            ("Int.mod", [Term::Int(a)], Term::Int(b)) => Term::Int(a % b),
-                            ("Int.pow", [Term::Int(a)], Term::Nat(b)) => {
-                                Term::Int(a.pow(*b as u32))
+                            ("Int.*", [Value::Int(a)], Value::Int(b)) => Value::Int(a * b),
+                            ("Int./", [Value::Int(a)], Value::Int(b)) => Value::Int(a / b),
+                            ("Int.<", [Value::Int(a)], Value::Int(b)) => Value::Boolean(*a < *b),
+                            ("Int.<=", [Value::Int(a)], Value::Int(b)) => Value::Boolean(*a <= *b),
+                            ("Int.>", [Value::Int(a)], Value::Int(b)) => Value::Boolean(*a > *b),
+                            ("Int.>=", [Value::Int(a)], Value::Int(b)) => Value::Boolean(*a >= *b),
+                            ("Int.==", [Value::Int(a)], Value::Int(b)) => Value::Boolean(*a == *b),
+                            ("Int.and", [Value::Int(a)], Value::Int(b)) => Value::Int(a & b),
+                            ("Int.or", [Value::Int(a)], Value::Int(b)) => Value::Int(a | b),
+                            ("Int.xor", [Value::Int(a)], Value::Int(b)) => Value::Int(a ^ b),
+                            ("Int.mod", [Value::Int(a)], Value::Int(b)) => Value::Int(a % b),
+                            ("Int.pow", [Value::Int(a)], Value::Nat(b)) => {
+                                Value::Int(a.pow(*b as u32))
                             }
-                            ("Int.shiftLeft", [Term::Int(a)], Term::Nat(b)) => {
-                                Term::Int(a >> *b as u32)
+                            ("Int.shiftLeft", [Value::Int(a)], Value::Nat(b)) => {
+                                Value::Int(a >> *b as u32)
                             }
-                            ("Int.shiftRight", [Term::Int(a)], Term::Nat(b)) => {
-                                Term::Int(a << *b as u32)
+                            ("Int.shiftRight", [Value::Int(a)], Value::Nat(b)) => {
+                                Value::Int(a << *b as u32)
                             }
 
-                            ("Nat.+", [Term::Nat(a)], Term::Nat(b)) => {
+                            ("Nat.+", [Value::Nat(a)], Value::Nat(b)) => {
                                 info!("Nat + {} {}", a, b);
-                                Term::Nat(a + b)
+                                Value::Nat(a + b)
                             }
-                            ("Nat.*", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a * b),
-                            ("Nat./", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a / b),
-                            ("Nat.>", [Term::Nat(a)], Term::Nat(b)) => Term::Boolean(*a > *b),
-                            ("Nat.>=", [Term::Nat(a)], Term::Nat(b)) => Term::Boolean(*a >= *b),
-                            ("Nat.<", [Term::Nat(a)], Term::Nat(b)) => Term::Boolean(*a < *b),
-                            ("Nat.<=", [Term::Nat(a)], Term::Nat(b)) => Term::Boolean(*a <= *b),
-                            ("Nat.==", [Term::Nat(a)], Term::Nat(b)) => Term::Boolean(*a == *b),
-                            ("Nat.and", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a & b),
-                            ("Nat.or", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a | b),
-                            ("Nat.xor", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a ^ b),
-                            ("Nat.mod", [Term::Nat(a)], Term::Nat(b)) => Term::Nat(a % b),
-                            ("Nat.pow", [Term::Nat(a)], Term::Nat(b)) => {
-                                Term::Nat(a.pow(*b as u32))
+                            ("Nat.*", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a * b),
+                            ("Nat./", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a / b),
+                            ("Nat.>", [Value::Nat(a)], Value::Nat(b)) => Value::Boolean(*a > *b),
+                            ("Nat.>=", [Value::Nat(a)], Value::Nat(b)) => Value::Boolean(*a >= *b),
+                            ("Nat.<", [Value::Nat(a)], Value::Nat(b)) => Value::Boolean(*a < *b),
+                            ("Nat.<=", [Value::Nat(a)], Value::Nat(b)) => Value::Boolean(*a <= *b),
+                            ("Nat.==", [Value::Nat(a)], Value::Nat(b)) => Value::Boolean(*a == *b),
+                            ("Nat.and", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a & b),
+                            ("Nat.or", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a | b),
+                            ("Nat.xor", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a ^ b),
+                            ("Nat.mod", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a % b),
+                            ("Nat.pow", [Value::Nat(a)], Value::Nat(b)) => {
+                                Value::Nat(a.pow(*b as u32))
                             }
-                            ("Nat.shiftLeft", [Term::Nat(a)], Term::Nat(b)) => {
-                                Term::Nat(a >> *b as u32)
+                            ("Nat.shiftLeft", [Value::Nat(a)], Value::Nat(b)) => {
+                                Value::Nat(a >> *b as u32)
                             }
-                            ("Nat.shiftRight", [Term::Nat(a)], Term::Nat(b)) => {
-                                Term::Nat(a << *b as u32)
+                            ("Nat.shiftRight", [Value::Nat(a)], Value::Nat(b)) => {
+                                Value::Nat(a << *b as u32)
                             }
 
-                            ("Nat.drop", [Term::Nat(a)], Term::Nat(b)) => {
+                            ("Nat.drop", [Value::Nat(a)], Value::Nat(b)) => {
                                 if b >= a {
-                                    Term::Nat(0)
+                                    Value::Nat(0)
                                 } else {
-                                    Term::Nat(a - b)
+                                    Value::Nat(a - b)
                                 }
                             }
                             // , ("Nat.drop", 2, DropN (Slot 1) (Slot 0))
                             // , ("Nat.sub", 2, SubN (Slot 1) (Slot 0))
                             // , ("Nat.mod", 2, ModN (Slot 1) (Slot 0))
                             // , ("Nat.pow", 2, PowN (Slot 1) (Slot 0))
-                            ("Float.+", [Term::Float(a)], Term::Float(b)) => Term::Float(a + b),
-                            ("Float.-", [Term::Float(a)], Term::Float(b)) => Term::Float(a - b),
-                            ("Float.*", [Term::Float(a)], Term::Float(b)) => Term::Float(a * b),
-                            ("Float./", [Term::Float(a)], Term::Float(b)) => Term::Float(a / b),
-                            ("Float.<", [Term::Float(a)], Term::Float(b)) => Term::Boolean(*a < *b),
-                            ("Float.<=", [Term::Float(a)], Term::Float(b)) => {
-                                Term::Boolean(*a <= *b)
+                            ("Float.+", [Value::Float(a)], Value::Float(b)) => Value::Float(a + b),
+                            ("Float.-", [Value::Float(a)], Value::Float(b)) => Value::Float(a - b),
+                            ("Float.*", [Value::Float(a)], Value::Float(b)) => Value::Float(a * b),
+                            ("Float./", [Value::Float(a)], Value::Float(b)) => Value::Float(a / b),
+                            ("Float.<", [Value::Float(a)], Value::Float(b)) => {
+                                Value::Boolean(*a < *b)
                             }
-                            ("Float.>", [Term::Float(a)], Term::Float(b)) => Term::Boolean(*a > *b),
-                            ("Float.>=", [Term::Float(a)], Term::Float(b)) => {
-                                Term::Boolean(*a >= *b)
+                            ("Float.<=", [Value::Float(a)], Value::Float(b)) => {
+                                Value::Boolean(*a <= *b)
                             }
-                            ("Float.==", [Term::Float(a)], Term::Float(b)) => {
-                                Term::Boolean(*a == *b)
+                            ("Float.>", [Value::Float(a)], Value::Float(b)) => {
+                                Value::Boolean(*a > *b)
+                            }
+                            ("Float.>=", [Value::Float(a)], Value::Float(b)) => {
+                                Value::Boolean(*a >= *b)
+                            }
+                            ("Float.==", [Value::Float(a)], Value::Float(b)) => {
+                                Value::Boolean(*a == *b)
                             }
 
-                            ("Universal.==", [one], two) => Term::Boolean(one == two),
-                            ("Universal.>", [one], two) => Term::Boolean(one > two),
-                            ("Universal.<", [one], two) => Term::Boolean(one < two),
-                            ("Universal.>=", [one], two) => Term::Boolean(one >= two),
-                            ("Universal.<=", [one], two) => Term::Boolean(one <= two),
-                            ("Universal.compare", [one], two) => Term::Int(if one < two {
+                            ("Universal.==", [one], two) => Value::Boolean(one == two),
+                            ("Universal.>", [one], two) => Value::Boolean(one > two),
+                            ("Universal.<", [one], two) => Value::Boolean(one < two),
+                            ("Universal.>=", [one], two) => Value::Boolean(one >= two),
+                            ("Universal.<=", [one], two) => Value::Boolean(one <= two),
+                            ("Universal.compare", [one], two) => Value::Int(if one < two {
                                 -1
                             } else if one > two {
                                 1
@@ -740,15 +744,15 @@ impl IR {
                                 0
                             }),
 
-                            ("Text.++", [Term::Text(a)], Term::Text(b)) => {
-                                Term::Text(a.to_owned() + b)
+                            ("Text.++", [Value::Text(a)], Value::Text(b)) => {
+                                Value::Text(a.to_owned() + b)
                             }
-                            ("Text.==", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a == b),
-                            ("Text.!=", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a != b),
-                            ("Text.<=", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a <= b),
-                            ("Text.>=", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a >= b),
-                            ("Text.>", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a > b),
-                            ("Text.<", [Term::Text(a)], Term::Text(b)) => Term::Boolean(a < b),
+                            ("Text.==", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a == b),
+                            ("Text.!=", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a != b),
+                            ("Text.<=", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a <= b),
+                            ("Text.>=", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a >= b),
+                            ("Text.>", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a > b),
+                            ("Text.<", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a < b),
                             // , mk2 "Text.take" atn att (pure . T) (Text.take . fromIntegral)
                             // , mk2 "Text.drop" atn att (pure . T) (Text.drop . fromIntegral)
                             // , mk2 "Text.=="   att att (pure . B) (==)
@@ -757,46 +761,43 @@ impl IR {
                             // , mk2 "Text.>="   att att (pure . B) (>=)
                             // , mk2 "Text.>"    att att (pure . B) (>)
                             // , mk2 "Text.<"    att att (pure . B) (<)
-                            ("List.at", [Term::Nat(a)], Term::Sequence(l)) => {
+                            ("List.at", [Value::Nat(a)], Value::Sequence(l)) => {
                                 if a < &(l.len() as u64) {
-                                    Term::PartialConstructor(
+                                    Value::PartialConstructor(
                                         Reference::from_hash(OPTION_HASH),
                                         1,
-                                        vec![match &*l[*a as usize] {
-                                            ABT::Tm(term) => term.clone(),
-                                            _ => unreachable!(),
-                                        }],
+                                        vec![l[*a as usize].clone()],
                                     )
                                 } else {
-                                    Term::Constructor(Reference::from_hash(OPTION_HASH), 0)
+                                    Value::Constructor(Reference::from_hash(OPTION_HASH), 0)
                                 }
                             }
-                            ("List.cons", [value], Term::Sequence(l)) => {
+                            ("List.cons", [value], Value::Sequence(l)) => {
                                 let mut l = l.clone();
-                                l.insert(0, Box::new(value.clone().into()));
-                                Term::Sequence(l)
+                                l.insert(0, value.clone().into());
+                                Value::Sequence(l)
                             }
-                            ("List.snoc", [Term::Sequence(l)], value) => {
+                            ("List.snoc", [Value::Sequence(l)], value) => {
                                 let mut l = l.clone();
-                                l.push(Box::new(value.clone().into()));
-                                Term::Sequence(l)
+                                l.push(value.clone().into());
+                                Value::Sequence(l)
                             }
-                            ("List.take", [Term::Nat(n)], Term::Sequence(l)) => {
+                            ("List.take", [Value::Nat(n)], Value::Sequence(l)) => {
                                 let l = l[0..*n as usize].to_vec();
-                                Term::Sequence(l)
+                                Value::Sequence(l)
                             }
-                            ("List.drop", [Term::Nat(n)], Term::Sequence(l)) => {
+                            ("List.drop", [Value::Nat(n)], Value::Sequence(l)) => {
                                 if *n as usize >= l.len() {
-                                    Term::Sequence(vec![])
+                                    Value::Sequence(vec![])
                                 } else {
                                     let l = l[*n as usize..].to_vec();
-                                    Term::Sequence(l)
+                                    Value::Sequence(l)
                                 }
                             }
-                            ("List.++", [Term::Sequence(l0)], Term::Sequence(l1)) => {
+                            ("List.++", [Value::Sequence(l0)], Value::Sequence(l1)) => {
                                 let mut l = l0.clone();
                                 l.extend(l1.clone());
-                                Term::Sequence(l)
+                                Value::Sequence(l)
                             }
                             // , mk2 "Bytes.++"  atbs atbs (pure . Bs) (<>)
                             // , mk2 "Bytes.take" atn atbs (pure . Bs) (\n b -> Bytes.take (fromIntegral n) b)
@@ -829,9 +830,9 @@ impl IR {
                 let mut v = vec![];
                 for _ in 0..*num {
                     // TODO would be nice to ditch the wrappings
-                    v.insert(0, Box::new(stack.pop().unwrap().into()))
+                    v.insert(0, stack.pop().unwrap());
                 }
-                stack.push(Term::Sequence(v));
+                stack.push(Value::Sequence(v));
                 *idx += 1;
             }
             IR::JumpTo(mark) => {
@@ -843,8 +844,8 @@ impl IR {
             }
             IR::If(mark) => match stack.pop() {
                 None => unreachable!("If pop"),
-                Some(Term::Boolean(true)) => *idx += 1,
-                Some(Term::Boolean(false)) => {
+                Some(Value::Boolean(true)) => *idx += 1,
+                Some(Value::Boolean(false)) => {
                     info!("If jumping to {}", mark);
                     *idx = *marks.get(mark).unwrap();
                 }
@@ -852,8 +853,8 @@ impl IR {
             },
             IR::IfAndPopStack(mark) => match stack.pop() {
                 None => unreachable!("If pop"),
-                Some(Term::Boolean(true)) => *idx += 1,
-                Some(Term::Boolean(false)) => {
+                Some(Value::Boolean(true)) => *idx += 1,
+                Some(Value::Boolean(false)) => {
                     *idx = *marks.get(mark).unwrap();
                     stack.pop_to_mark();
                 }
@@ -870,7 +871,7 @@ impl IR {
             IR::PatternMatch(pattern, has_where) => {
                 let value = stack.peek().unwrap();
                 match pattern.match_(&value) {
-                    None => stack.push(Term::Boolean(false)),
+                    None => stack.push(Value::Boolean(false)),
                     Some(mut bindings) => {
                         bindings.reverse();
                         if *has_where {
@@ -881,7 +882,7 @@ impl IR {
                         for term in bindings {
                             stack.push(term);
                         }
-                        stack.push(Term::Boolean(true))
+                        stack.push(Value::Boolean(true))
                     }
                 }
                 *idx += 1;
@@ -889,7 +890,7 @@ impl IR {
             IR::PatternMatchFail => {
                 let value = stack.pop().unwrap();
                 match value {
-                    Term::RequestWithContinuation(req, i, args, back_idx, frames) => {
+                    Value::RequestWithContinuation(req, i, args, back_idx, frames) => {
                         info!("Bubbling up a continuation {:?} # {}", req, i);
                         return Ret::ReRequest(req, i, args, back_idx, frames);
                     }

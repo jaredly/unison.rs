@@ -139,7 +139,54 @@ pub enum Type {
     IntroOuter(Box<ABT<Type>>),
 }
 
-#[allow(dead_code)]
+// Runtime values
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
+pub enum Value {
+    Int(i64),
+    Nat(u64),
+    Float(f64),
+    Boolean(bool),
+    Text(String),
+    Bytes(Vec<u64>),
+    Char(char),
+    Blank,
+    Ref(Reference),
+
+    CycleFnBody(usize, Vec<(Symbol, Value)>, Vec<(Symbol, usize)>),
+    PartialFnBody(usize, Vec<(Symbol, Value)>),
+    PartialNativeApp(String, Vec<Value>),
+    PartialConstructor(Reference, usize, Vec<Value>),
+    ScopedFunction(Box<Value>, String, Vec<(String, Value)>),
+    Cycle(Box<Value>, Vec<(String, Value)>),
+
+    Continuation(usize, Vec<super::ir_runtime::Frame>),
+    Constructor(Reference, usize),
+    Request(Reference, usize),
+    RequestPure(Box<Value>),
+    RequestWithArgs(Reference, usize, usize, Vec<Value>),
+    RequestWithContinuation(
+        Reference,
+        usize,
+        Vec<Value>,
+        usize,
+        Vec<super::ir_runtime::Frame>,
+    ),
+
+    // Handle(Box<Value>, Box<Value>),
+    // App(Box<Value>, Box<Value>),
+    // Ann(Box<Value>, ABT<Type>),
+    Sequence(Vec<Value>),
+    // If(Box<Value>, Box<Value>, Box<Value>),
+    // And(Box<Value>, Box<Value>),
+    // Or(Box<Value>, Box<Value>),
+    // Lam(Box<Value>),
+    // LetRec(bool, Vec<Box<Value>>, Box<Value>),
+    // Let(bool, Box<Value>, Box<Value>),
+    // Match(Box<Value>, Vec<MatchCase>),
+    TermLink(Referent),
+    TypeLink(Reference),
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub enum Term {
     Int(i64),
@@ -321,5 +368,39 @@ impl<K: std::hash::Hash + std::cmp::Eq + Clone, V: Clone> Star<K, V> {
         self.d1.extend(other.d1.clone());
         self.d2.extend(other.d2.clone());
         self.d3.extend(other.d3.clone());
+    }
+}
+
+impl ABT<Term> {
+    fn to_term(self) -> Option<Term> {
+        match self {
+            ABT::Tm(t) => Some(t),
+            _ => None,
+        }
+    }
+}
+
+impl Into<Value> for Term {
+    fn into(self) -> Value {
+        match self {
+            Term::Int(i) => Value::Int(i),
+            Term::Nat(a) => Value::Nat(a),
+            Term::Float(a) => Value::Float(a),
+            Term::Boolean(a) => Value::Boolean(a),
+            Term::Text(a) => Value::Text(a),
+            Term::Bytes(a) => Value::Bytes(a),
+            Term::Char(a) => Value::Char(a),
+            Term::Ref(a) => Value::Ref(a),
+            Term::Constructor(a, b) => Value::Constructor(a, b),
+            Term::Request(a, b) => Value::Request(a, b),
+            Term::Sequence(a) => Value::Sequence(
+                a.into_iter()
+                    .map(|x| (*x).to_term().unwrap().into())
+                    .collect(),
+            ),
+            Term::TermLink(a) => Value::TermLink(a),
+            Term::TypeLink(a) => Value::TypeLink(a),
+            _ => unreachable!("Cannot convert to a value"),
+        }
     }
 }
