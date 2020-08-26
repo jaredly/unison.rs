@@ -176,6 +176,7 @@ impl FromBuffer for Symbol {
         Symbol {
             num: buf.get(),
             text: buf.get(),
+            unique: 0,
         }
     }
 }
@@ -318,9 +319,11 @@ impl<Inner: std::fmt::Debug> std::fmt::Debug for ABT<Inner> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             ABT::Tm(i) => f.write_fmt(format_args!("{:?}", i)),
-            ABT::Var(i) => f.write_fmt(format_args!("〰️{}", i.text)),
+            ABT::Var(i, u) => f.write_fmt(format_args!("〰️{} (#{})", i.text, u)),
             ABT::Cycle(i) => f.write_fmt(format_args!("🚲({:?})", i)),
-            ABT::Abs(s, i) => f.write_fmt(format_args!("|{}|({:?})", s.text, i)),
+            ABT::Abs(s, u, i) => {
+                f.write_fmt(format_args!("|{}/{} #{}|({:?})", s.text, s.unique, u, i))
+            }
         }
     }
 }
@@ -431,8 +434,8 @@ impl<Inner: FromBufferWithEnv + std::fmt::Debug> FromBufferWithEnv for ABT<Inner
             0 => {
                 let tag = u8::get(buf);
                 match tag {
-                    0 => ABT::Var(env[buf.get::<usize>()].clone()),
-                    1 => ABT::Var(fvs[buf.get::<usize>()].clone()),
+                    0 => ABT::Var(env[buf.get::<usize>()].clone(), 0),
+                    1 => ABT::Var(fvs[buf.get::<usize>()].clone(), 0),
                     _ => unreachable!(),
                 }
             }
@@ -441,7 +444,7 @@ impl<Inner: FromBufferWithEnv + std::fmt::Debug> FromBufferWithEnv for ABT<Inner
                 let v: Symbol = buf.get();
                 let mut nw = env.to_owned();
                 nw.insert(0, v.clone());
-                ABT::Abs(v, buf.get_with_env(&nw, fvs))
+                ABT::Abs(v, 0, buf.get_with_env(&nw, fvs))
             }
             3 => ABT::Cycle(buf.get_with_env(env, fvs)),
             _ => unreachable!("ABT {}", tag),

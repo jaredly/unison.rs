@@ -54,9 +54,11 @@ impl Env {
                     full.push("#".to_owned() + hash);
                     full.push("compiled.ub");
                     info!("Trying to load {:?}", full);
-                    let res = parser::Buffer::from_file(full.as_path())
+                    let mut res = parser::Buffer::from_file(full.as_path())
                         .unwrap()
                         .get_term();
+                    let mut bindings = super::unique::Bindings::new();
+                    res.unique(&mut bindings);
                     self.raw_cache.insert(hash.to_owned(), res.clone());
                     res
                 }

@@ -9,6 +9,7 @@ mod parser;
 mod pattern;
 mod printer;
 mod types;
+mod unique;
 
 fn load_type(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
@@ -147,7 +148,7 @@ fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<types::
     ir_env.load(&types::Hash::from_string(hash));
 
     {
-        let mut file = std::fs::File::create(format!("source-{}.txt", hash))?;
+        let mut file = std::fs::File::create(format!("data/source-{}.txt", hash))?;
 
         file.write_all(b"[- ENV -]\n")?;
         for (k, v) in ir_env.terms.iter() {
@@ -188,14 +189,14 @@ fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<types::
 
     let mut file = std::fs::File::create({
         let mut i = 0;
-        let mut name = "";
+        let mut name;
         loop {
             name = if i == 0 {
-                format!("profile-{}.json", hash)
+                format!("data/profile-{}.json", hash)
             } else {
-                format!("profile-{}-{}.json", hash, i)
+                format!("data/profile-{}-{}.json", hash, i)
             };
-            if std::path::Path::new(name).exists() {
+            if std::path::Path::new(&name).exists() {
                 i += 1;
             } else {
                 break;

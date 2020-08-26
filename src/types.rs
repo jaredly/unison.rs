@@ -2,10 +2,11 @@ use serde_derive::{Deserialize, Serialize};
 use std::cmp::{PartialEq, PartialOrd};
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Hash, Eq)]
 pub struct Symbol {
     pub num: usize,
     pub text: String,
+    pub unique: usize,
 }
 impl std::fmt::Debug for Symbol {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -14,7 +15,11 @@ impl std::fmt::Debug for Symbol {
 }
 impl Symbol {
     pub fn new(text: String) -> Self {
-        Symbol { text, num: 0 }
+        Symbol {
+            text,
+            num: 0,
+            unique: 0,
+        }
     }
 }
 
@@ -218,9 +223,10 @@ pub enum Term {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub enum ABT<Content> {
-    Var(Symbol),
+    Var(Symbol, usize), // usage number
     Cycle(Box<ABT<Content>>),
-    Abs(Symbol, Box<ABT<Content>>),
+    // number of usages expected
+    Abs(Symbol, usize, Box<ABT<Content>>),
     Tm(Content),
 }
 

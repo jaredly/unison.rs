@@ -18,9 +18,9 @@ pub enum IR {
     // Push this value onto the stack
     Value(Value),
     // lookup the symbol, and push it onto the stack
-    PushSym(Symbol),
+    PushSym(Symbol, usize),
     // pop the top value off the stack and give it a name
-    PopAndName(Symbol),
+    PopAndName(Symbol, usize),
     // pop the top two values off the stack, call the first with the second
     Call,
     // Swap the top two values
@@ -57,7 +57,7 @@ pub enum IR {
 impl ABT<Term> {
     pub fn to_ir(&self, cmds: &mut IREnv, env: &mut GlobalEnv) {
         match self {
-            ABT::Var(symbol) => cmds.push(IR::PushSym(symbol.clone())),
+            ABT::Var(symbol, usage) => cmds.push(IR::PushSym(symbol.clone(), *usage)),
             ABT::Tm(term) => term.to_ir(cmds, env),
             ABT::Cycle(inner) => {
                 let mut names = vec![];
@@ -69,9 +69,9 @@ impl ABT<Term> {
                 cmds.push(IR::Cycle(names));
                 body.to_ir(cmds, env);
             }
-            ABT::Abs(name, body) => {
+            ABT::Abs(name, uses, body) => {
                 cmds.push(IR::MarkBindings);
-                cmds.push(IR::PopAndName(name.clone()));
+                cmds.push(IR::PopAndName(name.clone(), *uses));
                 body.to_ir(cmds, env);
                 cmds.push(IR::PopBindings);
             }
@@ -84,7 +84,7 @@ fn unroll_cycle(
     names: &mut Vec<String>,
 ) -> (Vec<Box<ABT<Term>>>, Box<ABT<Term>>) {
     match inner {
-        ABT::Abs(sym, inner) => {
+        ABT::Abs(sym, uses, inner) => {
             names.push(sym.text.clone());
             match &**inner {
                 ABT::Tm(Term::LetRec(_, things, body)) => (things.clone(), body.clone()),
@@ -353,7 +353,7 @@ fn calc_args(t: &ABT<Type>) -> usize {
             Type::Forall(inner) => calc_args(inner),
             _ => unimplemented!("Unexpected element of a request {:?}", t),
         },
-        ABT::Abs(_, inner) => calc_args(inner),
+        ABT::Abs(_, _, inner) => calc_args(inner),
         ABT::Cycle(inner) => calc_args(inner),
         _ => unimplemented!("Unexpected ABT"),
     }

@@ -15,8 +15,10 @@ impl ABT<Term> {
         match self {
             Tm(t) => t.to_doc(),
             Cycle(t) => RcDoc::text("<cycle>").append(t.to_doc()),
-            Var(sym) => RcDoc::text(format!("🍿({})", sym.text)),
-            Abs(sym, c) => RcDoc::text(format!("👋({}) ", sym.text)).append(c.to_doc()),
+            Var(sym, u) => RcDoc::text(format!("🍿({}/{} #{})", sym.text, sym.unique, u)),
+            Abs(sym, u, c) => {
+                RcDoc::text(format!("👋({}/{} ##{}) ", sym.text, sym.unique, u)).append(c.to_doc())
+            }
         }
     }
 }
@@ -33,14 +35,14 @@ impl Pattern {
             Float(i) => RcDoc::as_string(i),
             Text(i) => RcDoc::as_string(i),
             Char(i) => RcDoc::as_string(i),
-            Constructor(r, n, children) => {
+            Constructor(r, n, _children) => {
                 RcDoc::text(format!("{:?} # ", r)).append(RcDoc::as_string(n))
             }
             As(i) => i.to_doc(),
             EffectPure(p) => RcDoc::text("{ ")
                 .append(p.to_doc())
                 .append(RcDoc::text(" }")),
-            EffectBind(r, n, v, k) => RcDoc::text("Effect"),
+            EffectBind(_r, _n, _v, _k) => RcDoc::text("Effect"),
             SequenceLiteral(l) => RcDoc::text("[")
                 .append(
                     RcDoc::intersperse(
@@ -51,7 +53,7 @@ impl Pattern {
                     .group(),
                 )
                 .append(RcDoc::text("]")),
-            SequenceOp(a, op, b) => RcDoc::text("seq op"),
+            SequenceOp(_a, _op, _b) => RcDoc::text("seq op"),
         }
     }
 }

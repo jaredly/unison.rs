@@ -21,7 +21,7 @@ pub struct Frame {
     marks: Vec<usize>,
     handler: Option<usize>,
     return_index: usize,
-    bindings: Vec<(Symbol, Value)>,
+    bindings: Vec<(Symbol, Value)>, // the number of usages to expect
     binding_marks: Vec<usize>,
     marks_map: HashMap<usize, usize>,
 }
@@ -589,19 +589,19 @@ impl IR {
             //     stack.push(Value::Ref(Reference::Builtin(name.clone())));
             //     *idx += 1;
             // }
-            IR::PushSym(symbol) => {
-                let v = match stack.frames[0]
+            IR::PushSym(symbol, usage) => {
+                let i = match stack.frames[0]
                     .bindings
                     .iter()
-                    .find(|(k, _)| symbol.text == k.text)
+                    .position(|(k, _)| symbol == k)
                 {
                     None => unreachable!("Vbl not found {}", symbol.text),
-                    Some((_, v)) => v.clone(),
+                    Some(idx) => idx,
                 };
-                stack.push(v);
+                stack.push(stack.frames[0].bindings[i].1.clone());
                 *idx += 1;
             }
-            IR::PopAndName(symbol) => {
+            IR::PopAndName(symbol, uses) => {
                 let v = stack.pop().unwrap();
                 stack.frames[0].bindings.insert(0, (symbol.clone(), v));
                 *idx += 1;
