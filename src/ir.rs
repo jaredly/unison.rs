@@ -13,7 +13,7 @@ pub enum IR {
     // just this moment
     Fn(usize, Vec<(Symbol, usize, usize)>),
     // Builtin(String),
-    Cycle(Vec<String>),
+    Cycle(Vec<(Symbol, usize)>),
     // CycleFn(usize, Vec<(Symbol, usize)>),
     // Push this value onto the stack
     Value(Value),
@@ -61,8 +61,24 @@ impl ABT<Term> {
             ABT::Tm(term) => term.to_ir(cmds, env),
             ABT::Cycle(inner) => {
                 let mut names = vec![];
-                let (values, body) = unroll_cycle(inner, &mut names);
+                let (mut values, body) = unroll_cycle(inner, &mut names);
                 for i in 0..names.len() {
+                    match values[i].as_mut() {
+                        ABT::Tm(Term::Lam(body, free)) => {
+                            // Filter out references to the items in the cycle
+                            *free = free
+                                .clone()
+                                .into_iter()
+                                .filter(|x| names.iter().find(|y| x.0 == y.0) == None)
+                                .collect();
+                        }
+                        _ => (),
+                    };
+                    // match &mut values[i] {
+                    //     Term::Lam(body, free) => {
+
+                    //     }
+                    // }
                     values[i].to_ir(cmds, env);
                 }
                 names.reverse();
@@ -81,11 +97,11 @@ impl ABT<Term> {
 
 fn unroll_cycle(
     inner: &ABT<Term>,
-    names: &mut Vec<String>,
+    names: &mut Vec<(Symbol, usize)>,
 ) -> (Vec<Box<ABT<Term>>>, Box<ABT<Term>>) {
     match inner {
         ABT::Abs(sym, uses, inner) => {
-            names.push(sym.text.clone());
+            names.push((sym.clone(), *uses));
             match &**inner {
                 ABT::Tm(Term::LetRec(_, things, body)) => (things.clone(), body.clone()),
                 _ => unroll_cycle(inner, names),

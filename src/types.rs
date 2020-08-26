@@ -10,7 +10,7 @@ pub struct Symbol {
 }
 impl std::fmt::Debug for Symbol {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        fmt.write_fmt(format_args!("🔣{}", self.text))
+        fmt.write_fmt(format_args!("🔣{}/{}", self.text, self.unique))
     }
 }
 impl Symbol {
@@ -156,8 +156,12 @@ pub enum Value {
     Char(char),
     Ref(Reference),
 
-    CycleFnBody(usize, Vec<(Symbol, Value)>, Vec<(Symbol, usize)>),
-    PartialFnBody(usize, Vec<(Symbol, Value)>),
+    CycleFnBody(
+        usize,
+        Vec<(Symbol, usize, Value)>,
+        Vec<(Symbol, usize, usize)>,
+    ),
+    PartialFnBody(usize, Vec<(Symbol, usize, Value)>),
     PartialNativeApp(String, Vec<Value>),
     PartialConstructor(Reference, usize, Vec<Value>),
 

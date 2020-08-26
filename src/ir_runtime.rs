@@ -21,7 +21,7 @@ pub struct Frame {
     marks: Vec<usize>,
     handler: Option<usize>,
     return_index: usize,
-    bindings: Vec<(Symbol, Value)>, // the number of usages to expect
+    bindings: Vec<(Symbol, usize, Value)>, // the number of usages to expect
     binding_marks: Vec<usize>,
     marks_map: HashMap<usize, usize>,
 }
@@ -88,10 +88,15 @@ impl Stack {
         let idx = self.frames[0]
             .bindings
             .iter()
-            .position(|(a, _)| a == sym)
-            .unwrap();
+            .position(|(a, _, _)| a == sym)
+            .expect("Variable not found");
         // TODO take usage into account
-        self.frames[0].bindings[idx].1.clone()
+        if self.frames[0].bindings[idx].1 == usage {
+            let (_, _, v) = self.frames[0].bindings.remove(idx);
+            v
+        } else {
+            self.frames[0].bindings[idx].2.clone()
+        }
     }
 
     fn new_frame(&mut self, return_index: usize, source: Source, marks: HashMap<usize, usize>) {
@@ -275,7 +280,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
         // last = std::time::Instant::now();
         if n % 100 == 0 {
             if start.elapsed().as_secs() > 20 {
-                return Value::Text("Ran out of time".to_owned());
+                return Value::Text(format!("Ran out of time after {} ticks", n));
             }
         }
 
@@ -512,7 +517,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
 }
 
 enum Ret {
-    FnCall(usize, Vec<(Symbol, Value)>, Value),
+    FnCall(usize, Vec<(Symbol, usize, Value)>, Value),
     Value(Hash),
     Nothing,
     Request(Reference, usize, Vec<Value>),
@@ -601,26 +606,30 @@ impl IR {
             //     *idx += 1;
             // }
             IR::PushSym(symbol, usage) => {
-                let i = match stack.frames[0]
-                    .bindings
-                    .iter()
-                    .position(|(k, _)| symbol == k)
-                {
-                    None => unreachable!("Vbl not found {}", symbol.text),
-                    Some(idx) => idx,
-                };
-                stack.push(stack.frames[0].bindings[i].1.clone());
+                let v = stack.get_vbl(symbol, *usage);
+                stack.push(v);
+                // let i = match stack.frames[0]
+                //     .bindings
+                //     .iter()
+                //     .position(|(k, _, _)| symbol == k)
+                // {
+                //     None => unreachable!("Vbl not found {}", symbol.text),
+                //     Some(idx) => idx,
+                // };
+                // stack.push(stack.frames[0].bindings[i].1.clone());
                 *idx += 1;
             }
             IR::PopAndName(symbol, uses) => {
                 let v = stack.pop().unwrap();
-                stack.frames[0].bindings.insert(0, (symbol.clone(), v));
+                stack.frames[0]
+                    .bindings
+                    .insert(0, (symbol.clone(), *uses, v));
                 *idx += 1;
             }
             IR::Fn(i, free_vbls) => {
-                let bound: Vec<(Symbol, Value)> = free_vbls
+                let bound: Vec<(Symbol, usize, Value)> = free_vbls
                     .iter()
-                    .map(|(sym, min, max)| (sym.clone(), /*max,*/ stack.get_vbl(sym, *max)))
+                    .map(|(sym, _min, max)| (sym.clone(), *max, stack.get_vbl(sym, *max)))
                     .collect();
                 stack.push(Value::PartialFnBody(*i, bound));
                 *idx += 1;
@@ -628,23 +637,22 @@ impl IR {
             IR::Cycle(names) => {
                 let mut mutuals = vec![];
                 let mut items = vec![];
-                for name in names {
+                for (name, uses) in names {
                     let v = stack.pop().unwrap();
                     match v {
                         Value::PartialFnBody(fnint, bindings) => {
-                            mutuals.push((Symbol::new(name.clone()), fnint));
-                            items.push((name, fnint, bindings));
+                            mutuals.push((name.clone(), *uses, fnint));
+                            items.push((name, *uses, fnint, bindings));
                         }
                         _ => {
-                            stack.frames[0]
-                                .bindings
-                                .push((Symbol::new(name.clone()), v));
+                            stack.frames[0].bindings.push((name.clone(), *uses, v));
                         }
                     }
                 }
-                for (name, fnint, bindings) in items {
+                for (name, uses, fnint, bindings) in items {
                     stack.frames[0].bindings.push((
-                        Symbol::new(name.clone()),
+                        name.clone(),
+                        uses,
                         Value::CycleFnBody(fnint, bindings, mutuals.clone()),
                     ))
                 }
@@ -695,9 +703,10 @@ impl IR {
                     Value::CycleFnBody(fnint, mut bindings, mutuals) => {
                         *idx += 1;
                         let copy = bindings.clone();
-                        for (k, v) in &mutuals {
+                        for (k, uses, v) in &mutuals {
                             bindings.push((
                                 k.clone(),
+                                *uses,
                                 Value::CycleFnBody(*v, copy.clone(), mutuals.clone()),
                             ))
                         }
