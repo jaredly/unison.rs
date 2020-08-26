@@ -328,16 +328,16 @@ impl<Inner: std::fmt::Debug> std::fmt::Debug for ABT<Inner> {
 impl std::fmt::Debug for Term {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Term::RequestWithArgs(i, n, _, _) => f.write_fmt(format_args!("req<{:?} - {}>", i, n)),
-            Term::RequestWithContinuation(i, n, _, _, _) => {
-                f.write_fmt(format_args!("req+cont<{:?} - {}>", i, n))
-            }
-            Term::Continuation(idx, frames) => f.write_fmt(format_args!(
-                "cont<idx: {} - frames: {}>",
-                idx,
-                frames.len()
-            )),
-            Term::RequestPure(i) => f.write_fmt(format_args!("pure<{:?}>", i)),
+            // Term::RequestWithArgs(i, n, _, _) => f.write_fmt(format_args!("req<{:?} - {}>", i, n)),
+            // Term::RequestWithContinuation(i, n, _, _, _) => {
+            //     f.write_fmt(format_args!("req+cont<{:?} - {}>", i, n))
+            // }
+            // Term::Continuation(idx, frames) => f.write_fmt(format_args!(
+            //     "cont<idx: {} - frames: {}>",
+            //     idx,
+            //     frames.len()
+            // )),
+            // Term::RequestPure(i) => f.write_fmt(format_args!("pure<{:?}>", i)),
             Term::Int(i) => f.write_fmt(format_args!("{}", i)),
             Term::Nat(i) => f.write_fmt(format_args!("{}", i)),
             Term::Float(i) => f.write_fmt(format_args!("{}", i)),

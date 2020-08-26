@@ -97,9 +97,9 @@ fn unroll_cycle(
 
 pub struct GlobalEnv {
     pub env: env::Env,
-    pub terms: HashMap<String, Vec<IR>>,
-    pub types: HashMap<String, TypeDecl>,
-    pub anon_fns: Vec<(String, Vec<IR>)>, // I think?
+    pub terms: HashMap<Hash, Vec<IR>>,
+    pub types: HashMap<Hash, TypeDecl>,
+    pub anon_fns: Vec<(Hash, Vec<IR>)>, // I think?
 }
 
 impl GlobalEnv {
@@ -112,25 +112,25 @@ impl GlobalEnv {
         }
     }
 
-    pub fn get_type(&mut self, hash: String) -> TypeDecl {
-        match self.types.get(&hash) {
+    pub fn get_type(&mut self, hash: &Hash) -> TypeDecl {
+        match self.types.get(hash) {
             Some(v) => v.clone(),
             None => {
-                let res = self.env.load_type(&hash);
-                self.types.insert(hash, res.clone());
+                let res = self.env.load_type(&hash.to_string());
+                self.types.insert(hash.clone(), res.clone());
                 res
             }
         }
     }
 
-    pub fn load(&mut self, hash: &str) {
+    pub fn load(&mut self, hash: &Hash) {
         if self.terms.contains_key(hash) {
             // Already loaded
             return;
         }
-        let mut cmds = IREnv::new(hash.to_owned());
+        let mut cmds = IREnv::new(hash.clone());
         self.terms.insert(hash.to_owned(), vec![]);
-        let term = self.env.load(hash);
+        let term = self.env.load(&hash.to_string());
         // println!("Loaded {}", hash);
         // println!("{:?}", term);
         term.to_ir(&mut cmds, self);
@@ -143,7 +143,7 @@ impl GlobalEnv {
 
         self.terms.insert(hash.to_owned(), cmds.cmds);
     }
-    pub fn add_fn(&mut self, hash: String, contents: &ABT<Term>) -> usize {
+    pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> usize {
         let mut sub = IREnv::new(hash.clone());
         contents.to_ir(&mut sub, self);
         let v = self.anon_fns.len();
@@ -153,13 +153,13 @@ impl GlobalEnv {
 }
 
 pub struct IREnv {
-    pub term: String,
+    pub term: Hash,
     pub cmds: Vec<IR>,
     pub counter: usize,
 }
 
 impl IREnv {
-    pub fn new(term: String) -> Self {
+    pub fn new(term: Hash) -> Self {
         IREnv {
             term,
             cmds: vec![],
@@ -212,7 +212,7 @@ impl Term {
             }
             Term::Ref(Reference::Builtin(_)) => cmds.push(IR::Value(self.clone().into())),
             Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                env.load(&hash.to_string());
+                env.load(&hash);
                 cmds.push(IR::Value(self.clone().into()))
             }
             Term::App(one, two) => {
@@ -317,7 +317,7 @@ impl Term {
                 unimplemented!("Builtin Effect! I dont know the arity: {}", name);
             }
             Term::Request(Reference::DerivedId(id), number) => {
-                let t = env.get_type(id.0.to_string());
+                let t = env.get_type(&id.0);
                 match t {
                     TypeDecl::Effect(DataDecl { constructors, .. }) => {
                         let args = calc_args(&constructors[*number].1);

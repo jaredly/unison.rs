@@ -6,13 +6,13 @@ use std::collections::HashMap;
 
 static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 
-#[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Serialize, Deserialize, Hash)]
 pub enum Source {
-    Value(String),
-    Fn(usize, String),
+    Value(Hash),
+    Fn(usize, Hash),
 }
 
-#[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Frame {
     source: Source,
     stack: Vec<Value>,
@@ -21,10 +21,29 @@ pub struct Frame {
     return_index: usize,
     bindings: Vec<(Symbol, Value)>,
     binding_marks: Vec<usize>,
+    marks_map: HashMap<usize, usize>,
+}
+
+impl std::cmp::PartialEq for Frame {
+    fn eq(&self, other: &Self) -> bool {
+        self.source == other.source
+    }
+}
+
+impl std::cmp::PartialOrd for Frame {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if self.source < other.source {
+            Some(std::cmp::Ordering::Less)
+        } else if self.source > other.source {
+            Some(std::cmp::Ordering::Greater)
+        } else {
+            None
+        }
+    }
 }
 
 impl Frame {
-    fn new(source: Source, return_index: usize) -> Self {
+    fn new(source: Source, return_index: usize, marks_map: HashMap<usize, usize>) -> Self {
         Frame {
             source,
             stack: vec![],
@@ -33,6 +52,7 @@ impl Frame {
             return_index,
             bindings: vec![],
             binding_marks: vec![],
+            marks_map,
         }
     }
 }
@@ -42,16 +62,17 @@ struct Stack {
     frames: Vec<Frame>,
 }
 impl Stack {
-    fn new(source: Source) -> Self {
+    fn new(source: Source, marks: HashMap<usize, usize>) -> Self {
         info!("{})> Initial frame {:?}", 0, source);
         Stack {
-            frames: vec![Frame::new(source, 0)],
+            frames: vec![Frame::new(source, 0, marks)],
         }
     }
 
-    fn new_frame(&mut self, return_index: usize, source: Source) {
+    fn new_frame(&mut self, return_index: usize, source: Source, marks: HashMap<usize, usize>) {
         info!("{} | ----> New frame {:?}", self.frames.len(), source);
-        self.frames.insert(0, Frame::new(source, return_index))
+        self.frames
+            .insert(0, Frame::new(source, return_index, marks))
     }
 
     fn clone_frame(&mut self, return_index: usize) {
@@ -162,26 +183,28 @@ fn make_marks(cmds: &[IR]) -> HashMap<usize, usize> {
 
 #[allow(while_true)]
 pub fn eval(env: GlobalEnv, hash: &str) -> Value {
+    let hash = Hash::from_string(hash);
     info!("[- ENV -]");
     for (k, v) in env.terms.iter() {
-        info!("] Value {}", k);
+        info!("] Value {:?}", k);
         for (n, i) in v.iter().enumerate() {
             info!("({}) {:?}", n, i);
         }
         info!("\n");
     }
     for (i, v) in env.anon_fns.iter().enumerate() {
-        info!("] Fn({}) : {}", i, v.0);
+        info!("] Fn({}) : {:?}", i, v.0);
         for (n, i) in v.1.iter().enumerate() {
             info!("({}) {:?}", n, i)
         }
         info!("\n");
     }
 
-    let mut stack = Stack::new(Source::Value(hash.to_owned()));
-    let mut cmds: &Vec<IR> = env.terms.get(hash).unwrap();
+    let mut cmds: &Vec<IR> = env.terms.get(&hash).unwrap();
 
-    let mut marks = make_marks(&cmds);
+    let mut stack = Stack::new(Source::Value(hash.clone()), make_marks(&cmds));
+
+    // let mut marks = make_marks(&cmds);
     // let mut marks = HashMap::new();
     // for i in 0..cmds.len() {
     //     match &cmds[i] {
@@ -191,6 +214,8 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
     //         _ => (),
     //     }
     // }
+
+    let optionRef = Reference::from_hash(OPTION_HASH);
 
     let mut idx = 0;
 
@@ -226,11 +251,11 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
 
         let cmd = &cmds[idx];
         info!("----- <{}>    {:?}", idx, cmd);
-        match cmd.eval(&mut stack, &mut idx, &marks) {
+        match cmd.eval(&optionRef, &mut stack, &mut idx) {
             Ret::Nothing => (),
             Ret::Handle(mark) => {
                 idx += 1;
-                let mark_idx = *marks.get(&mark).unwrap();
+                let mark_idx = *stack.frames[0].marks_map.get(&mark).unwrap();
                 info!("Setting handle, mark {} - idx {}", mark, mark_idx);
                 stack.frames[0].handler = Some(mark_idx);
                 stack.clone_frame(mark_idx);
@@ -257,7 +282,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
                     Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
                 }
-                marks = make_marks(&cmds);
+                // marks = make_marks(&cmds);
                 // umm
                 // ok, so do we need to clone the absolutely whole stack?
                 // Or .. is it just "when we go down a level, we need to clone"
@@ -321,12 +346,13 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
                 ))
             }
             Ret::FnCall(fnid, bindings, arg) => {
-                stack.new_frame(idx, Source::Fn(fnid, env.anon_fns[fnid].0.clone()));
+                cmds = &env.anon_fns[fnid].1;
+                let marks = make_marks(&cmds);
+
+                stack.new_frame(idx, Source::Fn(fnid, env.anon_fns[fnid].0.clone()), marks);
                 info!("^ fn call with {:?}", arg);
                 stack.frames[0].bindings = bindings;
                 stack.frames[0].stack.push(arg);
-                cmds = &env.anon_fns[fnid].1;
-                marks = make_marks(&cmds);
                 // // cmds = env.anon_fns.get(&hash.to_string()).unwrap();
                 // info!("[Fn Instructions - {}]", fnid);
                 // for cmd in cmds {
@@ -336,9 +362,9 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
             }
             Ret::Value(hash) => {
                 // info!("Jumping to {:?}", hash);
-                stack.new_frame(idx, Source::Value(hash.to_string()));
-                cmds = env.terms.get(&hash.to_string()).unwrap();
-                marks = make_marks(&cmds);
+                cmds = env.terms.get(&hash).unwrap();
+                let marks = make_marks(&cmds);
+                stack.new_frame(idx, Source::Value(hash), marks);
                 // info!("[Value Instructions]");
                 // for cmd in cmds {
                 //     info!("{:?}", cmd);
@@ -355,7 +381,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
                     Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
                 };
-                marks = make_marks(&cmds);
+                // marks = make_marks(&cmds);
             }
         }
 
@@ -385,7 +411,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
                         cmds = &env.anon_fns[fnid].1;
                     }
                 }
-                marks = make_marks(&cmds);
+            // marks = make_marks(&cmds);
             } else {
                 info!("Got only one frame left, and idx is larger than the cmds len");
                 break;
@@ -431,9 +457,10 @@ impl IR {
     fn eval(
         &self,
         // env: &GlobalEnv,
+        optionRef: &Reference,
         stack: &mut Stack,
         idx: &mut usize,
-        marks: &HashMap<usize, usize>,
+        // marks: &HashMap<usize, usize>,
     ) -> Ret {
         match self {
             IR::MarkBindings => {
@@ -764,12 +791,12 @@ impl IR {
                             ("List.at", [Value::Nat(a)], Value::Sequence(l)) => {
                                 if a < &(l.len() as u64) {
                                     Value::PartialConstructor(
-                                        Reference::from_hash(OPTION_HASH),
+                                        optionRef.clone(),
                                         1,
                                         vec![l[*a as usize].clone()],
                                     )
                                 } else {
-                                    Value::Constructor(Reference::from_hash(OPTION_HASH), 0)
+                                    Value::Constructor(optionRef.clone(), 0)
                                 }
                             }
                             ("List.cons", [value], Value::Sequence(l)) => {
@@ -836,7 +863,7 @@ impl IR {
                 *idx += 1;
             }
             IR::JumpTo(mark) => {
-                *idx = *marks.get(mark).unwrap();
+                *idx = *stack.frames[0].marks_map.get(mark).unwrap();
             }
             IR::Mark(_mark) => {
                 // already collected as marks
@@ -847,7 +874,7 @@ impl IR {
                 Some(Value::Boolean(true)) => *idx += 1,
                 Some(Value::Boolean(false)) => {
                     info!("If jumping to {}", mark);
-                    *idx = *marks.get(mark).unwrap();
+                    *idx = *stack.frames[0].marks_map.get(mark).unwrap();
                 }
                 Some(contents) => unreachable!("If pop not bool: {:?}", contents),
             },
@@ -855,7 +882,7 @@ impl IR {
                 None => unreachable!("If pop"),
                 Some(Value::Boolean(true)) => *idx += 1,
                 Some(Value::Boolean(false)) => {
-                    *idx = *marks.get(mark).unwrap();
+                    *idx = *stack.frames[0].marks_map.get(mark).unwrap();
                     stack.pop_to_mark();
                 }
                 Some(contents) => unreachable!("If pop not bool: {:?}", contents),

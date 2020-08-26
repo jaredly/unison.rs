@@ -140,7 +140,7 @@ pub enum Type {
 }
 
 // Runtime values
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum Value {
     Int(i64),
     Nat(u64),
@@ -207,19 +207,18 @@ pub enum Term {
     // CycleFunction(Box<ABT<Term>>, String, Vec<(String, Term)>, String),
     Cycle(Box<Term>, Vec<(String, Term)>),
 
-    Continuation(usize, Vec<super::ir_runtime::Frame>),
+    // Continuation(usize, Vec<super::ir_runtime::Frame>),
     Constructor(Reference, usize),
     Request(Reference, usize),
-    RequestPure(Box<Term>),
-    RequestWithArgs(Reference, usize, usize, Vec<Term>),
-    RequestWithContinuation(
-        Reference,
-        usize,
-        Vec<Term>,
-        usize,
-        Vec<super::ir_runtime::Frame>,
-    ),
-
+    // RequestPure(Box<Term>),
+    // RequestWithArgs(Reference, usize, usize, Vec<Term>),
+    // RequestWithContinuation(
+    //     Reference,
+    //     usize,
+    //     Vec<Term>,
+    //     usize,
+    //     Vec<super::ir_runtime::Frame>,
+    // ),
     Handle(Box<ABT<Term>>, Box<ABT<Term>>),
     App(Box<ABT<Term>>, Box<ABT<Term>>),
     Ann(Box<ABT<Term>>, ABT<Type>),

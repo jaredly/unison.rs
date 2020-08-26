@@ -137,8 +137,9 @@ fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<types::
     // let res = env.load(hash);
     // println!("{:?}", res);
     let mut ir_env = ir::GlobalEnv::new(env);
-    ir_env.load(hash);
+    ir_env.load(&types::Hash::from_string(hash));
     // res.to_ir(&mut ir_env, &mut env);
+    let guard = pprof::ProfilerGuard::new(100).unwrap();
     let ret = ir_runtime::eval(ir_env, hash);
     println!(
         "Time: {}ms ({}ns)",
@@ -152,6 +153,11 @@ fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<types::
     // );
     // let result = parser::Buffer::from_file(file)?.get_term();
     // println!("{:?}", res);
+    if let Ok(report) = guard.report().build() {
+        let file = std::fs::File::create(format!("flamegraph-{}.svg", hash)).unwrap();
+        report.flamegraph(file).unwrap();
+    };
+
     Ok(ret)
 }
 

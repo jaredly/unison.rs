@@ -10,6 +10,7 @@ edition = "2018"
 serde = ""
 serde_derive = ""
 bincode = ""
+pprof = { version = "0.3", features = ["flamegraph"] }
 byteorder = ""
 base64 = ""
 log = "0.4"
