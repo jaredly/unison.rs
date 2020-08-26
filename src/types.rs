@@ -149,15 +149,12 @@ pub enum Value {
     Text(String),
     Bytes(Vec<u64>),
     Char(char),
-    Blank,
     Ref(Reference),
 
     CycleFnBody(usize, Vec<(Symbol, Value)>, Vec<(Symbol, usize)>),
     PartialFnBody(usize, Vec<(Symbol, Value)>),
     PartialNativeApp(String, Vec<Value>),
     PartialConstructor(Reference, usize, Vec<Value>),
-    ScopedFunction(Box<Value>, String, Vec<(String, Value)>),
-    Cycle(Box<Value>, Vec<(String, Value)>),
 
     Continuation(usize, Vec<super::ir_runtime::Frame>),
     Constructor(Reference, usize),

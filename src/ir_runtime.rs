@@ -215,7 +215,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
     //     }
     // }
 
-    let optionRef = Reference::from_hash(OPTION_HASH);
+    let option_ref = Reference::from_hash(OPTION_HASH);
 
     let mut idx = 0;
 
@@ -251,7 +251,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
 
         let cmd = &cmds[idx];
         info!("----- <{}>    {:?}", idx, cmd);
-        match cmd.eval(&optionRef, &mut stack, &mut idx) {
+        match cmd.eval(&option_ref, &mut stack, &mut idx) {
             Ret::Nothing => (),
             Ret::Handle(mark) => {
                 idx += 1;
@@ -457,7 +457,7 @@ impl IR {
     fn eval(
         &self,
         // env: &GlobalEnv,
-        optionRef: &Reference,
+        option_ref: &Reference,
         stack: &mut Stack,
         idx: &mut usize,
         // marks: &HashMap<usize, usize>,
@@ -791,12 +791,12 @@ impl IR {
                             ("List.at", [Value::Nat(a)], Value::Sequence(l)) => {
                                 if a < &(l.len() as u64) {
                                     Value::PartialConstructor(
-                                        optionRef.clone(),
+                                        option_ref.clone(),
                                         1,
                                         vec![l[*a as usize].clone()],
                                     )
                                 } else {
-                                    Value::Constructor(optionRef.clone(), 0)
+                                    Value::Constructor(option_ref.clone(), 0)
                                 }
                             }
                             ("List.cons", [value], Value::Sequence(l)) => {
