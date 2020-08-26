@@ -15,3 +15,7 @@ byteorder = ""
 base64 = ""
 log = "0.4"
 env_logger = "0.7.1"
+pretty = "0.10.0"
+
+[profile.release]
+debug = true

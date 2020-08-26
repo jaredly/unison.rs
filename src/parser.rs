@@ -325,61 +325,6 @@ impl<Inner: std::fmt::Debug> std::fmt::Debug for ABT<Inner> {
     }
 }
 
-impl std::fmt::Debug for Term {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            // Term::RequestWithArgs(i, n, _, _) => f.write_fmt(format_args!("req<{:?} - {}>", i, n)),
-            // Term::RequestWithContinuation(i, n, _, _, _) => {
-            //     f.write_fmt(format_args!("req+cont<{:?} - {}>", i, n))
-            // }
-            // Term::Continuation(idx, frames) => f.write_fmt(format_args!(
-            //     "cont<idx: {} - frames: {}>",
-            //     idx,
-            //     frames.len()
-            // )),
-            // Term::RequestPure(i) => f.write_fmt(format_args!("pure<{:?}>", i)),
-            Term::Int(i) => f.write_fmt(format_args!("{}", i)),
-            Term::Nat(i) => f.write_fmt(format_args!("{}", i)),
-            Term::Float(i) => f.write_fmt(format_args!("{}", i)),
-            Term::Boolean(i) => f.write_fmt(format_args!("{}", i)),
-            Term::Text(i) => f.write_fmt(format_args!("{:?}", i)),
-            Term::Bytes(i) => f.write_fmt(format_args!("{:?}", i)),
-            Term::Char(i) => f.write_fmt(format_args!("{:?}", i)),
-            Term::Blank => f.write_str("<blank>"),
-            Term::PartialNativeApp(name, _) => f.write_fmt(format_args!("partial({})", name)),
-            Term::Ref(i) => f.write_fmt(format_args!("{:?}", i)),
-            Term::Constructor(i, n) => f.write_fmt(format_args!("[constructor]{:?}#{}", i, n)),
-            Term::Request(i, n) => f.write_fmt(format_args!("[request]{:?}#{}", i, n)),
-            Term::Handle(i, n) => f.write_fmt(format_args!("handle {:?} with {:?}", i, n)),
-            Term::App(i, n) => f.write_fmt(format_args!("{:?} <app> {:?}", i, n)),
-            Term::Ann(i, n) => f.write_fmt(format_args!("t- {:?} :: {:?} -t", i, n)),
-            Term::Sequence(i) => f.write_fmt(format_args!("{:?}", i)),
-            Term::If(i, a, b) => {
-                f.write_fmt(format_args!("if {:?} then\n{:?}\nelse\n{:?}", i, a, b))
-            }
-            Term::And(a, b) => f.write_fmt(format_args!("{:?} && {:?}", a, b)),
-            Term::Or(a, b) => f.write_fmt(format_args!("{:?} || {:?}", a, b)),
-            Term::Lam(a) => f.write_fmt(format_args!("-> {:?}", a)),
-            Term::LetRec(_, a, b) => f.write_fmt(format_args!("let(rec)\n{:?}\nin {:?}", a, b)),
-            Term::Let(_, a, b) => f.write_fmt(format_args!("let {:?} in {:?}", a, b)),
-            Term::Match(a, b) => f.write_fmt(format_args!("match {:?} with {:?}", a, b)),
-            Term::TermLink(a) => f.write_fmt(format_args!("termLink {:?}", a)),
-            Term::TypeLink(a) => f.write_fmt(format_args!("typeLink {:?}", a)),
-
-            Term::ScopedFunction(contents, term, bindings) => f.write_fmt(format_args!(
-                "[scoped fn | {} | {:?} | {:?} ]",
-                term, bindings, contents
-            )),
-            Term::PartialConstructor(reference, num, args) => {
-                f.write_fmt(format_args!("[partial]{:?}-{}({:?})", reference, num, args))
-            } // _ => f.write_str("Something Else"),
-            Term::Cycle(c, _d) => f.write_fmt(format_args!("🚲 {:?}", c)),
-            Term::CycleFnBody(a, c, _d) => f.write_fmt(format_args!("🚲 ({}) {:?}", a, c)),
-            Term::PartialFnBody(n, c) => f.write_fmt(format_args!("fn {} {:?}", n, c)),
-        }
-    }
-}
-
 impl<T: FromBuffer> FromBuffer for Box<T> {
     fn get(buf: &mut Buffer) -> Self {
         T::get(buf).into()

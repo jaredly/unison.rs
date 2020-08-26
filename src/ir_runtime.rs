@@ -3,6 +3,7 @@ use super::types::*;
 use log::info;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
+// use tracing::{debug, error, info as info_, span, warn, Level};
 
 static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 
@@ -14,6 +15,7 @@ pub enum Source {
 
 #[derive(Debug, Clone)]
 pub struct Frame {
+    // span: tracing::span:
     source: Source,
     stack: Vec<Value>,
     marks: Vec<usize>,
@@ -44,6 +46,7 @@ impl std::cmp::PartialOrd for Frame {
 
 impl Frame {
     fn new(source: Source, return_index: usize, marks_map: HashMap<usize, usize>) -> Self {
+        // let span = span!(Level::TRACE, format!("{:?}", source));
         Frame {
             source,
             stack: vec![],
@@ -53,6 +56,17 @@ impl Frame {
             bindings: vec![],
             binding_marks: vec![],
             marks_map,
+        }
+    }
+
+    fn as_trace(&self, ph: &str, ts: std::time::Duration) -> Trace {
+        Trace {
+            cat: "frame".to_owned(),
+            ph: ph.to_owned(), // B(eginning) E(nd) or I (info)
+            ts,
+            name: (self.source.clone(), None),
+            tid: 1,                  // thread ID I think?
+            file: "main".to_owned(), // [file] // TODO
         }
     }
 }
@@ -181,8 +195,23 @@ fn make_marks(cmds: &[IR]) -> HashMap<usize, usize> {
     marks
 }
 
+// pub enum TraceSource {
+//     Source(Source),
+//     Instruction(Source, )
+// }
+
+pub struct Trace {
+    pub cat: String,
+    pub ph: String, // B(eginning) E(nd) or I (info)
+    // pid: 1
+    pub ts: std::time::Duration,
+    pub name: (Source, Option<usize>),
+    pub tid: usize,   // thread ID I think?
+    pub file: String, // [file]
+}
+
 #[allow(while_true)]
-pub fn eval(env: GlobalEnv, hash: &str) -> Value {
+pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
     let hash = Hash::from_string(hash);
     info!("[- ENV -]");
     for (k, v) in env.terms.iter() {
@@ -239,6 +268,9 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
             }
         }
 
+        let cstart = std::time::Instant::now();
+        let cidx = idx;
+
         n += 1;
         // if n % 300 == 0 {
         //     println!("{}", n);
@@ -251,7 +283,31 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
 
         let cmd = &cmds[idx];
         info!("----- <{}>    {:?}", idx, cmd);
-        match cmd.eval(&option_ref, &mut stack, &mut idx) {
+
+        let ret = cmd.eval(&option_ref, &mut stack, &mut idx);
+
+        let ctime = cstart.elapsed();
+        if ctime.as_millis() > 5 {
+            trace.push(Trace {
+                cat: "Instruction".to_owned(),
+                ph: "B".to_owned(),
+                ts: start.elapsed() - ctime,
+                name: (stack.frames[0].source.clone(), Some(cidx)),
+                file: "".to_owned(),
+                tid: 1,
+            });
+
+            trace.push(Trace {
+                cat: "Instruction".to_owned(),
+                ph: "E".to_owned(),
+                ts: start.elapsed(),
+                name: (stack.frames[0].source.clone(), Some(cidx)),
+                file: "".to_owned(),
+                tid: 1,
+            });
+        };
+
+        match ret {
             Ret::Nothing => (),
             Ret::Handle(mark) => {
                 idx += 1;
@@ -350,6 +406,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
                 let marks = make_marks(&cmds);
 
                 stack.new_frame(idx, Source::Fn(fnid, env.anon_fns[fnid].0.clone()), marks);
+                trace.push(stack.frames[0].as_trace("B", start.elapsed()));
                 info!("^ fn call with {:?}", arg);
                 stack.frames[0].bindings = bindings;
                 stack.frames[0].stack.push(arg);
@@ -365,6 +422,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
                 cmds = env.terms.get(&hash).unwrap();
                 let marks = make_marks(&cmds);
                 stack.new_frame(idx, Source::Value(hash), marks);
+                trace.push(stack.frames[0].as_trace("B", start.elapsed()));
                 // info!("[Value Instructions]");
                 // for cmd in cmds {
                 //     info!("{:?}", cmd);
@@ -385,7 +443,6 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
             }
         }
 
-        // let time = start.elapsed().as_millis();
         // if time > 5 {
         //     println!("Took: {}", time);
         //     println!("{:?}", cmd);
@@ -393,6 +450,7 @@ pub fn eval(env: GlobalEnv, hash: &str) -> Value {
 
         // Multi-pop
         while idx >= cmds.len() {
+            trace.push(stack.frames[0].as_trace("E", start.elapsed()));
             if stack.frames.len() > 1 {
                 // info!("<<-- jump down");
                 let (idx1, value) = stack.pop_frame();
