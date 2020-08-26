@@ -133,7 +133,7 @@ impl Term {
             // RcDoc::text(format!("if {:?} then\n{:?}\nelse\n{:?}", i, a, b)),
             And(a, b) => a.to_doc().append(RcDoc::text(" && ")).append(b.to_doc()),
             Or(a, b) => a.to_doc().append(RcDoc::text(" || ")).append(b.to_doc()),
-            Lam(a) => RcDoc::text("->").append(a.to_doc()),
+            Lam(a, free) => RcDoc::text(format!("->(capture {:?})", free)).append(a.to_doc()),
             LetRec(_, a, b) => RcDoc::text("let(rec)")
                 .append(RcDoc::space())
                 .append(RcDoc::intersperse(
@@ -193,7 +193,7 @@ impl std::fmt::Debug for Term {
             If(i, a, b) => f.write_fmt(format_args!("if {:?} then\n{:?}\nelse\n{:?}", i, a, b)),
             And(a, b) => f.write_fmt(format_args!("{:?} && {:?}", a, b)),
             Or(a, b) => f.write_fmt(format_args!("{:?} || {:?}", a, b)),
-            Lam(a) => f.write_fmt(format_args!("-> {:?}", a)),
+            Lam(a, _free) => f.write_fmt(format_args!("-> {:?}", a)),
             LetRec(_, a, b) => f.write_fmt(format_args!("let(rec)\n{:?}\nin {:?}", a, b)),
             Let(_, a, b) => f.write_fmt(format_args!("let {:?} in {:?}", a, b)),
             Match(a, b) => f.write_fmt(format_args!("match {:?} with {:?}", a, b)),

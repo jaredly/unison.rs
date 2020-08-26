@@ -98,7 +98,16 @@ impl Term {
                 a.unique(bindings);
                 b.unique(bindings)
             }
-            Lam(i) => i.unique(bindings),
+            Lam(i, free) => {
+                let current = bindings.usages.clone();
+                i.unique(bindings);
+                for (k, pre) in current.iter() {
+                    let post = bindings.usages.get(k).unwrap();
+                    if post != pre {
+                        free.push((k.clone(), *pre, *post));
+                    }
+                }
+            }
             //   -- Note: let rec blocks have an outer ABT.Cycle which introduces as many
             //   -- variables as there are bindings
             LetRec(_, aa, b) => {

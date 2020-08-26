@@ -405,7 +405,7 @@ impl FromBufferWithEnv for Term {
             ),
             13 => Term::And(buf.get_with_env(env, fvs), buf.get_with_env(env, fvs)),
             14 => Term::Or(buf.get_with_env(env, fvs), buf.get_with_env(env, fvs)),
-            15 => Term::Lam(buf.get_with_env(env, fvs)),
+            15 => Term::Lam(buf.get_with_env(env, fvs), vec![]),
             16 => Term::LetRec(
                 false,
                 buf.get_with_env(env, fvs),

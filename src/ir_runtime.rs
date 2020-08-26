@@ -83,6 +83,17 @@ impl Stack {
         }
     }
 
+    fn get_vbl(&mut self, sym: &Symbol, usage: usize) -> Value {
+        // if this is the final usage, then pluck it out.
+        let idx = self.frames[0]
+            .bindings
+            .iter()
+            .position(|(a, _)| a == sym)
+            .unwrap();
+        // TODO take usage into account
+        self.frames[0].bindings[idx].1.clone()
+    }
+
     fn new_frame(&mut self, return_index: usize, source: Source, marks: HashMap<usize, usize>) {
         info!("{} | ----> New frame {:?}", self.frames.len(), source);
         self.frames
@@ -606,8 +617,12 @@ impl IR {
                 stack.frames[0].bindings.insert(0, (symbol.clone(), v));
                 *idx += 1;
             }
-            IR::Fn(i) => {
-                stack.push(Value::PartialFnBody(*i, stack.frames[0].bindings.clone()));
+            IR::Fn(i, free_vbls) => {
+                let bound: Vec<(Symbol, Value)> = free_vbls
+                    .iter()
+                    .map(|(sym, min, max)| (sym.clone(), /*max,*/ stack.get_vbl(sym, *max)))
+                    .collect();
+                stack.push(Value::PartialFnBody(*i, bound));
                 *idx += 1;
             }
             IR::Cycle(names) => {

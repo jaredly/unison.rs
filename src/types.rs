@@ -199,7 +199,7 @@ pub enum Term {
     If(Box<ABT<Term>>, Box<ABT<Term>>, Box<ABT<Term>>),
     And(Box<ABT<Term>>, Box<ABT<Term>>),
     Or(Box<ABT<Term>>, Box<ABT<Term>>),
-    Lam(Box<ABT<Term>>),
+    Lam(Box<ABT<Term>>, Vec<(Symbol, usize, usize)>),
     //   -- Note: let rec blocks have an outer ABT.Cycle which introduces as many
     //   -- variables as there are bindings
     LetRec(bool, Vec<Box<ABT<Term>>>, Box<ABT<Term>>),

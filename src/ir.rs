@@ -11,7 +11,7 @@ pub enum IR {
     // but maybe this should be a Term?
     // I mean I should make a different `Value` deal, but not
     // just this moment
-    Fn(usize),
+    Fn(usize, Vec<(Symbol, usize, usize)>),
     // Builtin(String),
     Cycle(Vec<String>),
     // CycleFn(usize, Vec<(Symbol, usize)>),
@@ -309,9 +309,9 @@ impl Term {
                 cmds.push(IR::Mark(done_tok));
                 cmds.push(IR::PopUpOne);
             }
-            Term::Lam(contents) => {
+            Term::Lam(contents, free_vbls) => {
                 let v = env.add_fn(cmds.term.clone(), &**contents);
-                cmds.push(IR::Fn(v));
+                cmds.push(IR::Fn(v, free_vbls.clone()));
             }
             Term::Request(Reference::Builtin(name), _) => {
                 unimplemented!("Builtin Effect! I dont know the arity: {}", name);
