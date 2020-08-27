@@ -137,8 +137,6 @@ pub enum Type {
     IntroOuter(Box<ABT<Type>>),
 }
 
-// pub type Rc<Value> = usize;
-
 // Runtime values
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum Value {
@@ -311,31 +309,6 @@ impl ABT<Term> {
             _ => None,
         }
     }
-}
-
-pub struct GC {
-    values: Vec<Value>,
-}
-
-impl GC {
-    pub fn new() -> GC {
-        GC { values: vec![] }
-    }
-    pub fn put(&mut self, v: Value) -> usize {
-        // match v {
-        //     Value::GC(v) => v,
-        //     _ => {
-        self.values.push(v);
-        self.values.len() - 1
-        //     }
-        // }
-    }
-    pub fn get(&self, n: usize) -> &Value {
-        &self.values[n]
-    }
-    // pub fn pop(&mut self, n: usize) -> Value {
-    //     self.values.remove(n)
-    // }
 }
 
 impl Into<Value> for Term {

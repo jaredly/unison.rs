@@ -210,8 +210,7 @@ pub struct Trace {
 }
 
 #[allow(while_true)]
-pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> (GC, Rc<Value>) {
-    let mut gc = GC::new();
+pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
     let hash = Hash::from_string(hash);
     info!("[- ENV -]");
     for (k, v) in env.terms.iter() {
@@ -254,7 +253,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> (GC, Rc<Value
         if n % 100 == 0 {
             if start.elapsed().as_secs() > 20 {
                 let n = Rc::new(Value::Text(format!("Ran out of time after {} ticks", n)));
-                return (gc, n);
+                return n;
             }
         }
 
@@ -274,7 +273,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> (GC, Rc<Value
         let cmd = &cmds[idx];
         info!("----- <{}>    {:?}", idx, cmd);
 
-        let ret = cmd.eval(&mut gc, &option_ref, &mut stack, &mut idx);
+        let ret = cmd.eval(&option_ref, &mut stack, &mut idx);
 
         let ctime = cstart.elapsed();
         if ctime.as_millis() > 1 {
@@ -462,7 +461,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> (GC, Rc<Value
     }
 
     info!("Final stack: {:?}", stack);
-    (gc, stack.pop().unwrap())
+    stack.pop().unwrap()
 }
 
 enum Ret {
@@ -479,7 +478,6 @@ enum Ret {
 impl IR {
     fn eval(
         &self,
-        gc: &mut GC,
         // env: &GlobalEnv,
         option_ref: &Reference,
         stack: &mut Stack,
@@ -935,12 +933,12 @@ impl IR {
             }
             IR::PatternMatch(pattern, has_where) => {
                 let value = stack.peek().unwrap();
-                if !pattern.matches(&value, gc) {
+                if !pattern.matches(&value) {
                     stack.push(Rc::new(Value::Boolean(false)));
                 } else {
                     // STOPSHIP: pass Some(value), (value)
                     // so we know not to double-add
-                    match pattern.match_(&value, gc) {
+                    match pattern.match_(&value) {
                         None => stack.push(Rc::new(Value::Boolean(false))),
                         Some(mut bindings) => {
                             bindings.reverse();

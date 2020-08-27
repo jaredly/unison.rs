@@ -135,7 +135,7 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
 fn run_term(
     terms_path: &std::path::Path,
     hash: &str,
-) -> std::io::Result<(types::GC, std::rc::Rc<types::Value>)> {
+) -> std::io::Result<std::rc::Rc<types::Value>> {
     // use tracing_chrome::ChromeLayerBuilder;
     // use tracing_subscriber::prelude::*;
 
@@ -266,7 +266,7 @@ fn run_test(root: &str) -> std::io::Result<()> {
                 continue;
             }
             let hash = all_terms.get(&k).unwrap().to_string();
-            let (gc, ret) = run_term(&terms, &hash)?;
+            let ret = run_term(&terms, &hash)?;
             use types::*;
             match &*ret {
                 Value::Sequence(results) => {
@@ -367,7 +367,7 @@ fn run(file: &String) -> std::io::Result<()> {
     }
 
     if path.parent().unwrap().ends_with("terms") {
-        let (_, ret) = run_term(
+        let ret = run_term(
             path.parent().unwrap(),
             &path.file_name().unwrap().to_str().unwrap()[1..],
         )?;
