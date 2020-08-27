@@ -871,12 +871,12 @@ impl IR {
                                     Value::Constructor(option_ref.clone(), 0)
                                 }
                             }
-                            ("List.cons", [(n, value)], Value::Sequence(l)) => {
+                            ("List.cons", [(n, _value)], Value::Sequence(l)) => {
                                 let mut l = l.clone();
                                 l.insert(0, *n);
                                 Value::Sequence(l)
                             }
-                            ("List.snoc", [(_, Value::Sequence(l))], value) => {
+                            ("List.snoc", [(_, Value::Sequence(l))], _value) => {
                                 let mut l = l.clone();
                                 l.push_back(arg);
                                 Value::Sequence(l)

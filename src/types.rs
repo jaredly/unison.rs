@@ -332,9 +332,9 @@ impl GC {
     pub fn get(&self, n: usize) -> &Value {
         &self.values[n]
     }
-    pub fn pop(&mut self, n: usize) -> Value {
-        self.values.remove(n)
-    }
+    // pub fn pop(&mut self, n: usize) -> Value {
+    //     self.values.remove(n)
+    // }
 }
 
 impl Into<Value> for Term {
