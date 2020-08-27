@@ -136,6 +136,8 @@ pub enum Type {
     IntroOuter(Box<ABT<Type>>),
 }
 
+pub type GCPointer = usize;
+
 // Runtime values
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum Value {
@@ -150,27 +152,27 @@ pub enum Value {
 
     CycleFnBody(
         usize,
-        Vec<(Symbol, usize, Value)>,
+        Vec<(Symbol, usize, GCPointer)>,
         Vec<(Symbol, usize, usize)>,
     ),
-    PartialFnBody(usize, Vec<(Symbol, usize, Value)>),
-    PartialNativeApp(String, Vec<Value>),
-    PartialConstructor(Reference, usize, Vector<Value>),
+    PartialFnBody(usize, Vec<(Symbol, usize, GCPointer)>),
+    PartialNativeApp(String, Vec<GCPointer>),
+    PartialConstructor(Reference, usize, Vector<GCPointer>),
 
     Continuation(usize, Vec<super::ir_runtime::Frame>),
     Constructor(Reference, usize),
     Request(Reference, usize),
-    RequestPure(Box<Value>),
-    RequestWithArgs(Reference, usize, usize, Vec<Value>),
+    RequestPure(GCPointer),
+    RequestWithArgs(Reference, usize, usize, Vec<GCPointer>),
     RequestWithContinuation(
         Reference,
         usize,
-        Vec<Value>,
+        Vec<GCPointer>,
         usize,
         Vec<super::ir_runtime::Frame>,
     ),
 
-    Sequence(Vector<Value>),
+    Sequence(Vector<GCPointer>),
     TermLink(Referent),
     TypeLink(Reference),
 }
@@ -310,6 +312,31 @@ impl ABT<Term> {
     }
 }
 
+pub struct GC {
+    values: Vec<Value>,
+}
+
+impl GC {
+    pub fn new() -> GC {
+        GC { values: vec![] }
+    }
+    pub fn put(&mut self, v: Value) -> usize {
+        // match v {
+        //     Value::GC(v) => v,
+        //     _ => {
+        self.values.push(v);
+        self.values.len() - 1
+        //     }
+        // }
+    }
+    pub fn get(&self, n: usize) -> &Value {
+        &self.values[n]
+    }
+    pub fn pop(&mut self, n: usize) -> Value {
+        self.values.remove(n)
+    }
+}
+
 impl Into<Value> for Term {
     fn into(self) -> Value {
         match self {
@@ -323,11 +350,11 @@ impl Into<Value> for Term {
             Term::Ref(a) => Value::Ref(a),
             Term::Constructor(a, b) => Value::Constructor(a, b),
             Term::Request(a, b) => Value::Request(a, b),
-            Term::Sequence(a) => Value::Sequence(
-                a.into_iter()
-                    .map(|x| (*x).to_term().unwrap().into())
-                    .collect(),
-            ),
+            // Term::Sequence(a) => Value::Sequence(
+            //     a.into_iter()
+            //         .map(|x| gc.put(x.to_term().unwrap().into_value(gc)))
+            //         .collect(),
+            // ),
             Term::TermLink(a) => Value::TermLink(a),
             Term::TypeLink(a) => Value::TypeLink(a),
             _ => unreachable!("Cannot convert to a value"),

@@ -17,11 +17,11 @@ pub enum Source {
 pub struct Frame {
     // span: tracing::span:
     source: Source,
-    stack: Vec<Value>,
+    stack: Vec<GCPointer>,
     marks: Vec<usize>,
     handler: Option<usize>,
     return_index: usize,
-    bindings: Vec<(Symbol, usize, Value)>, // the number of usages to expect
+    bindings: Vec<(Symbol, usize, GCPointer)>, // the number of usages to expect
 }
 
 impl std::cmp::PartialEq for Frame {
@@ -79,7 +79,7 @@ impl Stack {
         }
     }
 
-    fn get_vbl(&mut self, sym: &Symbol, usage: usize) -> Value {
+    fn get_vbl(&mut self, sym: &Symbol, usage: usize) -> GCPointer {
         // if this is the final usage, then pluck it out.
         let idx = self.frames[0]
             .bindings
@@ -141,7 +141,7 @@ impl Stack {
         Some((idx, frames))
     }
 
-    fn pop_frame(&mut self) -> (usize, Value) {
+    fn pop_frame(&mut self) -> (usize, GCPointer) {
         let idx = self.frames[0].return_index;
         let value = self.pop().unwrap();
         self.frames.remove(0);
@@ -155,20 +155,20 @@ impl Stack {
         (idx, value)
     }
     // TODO : fn replace_frame
-    fn push(&mut self, t: Value) {
+    fn push(&mut self, t: GCPointer) {
         info!("{} | Stack push: {:?}", self.frames.len(), t);
         self.frames[0].stack.push(t);
     }
-    fn pop(&mut self) -> Option<Value> {
+    fn pop(&mut self) -> Option<GCPointer> {
         let t = self.frames[0].stack.pop();
         info!("{} | Stack pop: {:?}", self.frames.len(), t);
         t
     }
-    fn peek(&mut self) -> Option<&Value> {
+    fn peek(&mut self) -> Option<GCPointer> {
         let l = self.frames[0].stack.len();
         if l > 0 {
             info!("Stack peek: {:?}", self.frames[0].stack[l - 1]);
-            Some(&self.frames[0].stack[l - 1])
+            Some(self.frames[0].stack[l - 1])
         } else {
             None
         }
@@ -209,6 +209,7 @@ pub struct Trace {
 
 #[allow(while_true)]
 pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
+    let mut gc = GC::new();
     let hash = Hash::from_string(hash);
     info!("[- ENV -]");
     for (k, v) in env.terms.iter() {
@@ -270,7 +271,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
         let cmd = &cmds[idx];
         info!("----- <{}>    {:?}", idx, cmd);
 
-        let ret = cmd.eval(&option_ref, &mut stack, &mut idx);
+        let ret = cmd.eval(&mut gc, &option_ref, &mut stack, &mut idx);
 
         let ctime = cstart.elapsed();
         if ctime.as_millis() > 1 {
@@ -345,13 +346,13 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
                 };
 
-                stack.push(Value::RequestWithContinuation(
+                stack.push(gc.put(Value::RequestWithContinuation(
                     kind,
                     number,
                     args,
                     final_index,
                     frames,
-                ))
+                )))
             }
             Ret::Request(kind, number, args) => {
                 let final_index = idx;
@@ -377,13 +378,13 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
                 };
 
-                stack.push(Value::RequestWithContinuation(
+                stack.push(gc.put(Value::RequestWithContinuation(
                     kind,
                     number,
                     args,
                     final_index,
                     saved_frames,
-                ))
+                )))
             }
             Ret::FnCall(fnid, bindings, arg) => {
                 cmds = &env.anon_fns[fnid].1;
@@ -458,23 +459,24 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
     }
 
     info!("Final stack: {:?}", stack);
-    stack.pop().unwrap()
+    gc.pop(stack.pop().unwrap())
 }
 
 enum Ret {
-    FnCall(usize, Vec<(Symbol, usize, Value)>, Value),
+    FnCall(usize, Vec<(Symbol, usize, GCPointer)>, GCPointer),
     Value(Hash),
     Nothing,
-    Request(Reference, usize, Vec<Value>),
-    ReRequest(Reference, usize, Vec<Value>, usize, Vec<Frame>),
+    Request(Reference, usize, Vec<GCPointer>),
+    ReRequest(Reference, usize, Vec<GCPointer>, usize, Vec<Frame>),
     Handle(usize),
     HandlePure,
-    Continue(usize, Vec<Frame>, Value),
+    Continue(usize, Vec<Frame>, GCPointer),
 }
 
 impl IR {
     fn eval(
         &self,
+        gc: &mut GC,
         // env: &GlobalEnv,
         option_ref: &Reference,
         stack: &mut Stack,
@@ -492,9 +494,9 @@ impl IR {
             IR::Handle(mark) => return Ret::Handle(*mark),
             IR::HandlePure => {
                 let v = stack.pop().unwrap();
-                let v = match v {
+                let v = match gc.get(v) {
                     Value::RequestPure(_) => v,
-                    _ => Value::RequestPure(Box::new(v)),
+                    _ => gc.put(Value::RequestPure(v)),
                 };
                 stack.push(v);
                 // *idx += 1;
@@ -522,7 +524,7 @@ impl IR {
                         // JUMP!
                     }
                     _ => {
-                        stack.push(term.clone());
+                        stack.push(gc.put(term.clone()));
                         *idx += 1;
                     }
                 };
@@ -558,11 +560,11 @@ impl IR {
                 *idx += 1;
             }
             IR::Fn(i, free_vbls) => {
-                let bound: Vec<(Symbol, usize, Value)> = free_vbls
+                let bound: Vec<(Symbol, usize, GCPointer)> = free_vbls
                     .iter()
                     .map(|(sym, _min, max)| (sym.clone(), *max, stack.get_vbl(sym, *max)))
                     .collect();
-                stack.push(Value::PartialFnBody(*i, bound));
+                stack.push(gc.put(Value::PartialFnBody(*i, bound)));
                 *idx += 1;
             }
             IR::Cycle(names) => {
@@ -570,10 +572,10 @@ impl IR {
                 let mut items = vec![];
                 for (name, uses) in names {
                     let v = stack.pop().unwrap();
-                    match v {
+                    match gc.get(v) {
                         Value::PartialFnBody(fnint, bindings) => {
-                            mutuals.push((name.clone(), *uses, fnint));
-                            items.push((name, *uses, fnint, bindings));
+                            mutuals.push((name.clone(), *uses, *fnint));
+                            items.push((name, *uses, *fnint, bindings.clone()));
                         }
                         _ => {
                             stack.frames[0].bindings.push((name.clone(), *uses, v));
@@ -584,7 +586,7 @@ impl IR {
                     stack.frames[0].bindings.push((
                         name.clone(),
                         uses,
-                        Value::CycleFnBody(fnint, bindings, mutuals.clone()),
+                        gc.put(Value::CycleFnBody(fnint, bindings, mutuals.clone())),
                     ))
                 }
 
@@ -607,48 +609,54 @@ impl IR {
                 info!("Call");
                 let arg = stack.pop().unwrap();
                 let f = stack.pop().unwrap();
-                match f {
+                match gc.get(f).clone() {
                     Value::Continuation(kidx, frames) => {
                         *idx += 1;
-                        return Ret::Continue(kidx, frames, arg);
+                        return Ret::Continue(kidx, frames.clone(), arg);
                     }
-                    Value::RequestWithArgs(r, i, n, mut args) => {
+                    Value::RequestWithArgs(r, i, n, args) => {
                         *idx += 1;
+                        let mut args = args.clone();
                         args.push(arg);
                         if args.len() == n {
-                            return Ret::Request(r, i, args);
+                            return Ret::Request(r.clone(), i, args);
                         }
                         info!("- request - {:?} - {}", args, n);
-                        stack.push(Value::RequestWithArgs(r, i, n, args));
+                        stack.push(gc.put(Value::RequestWithArgs(r.clone(), i, n, args)));
                     }
                     Value::Constructor(r, u) => {
-                        stack.push(Value::PartialConstructor(r, u, Vector::from(vec![arg])));
+                        stack.push(gc.put(Value::PartialConstructor(
+                            r.clone(),
+                            u,
+                            Vector::from(vec![arg]),
+                        )));
                         *idx += 1;
                     }
                     Value::PartialConstructor(r, u, c) => {
                         let mut c = c.clone();
                         c.push_back(arg);
-                        stack.push(Value::PartialConstructor(r, u, c));
+                        stack.push(gc.put(Value::PartialConstructor(r.clone(), u, c)));
                         *idx += 1;
                     }
-                    Value::CycleFnBody(fnint, mut bindings, mutuals) => {
+                    Value::CycleFnBody(fnint, bindings, mutuals) => {
                         *idx += 1;
+                        let mut bindings = bindings.clone();
                         let copy = bindings.clone();
                         for (k, uses, v) in &mutuals {
                             bindings.push((
                                 k.clone(),
                                 *uses,
-                                Value::CycleFnBody(*v, copy.clone(), mutuals.clone()),
+                                gc.put(Value::CycleFnBody(*v, copy.clone(), mutuals.clone())),
                             ))
                         }
                         return Ret::FnCall(fnint, bindings, arg);
                     }
                     Value::PartialFnBody(fnint, bindings) => {
                         *idx += 1;
-                        return Ret::FnCall(fnint, bindings, arg);
+                        return Ret::FnCall(fnint, bindings.clone(), arg);
                     }
                     Value::Ref(Reference::Builtin(builtin)) => {
-                        let res = match (builtin.as_str(), &arg) {
+                        let res = match (builtin.as_str(), gc.get(arg).clone()) {
                             ("Int.increment", Value::Int(i)) => Some(Value::Int(i + 1)),
                             ("Int.negate", Value::Int(i)) => Some(Value::Int(-i)),
                             ("Int.isEven", Value::Int(i)) => Some(Value::Boolean(i % 2 == 0)),
@@ -656,91 +664,121 @@ impl IR {
                             ("Nat.increment", Value::Nat(i)) => Some(Value::Nat(i + 1)),
                             ("Nat.isEvent", Value::Nat(i)) => Some(Value::Boolean(i % 2 == 0)),
                             ("Nat.isOdd", Value::Nat(i)) => Some(Value::Boolean(i % 2 == 1)),
-                            ("Nat.toInt", Value::Nat(i)) => Some(Value::Int(*i as i64)),
+                            ("Nat.toInt", Value::Nat(i)) => Some(Value::Int(i as i64)),
                             ("Nat.toText", Value::Nat(i)) => Some(Value::Text(i.to_string())),
                             ("Boolean.not", Value::Boolean(i)) => Some(Value::Boolean(!i)),
                             ("List.size", Value::Sequence(s)) => Some(Value::Nat(s.len() as u64)),
                             ("Text.size", Value::Text(t)) => Some(Value::Nat(t.len() as u64)),
-                            ("Text.toCharList", Value::Text(t)) => {
-                                Some(Value::Sequence(t.chars().map(|c| Value::Char(c)).collect()))
-                            }
+                            ("Text.toCharList", Value::Text(t)) => Some(Value::Sequence(
+                                t.chars().map(|c| gc.put(Value::Char(c))).collect(),
+                            )),
                             ("Text.fromCharList", Value::Sequence(l)) => Some(Value::Text({
                                 l.iter()
-                                    .map(|c| match c {
-                                        Value::Char(c) => c,
+                                    .map(|c| match gc.get(*c) {
+                                        Value::Char(c) => c.clone(),
                                         _ => unreachable!("Not a char"),
                                     })
                                     .collect()
                             })),
                             ("Bytes.size", Value::Bytes(t)) => Some(Value::Nat(t.len() as u64)),
-                            ("Bytes.toList", Value::Bytes(t)) => {
-                                Some(Value::Sequence(t.iter().map(|t| Value::Nat(*t)).collect()))
-                            }
+                            ("Bytes.toList", Value::Bytes(t)) => Some(Value::Sequence(
+                                t.iter().map(|t| gc.put(Value::Nat(*t))).collect(),
+                            )),
                             _ => None,
                         };
                         match res {
-                            Some(v) => stack.push(v),
+                            Some(v) => stack.push(gc.put(v)),
                             None => {
-                                stack.push(Value::PartialNativeApp(builtin, vec![arg.clone()]));
+                                stack.push(gc.put(Value::PartialNativeApp(
+                                    builtin.clone(),
+                                    vec![arg.clone()],
+                                )));
                             }
                         }
                         *idx += 1;
                     }
                     Value::PartialNativeApp(name, args) => {
-                        let res = match (name.as_str(), args.as_slice(), &arg) {
-                            ("Int.+", [Value::Int(a)], Value::Int(b)) => {
+                        let res = match (
+                            name.as_str(),
+                            args.iter()
+                                .map(|c| (*c, gc.get(*c)))
+                                .collect::<Vec<(usize, &Value)>>()
+                                .as_slice(),
+                            gc.get(arg),
+                        ) {
+                            ("Int.+", [(_, Value::Int(a))], Value::Int(b)) => {
                                 Value::Int(a.wrapping_add(*b))
                             }
-                            ("Int.-", [Value::Int(a)], Value::Int(b)) => {
+                            ("Int.-", [(_, Value::Int(a))], Value::Int(b)) => {
                                 Value::Int(a.wrapping_sub(*b))
                             }
-                            ("Int.*", [Value::Int(a)], Value::Int(b)) => Value::Int(a * b),
-                            ("Int./", [Value::Int(a)], Value::Int(b)) => Value::Int(a / b),
-                            ("Int.<", [Value::Int(a)], Value::Int(b)) => Value::Boolean(*a < *b),
-                            ("Int.<=", [Value::Int(a)], Value::Int(b)) => Value::Boolean(*a <= *b),
-                            ("Int.>", [Value::Int(a)], Value::Int(b)) => Value::Boolean(*a > *b),
-                            ("Int.>=", [Value::Int(a)], Value::Int(b)) => Value::Boolean(*a >= *b),
-                            ("Int.==", [Value::Int(a)], Value::Int(b)) => Value::Boolean(*a == *b),
-                            ("Int.and", [Value::Int(a)], Value::Int(b)) => Value::Int(a & b),
-                            ("Int.or", [Value::Int(a)], Value::Int(b)) => Value::Int(a | b),
-                            ("Int.xor", [Value::Int(a)], Value::Int(b)) => Value::Int(a ^ b),
-                            ("Int.mod", [Value::Int(a)], Value::Int(b)) => Value::Int(a % b),
-                            ("Int.pow", [Value::Int(a)], Value::Nat(b)) => {
+                            ("Int.*", [(_, Value::Int(a))], Value::Int(b)) => Value::Int(a * b),
+                            ("Int./", [(_, Value::Int(a))], Value::Int(b)) => Value::Int(a / b),
+                            ("Int.<", [(_, Value::Int(a))], Value::Int(b)) => {
+                                Value::Boolean(*a < *b)
+                            }
+                            ("Int.<=", [(_, Value::Int(a))], Value::Int(b)) => {
+                                Value::Boolean(*a <= *b)
+                            }
+                            ("Int.>", [(_, Value::Int(a))], Value::Int(b)) => {
+                                Value::Boolean(*a > *b)
+                            }
+                            ("Int.>=", [(_, Value::Int(a))], Value::Int(b)) => {
+                                Value::Boolean(*a >= *b)
+                            }
+                            ("Int.==", [(_, Value::Int(a))], Value::Int(b)) => {
+                                Value::Boolean(*a == *b)
+                            }
+                            ("Int.and", [(_, Value::Int(a))], Value::Int(b)) => Value::Int(a & b),
+                            ("Int.or", [(_, Value::Int(a))], Value::Int(b)) => Value::Int(a | b),
+                            ("Int.xor", [(_, Value::Int(a))], Value::Int(b)) => Value::Int(a ^ b),
+                            ("Int.mod", [(_, Value::Int(a))], Value::Int(b)) => Value::Int(a % b),
+                            ("Int.pow", [(_, Value::Int(a))], Value::Nat(b)) => {
                                 Value::Int(a.pow(*b as u32))
                             }
-                            ("Int.shiftLeft", [Value::Int(a)], Value::Nat(b)) => {
+                            ("Int.shiftLeft", [(_, Value::Int(a))], Value::Nat(b)) => {
                                 Value::Int(a >> *b as u32)
                             }
-                            ("Int.shiftRight", [Value::Int(a)], Value::Nat(b)) => {
+                            ("Int.shiftRight", [(_, Value::Int(a))], Value::Nat(b)) => {
                                 Value::Int(a << *b as u32)
                             }
 
-                            ("Nat.+", [Value::Nat(a)], Value::Nat(b)) => {
+                            ("Nat.+", [(_, Value::Nat(a))], Value::Nat(b)) => {
                                 info!("Nat + {} {}", a, b);
                                 Value::Nat(a + b)
                             }
-                            ("Nat.*", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a * b),
-                            ("Nat./", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a / b),
-                            ("Nat.>", [Value::Nat(a)], Value::Nat(b)) => Value::Boolean(*a > *b),
-                            ("Nat.>=", [Value::Nat(a)], Value::Nat(b)) => Value::Boolean(*a >= *b),
-                            ("Nat.<", [Value::Nat(a)], Value::Nat(b)) => Value::Boolean(*a < *b),
-                            ("Nat.<=", [Value::Nat(a)], Value::Nat(b)) => Value::Boolean(*a <= *b),
-                            ("Nat.==", [Value::Nat(a)], Value::Nat(b)) => Value::Boolean(*a == *b),
-                            ("Nat.and", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a & b),
-                            ("Nat.or", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a | b),
-                            ("Nat.xor", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a ^ b),
-                            ("Nat.mod", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a % b),
-                            ("Nat.pow", [Value::Nat(a)], Value::Nat(b)) => {
+                            ("Nat.*", [(_, Value::Nat(a))], Value::Nat(b)) => Value::Nat(a * b),
+                            ("Nat./", [(_, Value::Nat(a))], Value::Nat(b)) => Value::Nat(a / b),
+                            ("Nat.>", [(_, Value::Nat(a))], Value::Nat(b)) => {
+                                Value::Boolean(*a > *b)
+                            }
+                            ("Nat.>=", [(_, Value::Nat(a))], Value::Nat(b)) => {
+                                Value::Boolean(*a >= *b)
+                            }
+                            ("Nat.<", [(_, Value::Nat(a))], Value::Nat(b)) => {
+                                Value::Boolean(*a < *b)
+                            }
+                            ("Nat.<=", [(_, Value::Nat(a))], Value::Nat(b)) => {
+                                Value::Boolean(*a <= *b)
+                            }
+                            ("Nat.==", [(_, Value::Nat(a))], Value::Nat(b)) => {
+                                Value::Boolean(*a == *b)
+                            }
+                            ("Nat.and", [(_, Value::Nat(a))], Value::Nat(b)) => Value::Nat(a & b),
+                            ("Nat.or", [(_, Value::Nat(a))], Value::Nat(b)) => Value::Nat(a | b),
+                            ("Nat.xor", [(_, Value::Nat(a))], Value::Nat(b)) => Value::Nat(a ^ b),
+                            ("Nat.mod", [(_, Value::Nat(a))], Value::Nat(b)) => Value::Nat(a % b),
+                            ("Nat.pow", [(_, Value::Nat(a))], Value::Nat(b)) => {
                                 Value::Nat(a.pow(*b as u32))
                             }
-                            ("Nat.shiftLeft", [Value::Nat(a)], Value::Nat(b)) => {
+                            ("Nat.shiftLeft", [(_, Value::Nat(a))], Value::Nat(b)) => {
                                 Value::Nat(a >> *b as u32)
                             }
-                            ("Nat.shiftRight", [Value::Nat(a)], Value::Nat(b)) => {
+                            ("Nat.shiftRight", [(_, Value::Nat(a))], Value::Nat(b)) => {
                                 Value::Nat(a << *b as u32)
                             }
 
-                            ("Nat.drop", [Value::Nat(a)], Value::Nat(b)) => {
+                            ("Nat.drop", [(_, Value::Nat(a))], Value::Nat(b)) => {
                                 if b >= a {
                                     Value::Nat(0)
                                 } else {
@@ -751,48 +789,68 @@ impl IR {
                             // , ("Nat.sub", 2, SubN (Slot 1) (Slot 0))
                             // , ("Nat.mod", 2, ModN (Slot 1) (Slot 0))
                             // , ("Nat.pow", 2, PowN (Slot 1) (Slot 0))
-                            ("Float.+", [Value::Float(a)], Value::Float(b)) => Value::Float(a + b),
-                            ("Float.-", [Value::Float(a)], Value::Float(b)) => Value::Float(a - b),
-                            ("Float.*", [Value::Float(a)], Value::Float(b)) => Value::Float(a * b),
-                            ("Float./", [Value::Float(a)], Value::Float(b)) => Value::Float(a / b),
-                            ("Float.<", [Value::Float(a)], Value::Float(b)) => {
+                            ("Float.+", [(_, Value::Float(a))], Value::Float(b)) => {
+                                Value::Float(a + *b)
+                            }
+                            ("Float.-", [(_, Value::Float(a))], Value::Float(b)) => {
+                                Value::Float(a - *b)
+                            }
+                            ("Float.*", [(_, Value::Float(a))], Value::Float(b)) => {
+                                Value::Float(a * b)
+                            }
+                            ("Float./", [(_, Value::Float(a))], Value::Float(b)) => {
+                                Value::Float(a / b)
+                            }
+                            ("Float.<", [(_, Value::Float(a))], Value::Float(b)) => {
                                 Value::Boolean(*a < *b)
                             }
-                            ("Float.<=", [Value::Float(a)], Value::Float(b)) => {
+                            ("Float.<=", [(_, Value::Float(a))], Value::Float(b)) => {
                                 Value::Boolean(*a <= *b)
                             }
-                            ("Float.>", [Value::Float(a)], Value::Float(b)) => {
+                            ("Float.>", [(_, Value::Float(a))], Value::Float(b)) => {
                                 Value::Boolean(*a > *b)
                             }
-                            ("Float.>=", [Value::Float(a)], Value::Float(b)) => {
+                            ("Float.>=", [(_, Value::Float(a))], Value::Float(b)) => {
                                 Value::Boolean(*a >= *b)
                             }
-                            ("Float.==", [Value::Float(a)], Value::Float(b)) => {
+                            ("Float.==", [(_, Value::Float(a))], Value::Float(b)) => {
                                 Value::Boolean(*a == *b)
                             }
 
-                            ("Universal.==", [one], two) => Value::Boolean(one == two),
-                            ("Universal.>", [one], two) => Value::Boolean(one > two),
-                            ("Universal.<", [one], two) => Value::Boolean(one < two),
-                            ("Universal.>=", [one], two) => Value::Boolean(one >= two),
-                            ("Universal.<=", [one], two) => Value::Boolean(one <= two),
-                            ("Universal.compare", [one], two) => Value::Int(if one < two {
+                            ("Universal.==", [(_, one)], two) => Value::Boolean(one == &two),
+                            ("Universal.>", [(_, one)], two) => Value::Boolean(one > &two),
+                            ("Universal.<", [(_, one)], two) => Value::Boolean(one < &two),
+                            ("Universal.>=", [(_, one)], two) => Value::Boolean(one >= &two),
+                            ("Universal.<=", [(_, one)], two) => Value::Boolean(one <= &two),
+                            ("Universal.compare", [(_, one)], two) => Value::Int(if one < &two {
                                 -1
-                            } else if one > two {
+                            } else if one > &two {
                                 1
                             } else {
                                 0
                             }),
 
-                            ("Text.++", [Value::Text(a)], Value::Text(b)) => {
+                            ("Text.++", [(_, Value::Text(a))], Value::Text(b)) => {
                                 Value::Text(a.to_owned() + b)
                             }
-                            ("Text.==", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a == b),
-                            ("Text.!=", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a != b),
-                            ("Text.<=", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a <= b),
-                            ("Text.>=", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a >= b),
-                            ("Text.>", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a > b),
-                            ("Text.<", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a < b),
+                            ("Text.==", [(_, Value::Text(a))], Value::Text(b)) => {
+                                Value::Boolean(a == b)
+                            }
+                            ("Text.!=", [(_, Value::Text(a))], Value::Text(b)) => {
+                                Value::Boolean(a != b)
+                            }
+                            ("Text.<=", [(_, Value::Text(a))], Value::Text(b)) => {
+                                Value::Boolean(a <= b)
+                            }
+                            ("Text.>=", [(_, Value::Text(a))], Value::Text(b)) => {
+                                Value::Boolean(a >= b)
+                            }
+                            ("Text.>", [(_, Value::Text(a))], Value::Text(b)) => {
+                                Value::Boolean(a > b)
+                            }
+                            ("Text.<", [(_, Value::Text(a))], Value::Text(b)) => {
+                                Value::Boolean(a < b)
+                            }
                             // , mk2 "Text.take" atn att (pure . T) (Text.take . fromIntegral)
                             // , mk2 "Text.drop" atn att (pure . T) (Text.drop . fromIntegral)
                             // , mk2 "Text.=="   att att (pure . B) (==)
@@ -801,32 +859,32 @@ impl IR {
                             // , mk2 "Text.>="   att att (pure . B) (>=)
                             // , mk2 "Text.>"    att att (pure . B) (>)
                             // , mk2 "Text.<"    att att (pure . B) (<)
-                            ("List.at", [Value::Nat(a)], Value::Sequence(l)) => {
+                            ("List.at", [(_, Value::Nat(a))], Value::Sequence(l)) => {
                                 if a < &(l.len() as u64) {
                                     Value::PartialConstructor(
                                         option_ref.clone(),
                                         1,
-                                        Vector::from(vec![l[*a as usize].clone()]),
+                                        Vector::from(vec![l[*a as usize]]),
                                     )
                                 } else {
                                     Value::Constructor(option_ref.clone(), 0)
                                 }
                             }
-                            ("List.cons", [value], Value::Sequence(l)) => {
+                            ("List.cons", [(n, value)], Value::Sequence(l)) => {
                                 let mut l = l.clone();
-                                l.insert(0, value.clone().into());
+                                l.insert(0, *n);
                                 Value::Sequence(l)
                             }
-                            ("List.snoc", [Value::Sequence(l)], value) => {
+                            ("List.snoc", [(_, Value::Sequence(l))], value) => {
                                 let mut l = l.clone();
-                                l.push_back(value.clone().into());
+                                l.push_back(arg);
                                 Value::Sequence(l)
                             }
-                            ("List.take", [Value::Nat(n)], Value::Sequence(l)) => {
+                            ("List.take", [(_, Value::Nat(n))], Value::Sequence(l)) => {
                                 let l = l.take(*n as usize);
                                 Value::Sequence(l)
                             }
-                            ("List.drop", [Value::Nat(n)], Value::Sequence(l)) => {
+                            ("List.drop", [(_, Value::Nat(n))], Value::Sequence(l)) => {
                                 if *n as usize >= l.len() {
                                     Value::Sequence(Vector::new())
                                 } else {
@@ -834,7 +892,7 @@ impl IR {
                                     Value::Sequence(l)
                                 }
                             }
-                            ("List.++", [Value::Sequence(l0)], Value::Sequence(l1)) => {
+                            ("List.++", [(_, Value::Sequence(l0))], Value::Sequence(l1)) => {
                                 let mut l = l0.clone();
                                 l.extend(l1.clone());
                                 Value::Sequence(l)
@@ -859,7 +917,7 @@ impl IR {
                                 a, b, c
                             ),
                         };
-                        stack.push(res);
+                        stack.push(gc.put(res));
                         *idx += 1;
                     }
                     term => unimplemented!("Call {:?}", term),
@@ -872,7 +930,7 @@ impl IR {
                     // TODO would be nice to ditch the wrappings
                     v.insert(0, stack.pop().unwrap());
                 }
-                stack.push(Value::Sequence(Vector::from(v)));
+                stack.push(gc.put(Value::Sequence(Vector::from(v))));
                 *idx += 1;
             }
             IR::JumpTo(mark) => {
@@ -882,23 +940,21 @@ impl IR {
                 // already collected as marks
                 *idx += 1;
             }
-            IR::If(mark) => match stack.pop() {
-                None => unreachable!("If pop"),
-                Some(Value::Boolean(true)) => *idx += 1,
-                Some(Value::Boolean(false)) => {
+            IR::If(mark) => match gc.get(stack.pop().unwrap()) {
+                Value::Boolean(true) => *idx += 1,
+                Value::Boolean(false) => {
                     info!("If jumping to {}", mark);
                     *idx = *mark;
                 }
-                Some(contents) => unreachable!("If pop not bool: {:?}", contents),
+                contents => unreachable!("If pop not bool: {:?}", contents),
             },
-            IR::IfAndPopStack(mark) => match stack.pop() {
-                None => unreachable!("If pop"),
-                Some(Value::Boolean(true)) => *idx += 1,
-                Some(Value::Boolean(false)) => {
+            IR::IfAndPopStack(mark) => match gc.get(stack.pop().unwrap()) {
+                Value::Boolean(true) => *idx += 1,
+                Value::Boolean(false) => {
                     *idx = *mark;
                     stack.pop_to_mark();
                 }
-                Some(contents) => unreachable!("If pop not bool: {:?}", contents),
+                contents => unreachable!("If pop not bool: {:?}", contents),
             },
             IR::MarkStack => {
                 stack.mark();
@@ -910,11 +966,13 @@ impl IR {
             }
             IR::PatternMatch(pattern, has_where) => {
                 let value = stack.peek().unwrap();
-                if !pattern.matches(value) {
-                    stack.push(Value::Boolean(false));
+                if !pattern.matches(gc.get(value), gc) {
+                    stack.push(gc.put(Value::Boolean(false)));
                 } else {
-                    match pattern.match_(&value) {
-                        None => stack.push(Value::Boolean(false)),
+                    // STOPSHIP: pass Some(value), gc.get(value)
+                    // so we know not to double-add
+                    match pattern.match_(value, gc) {
+                        None => stack.push(gc.put(Value::Boolean(false))),
                         Some(mut bindings) => {
                             bindings.reverse();
                             if *has_where {
@@ -925,7 +983,8 @@ impl IR {
                             for term in bindings {
                                 stack.push(term);
                             }
-                            stack.push(Value::Boolean(true))
+                            // STOPSHIP support primitives
+                            stack.push(gc.put(Value::Boolean(true)))
                         }
                     }
                 }
@@ -933,10 +992,16 @@ impl IR {
             }
             IR::PatternMatchFail => {
                 let value = stack.pop().unwrap();
-                match value {
+                match gc.get(value) {
                     Value::RequestWithContinuation(req, i, args, back_idx, frames) => {
                         info!("Bubbling up a continuation {:?} # {}", req, i);
-                        return Ret::ReRequest(req, i, args, back_idx, frames);
+                        return Ret::ReRequest(
+                            req.clone(),
+                            *i,
+                            args.clone(),
+                            *back_idx,
+                            frames.clone(),
+                        );
                     }
                     _ => unreachable!("Pattern match failure! {:?}", value),
                 }
