@@ -13,15 +13,6 @@ impl std::fmt::Debug for Symbol {
         fmt.write_fmt(format_args!("🔣{}/{}", self.text, self.unique))
     }
 }
-impl Symbol {
-    pub fn new(text: String) -> Self {
-        Symbol {
-            text,
-            num: 0,
-            unique: 0,
-        }
-    }
-}
 
 #[derive(
     Serialize,

@@ -70,12 +70,6 @@ impl MatchCase {
 }
 
 impl Term {
-    pub fn to_pretty(&self, width: usize) -> String {
-        let mut w = Vec::new();
-        self.to_doc().render(width, &mut w).unwrap();
-        String::from_utf8(w).unwrap()
-    }
-
     fn to_doc(&self) -> pretty::RcDoc<()> {
         match self {
             Int(i) => RcDoc::as_string(i),

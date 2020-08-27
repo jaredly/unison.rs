@@ -61,7 +61,7 @@ impl ABT<Term> {
                 let (mut values, body) = unroll_cycle(inner, &mut names);
                 for i in 0..names.len() {
                     match values[i].as_mut() {
-                        ABT::Tm(Term::Lam(body, free)) => {
+                        ABT::Tm(Term::Lam(_body, free)) => {
                             // Filter out references to the items in the cycle
                             *free = free
                                 .clone()
@@ -146,6 +146,8 @@ impl GlobalEnv {
         // println!("{:?}", term);
         term.to_ir(&mut cmds, self);
 
+        resolve_marks(&mut cmds.cmds);
+
         // println!("[how]");
         // for cmd in &cmds.cmds {
         //     println!("{:?}", cmd);
@@ -157,9 +159,47 @@ impl GlobalEnv {
     pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> usize {
         let mut sub = IREnv::new(hash.clone());
         contents.to_ir(&mut sub, self);
+
+        resolve_marks(&mut sub.cmds);
+
         let v = self.anon_fns.len();
         self.anon_fns.push((hash, sub.cmds));
         v
+    }
+}
+
+fn make_marks(cmds: &[IR]) -> HashMap<usize, usize> {
+    let mut marks = HashMap::new();
+    for i in 0..cmds.len() {
+        match &cmds[i] {
+            IR::Mark(m) => {
+                marks.insert(*m, i);
+            }
+            _ => (),
+        }
+    }
+
+    marks
+}
+
+fn resolve_marks(cmds: &mut Vec<IR>) {
+    let marks = make_marks(cmds);
+    for cmd in cmds {
+        match cmd {
+            IR::Handle(mark) => {
+                *mark = *marks.get(mark).unwrap();
+            }
+            IR::JumpTo(mark) => {
+                *mark = *marks.get(mark).unwrap();
+            }
+            IR::IfAndPopStack(mark) => {
+                *mark = *marks.get(mark).unwrap();
+            }
+            IR::If(mark) => {
+                *mark = *marks.get(mark).unwrap();
+            }
+            _ => (),
+        }
     }
 }
 
