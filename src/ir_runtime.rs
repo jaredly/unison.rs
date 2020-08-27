@@ -208,7 +208,7 @@ pub struct Trace {
 }
 
 #[allow(while_true)]
-pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
+pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> (GC, GCPointer) {
     let mut gc = GC::new();
     let hash = Hash::from_string(hash);
     info!("[- ENV -]");
@@ -251,7 +251,8 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
         // last = std::time::Instant::now();
         if n % 100 == 0 {
             if start.elapsed().as_secs() > 20 {
-                return Value::Text(format!("Ran out of time after {} ticks", n));
+                let n = gc.put(Value::Text(format!("Ran out of time after {} ticks", n)));
+                return (gc, n);
             }
         }
 
@@ -459,7 +460,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
     }
 
     info!("Final stack: {:?}", stack);
-    gc.pop(stack.pop().unwrap())
+    (gc, stack.pop().unwrap())
 }
 
 enum Ret {

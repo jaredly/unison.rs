@@ -132,7 +132,10 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<types::Value> {
+fn run_term(
+    terms_path: &std::path::Path,
+    hash: &str,
+) -> std::io::Result<(types::GC, types::GCPointer)> {
     // use tracing_chrome::ChromeLayerBuilder;
     // use tracing_subscriber::prelude::*;
 
@@ -263,29 +266,36 @@ fn run_test(root: &str) -> std::io::Result<()> {
                 continue;
             }
             let hash = all_terms.get(&k).unwrap().to_string();
-            let ret = run_term(&terms, &hash)?;
+            let (gc, ret) = run_term(&terms, &hash)?;
             use types::*;
-            match ret {
-                // Value::Sequence(results) => {
-                //     for result in results {
-                //         match result {
-                //             Value::PartialConstructor(
-                //                 Reference::DerivedId(Id(chash, _, _)),
-                //                 num,
-                //                 contents,
-                //             ) if chash.to_string().starts_with("vmc06s") => {
-                //                 if num == 0 {
-                //                     // failed!
-                //                     println!("Test {} failed! {:?}", hash, contents);
-                //                     return Ok(());
-                //                 } else {
-                //                     println!(". Test result passed");
-                //                 }
-                //             }
-                //             item => println!("Sequence item, not a `Result`: {:?}", item),
-                //         }
-                //     }
-                // }
+            match gc.get(ret) {
+                Value::Sequence(results) => {
+                    for result in results {
+                        match gc.get(*result) {
+                            Value::PartialConstructor(
+                                Reference::DerivedId(Id(chash, _, _)),
+                                num,
+                                contents,
+                            ) if chash.to_string().starts_with("vmc06s") => {
+                                if *num == 0 {
+                                    // failed!
+                                    println!(
+                                        "Test {} failed! {:?}",
+                                        hash,
+                                        contents
+                                            .iter()
+                                            .map(|m| gc.get(*m))
+                                            .collect::<Vec<&types::Value>>()
+                                    );
+                                    return Ok(());
+                                } else {
+                                    println!(". Test result passed");
+                                }
+                            }
+                            item => println!("Sequence item, not a `Result`: {:?}", item),
+                        }
+                    }
+                }
                 ret => println!("Test result, not a sequence: {:?}", ret),
             }
             println!("<-- all passed");
@@ -357,10 +367,10 @@ fn run(file: &String) -> std::io::Result<()> {
     }
 
     if path.parent().unwrap().ends_with("terms") {
-        let ret = run_term(
+        let (_, ret) = run_term(
             path.parent().unwrap(),
             &path.file_name().unwrap().to_str().unwrap()[1..],
-        );
+        )?;
         println!("-> {:?}", ret);
         return Ok(());
     }
