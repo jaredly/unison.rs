@@ -39,9 +39,6 @@ pub enum IR {
     // Or,
     // Dup, // duplicate the top item - might not need it
     PopUpOne,
-    // for cleaning up after blocks
-    MarkBindings,
-    PopBindings,
     // Match the given pattern.
     // If the "has_where" flag is true, bound variables
     // will be pushed onto the stack twice
@@ -86,10 +83,8 @@ impl ABT<Term> {
                 body.to_ir(cmds, env);
             }
             ABT::Abs(name, uses, body) => {
-                cmds.push(IR::MarkBindings);
                 cmds.push(IR::PopAndName(name.clone(), *uses));
                 body.to_ir(cmds, env);
-                cmds.push(IR::PopBindings);
             }
         }
     }

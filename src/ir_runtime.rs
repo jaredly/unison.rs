@@ -22,7 +22,6 @@ pub struct Frame {
     handler: Option<usize>,
     return_index: usize,
     bindings: Vec<(Symbol, usize, Value)>, // the number of usages to expect
-    binding_marks: Vec<usize>,
     marks_map: HashMap<usize, usize>,
 }
 
@@ -54,7 +53,6 @@ impl Frame {
             handler: None,
             return_index,
             bindings: vec![],
-            binding_marks: vec![],
             marks_map,
         }
     }
@@ -303,7 +301,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
         let ret = cmd.eval(&option_ref, &mut stack, &mut idx);
 
         let ctime = cstart.elapsed();
-        if ctime.as_millis() > 5 {
+        if ctime.as_millis() > 1 {
             trace.push(Trace {
                 cat: "Instruction".to_owned(),
                 ph: "B".to_owned(),
@@ -500,7 +498,6 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Value {
     //     match cmd.eval(
     //         &env,
     //         &mut bindings,
-    //         &mut binding_marks,
     //         &mut stack,
     //         &mut idx,
     //         &marks,
@@ -537,11 +534,6 @@ impl IR {
         // marks: &HashMap<usize, usize>,
     ) -> Ret {
         match self {
-            IR::MarkBindings => {
-                let ln = stack.frames[0].bindings.len();
-                stack.frames[0].binding_marks.push(ln);
-                *idx += 1;
-            }
             IR::Swap => {
                 let one = stack.pop().unwrap();
                 let two = stack.pop().unwrap();
@@ -561,15 +553,6 @@ impl IR {
                 return Ret::HandlePure;
                 // return Ret::RequestPure(v);
             }
-            IR::PopBindings => {
-                let mark = stack.frames[0].binding_marks.pop().unwrap();
-                // lol there's probably a better way
-                while stack.frames[0].bindings.len() > mark {
-                    stack.frames[0].bindings.remove(0);
-                }
-                *idx += 1;
-            }
-            // IR::Value(Value::Request(constructor, num))
             IR::Value(term) => {
                 match term {
                     Value::Request(a, b) => {
