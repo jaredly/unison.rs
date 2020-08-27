@@ -1,7 +1,7 @@
+use im::Vector;
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::{PartialEq, PartialOrd};
 use std::collections::HashMap;
-use std::rc::Rc;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Hash, Eq)]
 pub struct Symbol {
@@ -155,7 +155,7 @@ pub enum Value {
     ),
     PartialFnBody(usize, Vec<(Symbol, usize, Value)>),
     PartialNativeApp(String, Vec<Value>),
-    PartialConstructor(Reference, usize, Rc<Vec<Value>>),
+    PartialConstructor(Reference, usize, Vector<Value>),
 
     Continuation(usize, Vec<super::ir_runtime::Frame>),
     Constructor(Reference, usize),
@@ -170,7 +170,7 @@ pub enum Value {
         Vec<super::ir_runtime::Frame>,
     ),
 
-    Sequence(Vec<Value>),
+    Sequence(Vector<Value>),
     TermLink(Referent),
     TypeLink(Reference),
 }

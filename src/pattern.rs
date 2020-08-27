@@ -44,15 +44,14 @@ impl Pattern {
                 SeqOp::Cons => {
                     if contents.len() > 0 {
                         return one.matches(&contents[0])
-                            && two.matches(&Value::Sequence(contents[1..].to_vec()));
+                            && two.matches(&Value::Sequence(contents.skip(1)));
                     } else {
                         false
                     }
                 }
                 SeqOp::Snoc => {
                     if contents.len() > 0 {
-                        return one
-                            .matches(&Value::Sequence(contents[..contents.len() - 1].to_vec()))
+                        return one.matches(&Value::Sequence(contents.take(contents.len() - 1)))
                             && two.matches(&contents[contents.len() - 1]);
                     } else {
                         false
@@ -61,11 +60,8 @@ impl Pattern {
                 SeqOp::Concat => match (&**one, &**two) {
                     (Pattern::SequenceLiteral(patterns), two) => {
                         if contents.len() >= patterns.len() {
-                            return one
-                                .matches(&Value::Sequence(contents[0..patterns.len()].to_vec()))
-                                && two.matches(&Value::Sequence(
-                                    contents[patterns.len()..].to_vec(),
-                                ));
+                            return one.matches(&Value::Sequence(contents.take(patterns.len())))
+                                && two.matches(&Value::Sequence(contents.skip(patterns.len())));
                         } else {
                             false
                         }
@@ -73,8 +69,8 @@ impl Pattern {
                     (_, Pattern::SequenceLiteral(patterns)) => {
                         if contents.len() >= patterns.len() {
                             let split = contents.len() - patterns.len();
-                            return one.matches(&Value::Sequence(contents[0..split].to_vec()))
-                                && two.matches(&Value::Sequence(contents[split..].to_vec()));
+                            return one.matches(&Value::Sequence(contents.take(split)))
+                                && two.matches(&Value::Sequence(contents.skip(split)));
                         } else {
                             false
                         }
@@ -171,7 +167,7 @@ impl Pattern {
                         match one.match_(&contents[0]) {
                             None => None,
                             Some(mut ones) => {
-                                match two.match_(&Value::Sequence(contents[1..].to_vec())) {
+                                match two.match_(&Value::Sequence(contents.skip(1))) {
                                     None => None,
                                     Some(twos) => {
                                         ones.extend(twos);
@@ -186,8 +182,7 @@ impl Pattern {
                 }
                 SeqOp::Snoc => {
                     if contents.len() > 0 {
-                        match one.match_(&Value::Sequence(contents[..contents.len() - 1].to_vec()))
-                        {
+                        match one.match_(&Value::Sequence(contents.take(contents.len() - 1))) {
                             None => None,
                             Some(mut ones) => match two.match_(&contents[contents.len() - 1]) {
                                 None => None,
@@ -204,13 +199,12 @@ impl Pattern {
                 SeqOp::Concat => match (&**one, &**two) {
                     (Pattern::SequenceLiteral(patterns), two) => {
                         if contents.len() >= patterns.len() {
-                            match one.match_(&Value::Sequence(contents[0..patterns.len()].to_vec()))
-                            {
+                            match one.match_(&Value::Sequence(contents.take(patterns.len()))) {
                                 None => None,
                                 Some(mut ones) => {
-                                    match two.match_(&Value::Sequence(
-                                        contents[patterns.len()..].to_vec(),
-                                    )) {
+                                    match two
+                                        .match_(&Value::Sequence(contents.skip(patterns.len())))
+                                    {
                                         None => None,
                                         Some(twos) => {
                                             ones.extend(twos);
@@ -226,10 +220,10 @@ impl Pattern {
                     (_, Pattern::SequenceLiteral(patterns)) => {
                         if contents.len() >= patterns.len() {
                             let split = contents.len() - patterns.len();
-                            match one.match_(&Value::Sequence(contents[0..split].to_vec())) {
+                            match one.match_(&Value::Sequence(contents.take(split))) {
                                 None => None,
                                 Some(mut ones) => {
-                                    match two.match_(&Value::Sequence(contents[split..].to_vec())) {
+                                    match two.match_(&Value::Sequence(contents.skip(split))) {
                                         None => None,
                                         Some(twos) => {
                                             ones.extend(twos);

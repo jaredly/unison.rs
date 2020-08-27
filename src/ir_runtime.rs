@@ -1,5 +1,6 @@
 use super::ir::{GlobalEnv, IR};
 use super::types::*;
+use im::Vector;
 use log::info;
 use serde_derive::{Deserialize, Serialize};
 // use tracing::{debug, error, info as info_, span, warn, Level};
@@ -621,13 +622,13 @@ impl IR {
                         stack.push(Value::RequestWithArgs(r, i, n, args));
                     }
                     Value::Constructor(r, u) => {
-                        stack.push(Value::PartialConstructor(r, u, std::rc::Rc::new(vec![arg])));
+                        stack.push(Value::PartialConstructor(r, u, Vector::from(vec![arg])));
                         *idx += 1;
                     }
                     Value::PartialConstructor(r, u, c) => {
-                        let mut c = (*c).clone();
-                        c.push(arg);
-                        stack.push(Value::PartialConstructor(r, u, std::rc::Rc::new(c)));
+                        let mut c = c.clone();
+                        c.push_back(arg);
+                        stack.push(Value::PartialConstructor(r, u, c));
                         *idx += 1;
                     }
                     Value::CycleFnBody(fnint, mut bindings, mutuals) => {
@@ -805,7 +806,7 @@ impl IR {
                                     Value::PartialConstructor(
                                         option_ref.clone(),
                                         1,
-                                        std::rc::Rc::new(vec![l[*a as usize].clone()]),
+                                        Vector::from(vec![l[*a as usize].clone()]),
                                     )
                                 } else {
                                     Value::Constructor(option_ref.clone(), 0)
@@ -818,18 +819,18 @@ impl IR {
                             }
                             ("List.snoc", [Value::Sequence(l)], value) => {
                                 let mut l = l.clone();
-                                l.push(value.clone().into());
+                                l.push_back(value.clone().into());
                                 Value::Sequence(l)
                             }
                             ("List.take", [Value::Nat(n)], Value::Sequence(l)) => {
-                                let l = l[0..*n as usize].to_vec();
+                                let l = l.take(*n as usize);
                                 Value::Sequence(l)
                             }
                             ("List.drop", [Value::Nat(n)], Value::Sequence(l)) => {
                                 if *n as usize >= l.len() {
-                                    Value::Sequence(vec![])
+                                    Value::Sequence(Vector::new())
                                 } else {
-                                    let l = l[*n as usize..].to_vec();
+                                    let l = l.skip(*n as usize);
                                     Value::Sequence(l)
                                 }
                             }
@@ -871,7 +872,7 @@ impl IR {
                     // TODO would be nice to ditch the wrappings
                     v.insert(0, stack.pop().unwrap());
                 }
-                stack.push(Value::Sequence(v));
+                stack.push(Value::Sequence(Vector::from(v)));
                 *idx += 1;
             }
             IR::JumpTo(mark) => {
