@@ -127,7 +127,7 @@ impl Pattern {
                 }
                 match *kont {
                     Pattern::Unbound => (),
-                    Pattern::Var => all.push(gc.put(Value::Continuation(tidx, tkont))),
+                    Pattern::Var => all.push(Rc::new(Value::Continuation(tidx, tkont))),
                     _ => unreachable!("Can't match on a continuation"),
                 }
                 Some(all)
@@ -168,7 +168,7 @@ impl Pattern {
                             None => None,
                             Some(mut ones) => {
                                 // STOPSHIP maybe we don't need to put this ...
-                                match two.match_(gc.put(Value::Sequence(contents.skip(1))), gc) {
+                                match two.match_(Rc::new(Value::Sequence(contents.skip(1))), gc) {
                                     None => None,
                                     Some(twos) => {
                                         ones.extend(twos);
@@ -184,7 +184,7 @@ impl Pattern {
                 SeqOp::Snoc => {
                     if contents.len() > 0 {
                         match one.match_(
-                            gc.put(Value::Sequence(contents.take(contents.len() - 1))),
+                            Rc::new(Value::Sequence(contents.take(contents.len() - 1))),
                             gc,
                         ) {
                             None => None,
@@ -204,12 +204,12 @@ impl Pattern {
                     (Pattern::SequenceLiteral(patterns), two) => {
                         if contents.len() >= patterns.len() {
                             match one
-                                .match_(gc.put(Value::Sequence(contents.take(patterns.len()))), gc)
+                                .match_(Rc::new(Value::Sequence(contents.take(patterns.len()))), gc)
                             {
                                 None => None,
                                 Some(mut ones) => {
                                     match two.match_(
-                                        gc.put(Value::Sequence(contents.skip(patterns.len()))),
+                                        Rc::new(Value::Sequence(contents.skip(patterns.len()))),
                                         gc,
                                     ) {
                                         None => None,
@@ -227,11 +227,11 @@ impl Pattern {
                     (_, Pattern::SequenceLiteral(patterns)) => {
                         if contents.len() >= patterns.len() {
                             let split = contents.len() - patterns.len();
-                            match one.match_(gc.put(Value::Sequence(contents.take(split))), gc) {
+                            match one.match_(Rc::new(Value::Sequence(contents.take(split))), gc) {
                                 None => None,
                                 Some(mut ones) => {
                                     match two
-                                        .match_(gc.put(Value::Sequence(contents.skip(split))), gc)
+                                        .match_(Rc::new(Value::Sequence(contents.skip(split))), gc)
                                     {
                                         None => None,
                                         Some(twos) => {

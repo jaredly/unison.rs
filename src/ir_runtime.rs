@@ -3,6 +3,7 @@ use super::types::*;
 use im::Vector;
 use log::info;
 use serde_derive::{Deserialize, Serialize};
+use std::rc::Rc;
 // use tracing::{debug, error, info as info_, span, warn, Level};
 
 static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
@@ -17,11 +18,11 @@ pub enum Source {
 pub struct Frame {
     // span: tracing::span:
     source: Source,
-    stack: Vec<GCPointer>,
+    stack: Vec<Rc<Value>>,
     marks: Vec<usize>,
     handler: Option<usize>,
     return_index: usize,
-    bindings: Vec<(Symbol, usize, GCPointer)>, // the number of usages to expect
+    bindings: Vec<(Symbol, usize, Rc<Value>)>, // the number of usages to expect
 }
 
 impl std::cmp::PartialEq for Frame {
@@ -79,7 +80,7 @@ impl Stack {
         }
     }
 
-    fn get_vbl(&mut self, sym: &Symbol, usage: usize) -> GCPointer {
+    fn get_vbl(&mut self, sym: &Symbol, usage: usize) -> Rc<Value> {
         // if this is the final usage, then pluck it out.
         let idx = self.frames[0]
             .bindings
@@ -141,7 +142,7 @@ impl Stack {
         Some((idx, frames))
     }
 
-    fn pop_frame(&mut self) -> (usize, GCPointer) {
+    fn pop_frame(&mut self) -> (usize, Rc<Value>) {
         let idx = self.frames[0].return_index;
         let value = self.pop().unwrap();
         self.frames.remove(0);
@@ -155,16 +156,16 @@ impl Stack {
         (idx, value)
     }
     // TODO : fn replace_frame
-    fn push(&mut self, t: GCPointer) {
+    fn push(&mut self, t: Rc<Value>) {
         info!("{} | Stack push: {:?}", self.frames.len(), t);
         self.frames[0].stack.push(t);
     }
-    fn pop(&mut self) -> Option<GCPointer> {
+    fn pop(&mut self) -> Option<Rc<Value>> {
         let t = self.frames[0].stack.pop();
         info!("{} | Stack pop: {:?}", self.frames.len(), t);
         t
     }
-    fn peek(&mut self) -> Option<GCPointer> {
+    fn peek(&mut self) -> Option<Rc<Value>> {
         let l = self.frames[0].stack.len();
         if l > 0 {
             info!("Stack peek: {:?}", self.frames[0].stack[l - 1]);
@@ -208,7 +209,7 @@ pub struct Trace {
 }
 
 #[allow(while_true)]
-pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> (GC, GCPointer) {
+pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> (GC, Rc<Value>) {
     let mut gc = GC::new();
     let hash = Hash::from_string(hash);
     info!("[- ENV -]");
@@ -251,7 +252,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> (GC, GCPointe
         // last = std::time::Instant::now();
         if n % 100 == 0 {
             if start.elapsed().as_secs() > 20 {
-                let n = gc.put(Value::Text(format!("Ran out of time after {} ticks", n)));
+                let n = Rc::new(Value::Text(format!("Ran out of time after {} ticks", n)));
                 return (gc, n);
             }
         }
@@ -347,7 +348,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> (GC, GCPointe
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
                 };
 
-                stack.push(gc.put(Value::RequestWithContinuation(
+                stack.push(Rc::new(Value::RequestWithContinuation(
                     kind,
                     number,
                     args,
@@ -379,7 +380,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> (GC, GCPointe
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
                 };
 
-                stack.push(gc.put(Value::RequestWithContinuation(
+                stack.push(Rc::new(Value::RequestWithContinuation(
                     kind,
                     number,
                     args,
@@ -464,14 +465,14 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> (GC, GCPointe
 }
 
 enum Ret {
-    FnCall(usize, Vec<(Symbol, usize, GCPointer)>, GCPointer),
+    FnCall(usize, Vec<(Symbol, usize, Rc<Value>)>, Rc<Value>),
     Value(Hash),
     Nothing,
-    Request(Reference, usize, Vec<GCPointer>),
-    ReRequest(Reference, usize, Vec<GCPointer>, usize, Vec<Frame>),
+    Request(Reference, usize, Vec<Rc<Value>>),
+    ReRequest(Reference, usize, Vec<Rc<Value>>, usize, Vec<Frame>),
     Handle(usize),
     HandlePure,
-    Continue(usize, Vec<Frame>, GCPointer),
+    Continue(usize, Vec<Frame>, Rc<Value>),
 }
 
 impl IR {
@@ -497,7 +498,7 @@ impl IR {
                 let v = stack.pop().unwrap();
                 let v = match gc.get(v) {
                     Value::RequestPure(_) => v,
-                    _ => gc.put(Value::RequestPure(v)),
+                    _ => Rc::new(Value::RequestPure(v)),
                 };
                 stack.push(v);
                 // *idx += 1;
@@ -525,7 +526,7 @@ impl IR {
                         // JUMP!
                     }
                     _ => {
-                        stack.push(gc.put(term.clone()));
+                        stack.push(Rc::new(term.clone()));
                         *idx += 1;
                     }
                 };
@@ -561,11 +562,11 @@ impl IR {
                 *idx += 1;
             }
             IR::Fn(i, free_vbls) => {
-                let bound: Vec<(Symbol, usize, GCPointer)> = free_vbls
+                let bound: Vec<(Symbol, usize, Rc<Value>)> = free_vbls
                     .iter()
                     .map(|(sym, _min, max)| (sym.clone(), *max, stack.get_vbl(sym, *max)))
                     .collect();
-                stack.push(gc.put(Value::PartialFnBody(*i, bound)));
+                stack.push(Rc::new(Value::PartialFnBody(*i, bound)));
                 *idx += 1;
             }
             IR::Cycle(names) => {
@@ -587,7 +588,7 @@ impl IR {
                     stack.frames[0].bindings.push((
                         name.clone(),
                         uses,
-                        gc.put(Value::CycleFnBody(fnint, bindings, mutuals.clone())),
+                        Rc::new(Value::CycleFnBody(fnint, bindings, mutuals.clone())),
                     ))
                 }
 
@@ -623,10 +624,10 @@ impl IR {
                             return Ret::Request(r.clone(), i, args);
                         }
                         info!("- request - {:?} - {}", args, n);
-                        stack.push(gc.put(Value::RequestWithArgs(r.clone(), i, n, args)));
+                        stack.push(Rc::new(Value::RequestWithArgs(r.clone(), i, n, args)));
                     }
                     Value::Constructor(r, u) => {
-                        stack.push(gc.put(Value::PartialConstructor(
+                        stack.push(Rc::new(Value::PartialConstructor(
                             r.clone(),
                             u,
                             Vector::from(vec![arg]),
@@ -636,7 +637,7 @@ impl IR {
                     Value::PartialConstructor(r, u, c) => {
                         let mut c = c.clone();
                         c.push_back(arg);
-                        stack.push(gc.put(Value::PartialConstructor(r.clone(), u, c)));
+                        stack.push(Rc::new(Value::PartialConstructor(r.clone(), u, c)));
                         *idx += 1;
                     }
                     Value::CycleFnBody(fnint, bindings, mutuals) => {
@@ -647,7 +648,7 @@ impl IR {
                             bindings.push((
                                 k.clone(),
                                 *uses,
-                                gc.put(Value::CycleFnBody(*v, copy.clone(), mutuals.clone())),
+                                Rc::new(Value::CycleFnBody(*v, copy.clone(), mutuals.clone())),
                             ))
                         }
                         return Ret::FnCall(fnint, bindings, arg);
@@ -671,7 +672,7 @@ impl IR {
                             ("List.size", Value::Sequence(s)) => Some(Value::Nat(s.len() as u64)),
                             ("Text.size", Value::Text(t)) => Some(Value::Nat(t.len() as u64)),
                             ("Text.toCharList", Value::Text(t)) => Some(Value::Sequence(
-                                t.chars().map(|c| gc.put(Value::Char(c))).collect(),
+                                t.chars().map(|c| Rc::new(Value::Char(c))).collect(),
                             )),
                             ("Text.fromCharList", Value::Sequence(l)) => Some(Value::Text({
                                 l.iter()
@@ -683,14 +684,14 @@ impl IR {
                             })),
                             ("Bytes.size", Value::Bytes(t)) => Some(Value::Nat(t.len() as u64)),
                             ("Bytes.toList", Value::Bytes(t)) => Some(Value::Sequence(
-                                t.iter().map(|t| gc.put(Value::Nat(*t))).collect(),
+                                t.iter().map(|t| Rc::new(Value::Nat(*t))).collect(),
                             )),
                             _ => None,
                         };
                         match res {
-                            Some(v) => stack.push(gc.put(v)),
+                            Some(v) => stack.push(Rc::new(v)),
                             None => {
-                                stack.push(gc.put(Value::PartialNativeApp(
+                                stack.push(Rc::new(Value::PartialNativeApp(
                                     builtin.clone(),
                                     vec![arg.clone()],
                                 )));
@@ -918,7 +919,7 @@ impl IR {
                                 a, b, c
                             ),
                         };
-                        stack.push(gc.put(res));
+                        stack.push(Rc::new(res));
                         *idx += 1;
                     }
                     term => unimplemented!("Call {:?}", term),
@@ -931,7 +932,7 @@ impl IR {
                     // TODO would be nice to ditch the wrappings
                     v.insert(0, stack.pop().unwrap());
                 }
-                stack.push(gc.put(Value::Sequence(Vector::from(v))));
+                stack.push(Rc::new(Value::Sequence(Vector::from(v))));
                 *idx += 1;
             }
             IR::JumpTo(mark) => {
@@ -968,12 +969,12 @@ impl IR {
             IR::PatternMatch(pattern, has_where) => {
                 let value = stack.peek().unwrap();
                 if !pattern.matches(gc.get(value), gc) {
-                    stack.push(gc.put(Value::Boolean(false)));
+                    stack.push(Rc::new(Value::Boolean(false)));
                 } else {
                     // STOPSHIP: pass Some(value), gc.get(value)
                     // so we know not to double-add
                     match pattern.match_(value, gc) {
-                        None => stack.push(gc.put(Value::Boolean(false))),
+                        None => stack.push(Rc::new(Value::Boolean(false))),
                         Some(mut bindings) => {
                             bindings.reverse();
                             if *has_where {
@@ -985,7 +986,7 @@ impl IR {
                                 stack.push(term);
                             }
                             // STOPSHIP support primitives
-                            stack.push(gc.put(Value::Boolean(true)))
+                            stack.push(Rc::new(Value::Boolean(true)))
                         }
                     }
                 }

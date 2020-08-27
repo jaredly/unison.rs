@@ -135,7 +135,7 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
 fn run_term(
     terms_path: &std::path::Path,
     hash: &str,
-) -> std::io::Result<(types::GC, types::GCPointer)> {
+) -> std::io::Result<(types::GC, types::Rc<Value>)> {
     // use tracing_chrome::ChromeLayerBuilder;
     // use tracing_subscriber::prelude::*;
 
