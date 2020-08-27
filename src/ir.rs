@@ -51,6 +51,16 @@ pub enum IR {
     IfAndPopStack(usize),
 }
 
+fn filter_free_vbls(
+    free: &Vec<(Symbol, usize, usize)>,
+    names: &Vec<(Symbol, usize)>,
+) -> Vec<(Symbol, usize, usize)> {
+    free.clone()
+        .into_iter()
+        .filter(|x| names.iter().find(|y| x.0 == y.0) == None)
+        .collect()
+}
+
 impl ABT<Term> {
     pub fn to_ir(&self, cmds: &mut IREnv, env: &mut GlobalEnv) {
         match self {
@@ -63,19 +73,21 @@ impl ABT<Term> {
                     match values[i].as_mut() {
                         ABT::Tm(Term::Lam(_body, free)) => {
                             // Filter out references to the items in the cycle
-                            *free = free
-                                .clone()
-                                .into_iter()
-                                .filter(|x| names.iter().find(|y| x.0 == y.0) == None)
-                                .collect();
+                            *free = filter_free_vbls(free, &names);
                         }
-                        _ => (),
+                        ABT::Tm(Term::Ann(inner, _)) => match inner.as_mut() {
+                            ABT::Tm(Term::Lam(_body, free)) => {
+                                // Filter out references to the items in the cycle
+                                *free = filter_free_vbls(free, &names);
+                            }
+                            _ => {
+                                // println!("NOT A TM {:?}", x);
+                            }
+                        },
+                        _ => {
+                            // println!("NOT A TM {:?}", x);
+                        }
                     };
-                    // match &mut values[i] {
-                    //     Term::Lam(body, free) => {
-
-                    //     }
-                    // }
                     values[i].to_ir(cmds, env);
                 }
                 names.reverse();
