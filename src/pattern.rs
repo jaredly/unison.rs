@@ -264,7 +264,7 @@ impl Pattern {
                 }
 
                 match inner {
-                    Value::Constructor(r, n) if r == reference && n == n => Some(all),
+                    Value::Constructor(r, n) if r == reference && number == n => Some(all),
                     _ => None,
                 }
                 //
