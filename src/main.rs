@@ -7,8 +7,9 @@ mod ir;
 mod ir_runtime;
 mod parser;
 mod pattern;
-mod runtime;
+mod printer;
 mod types;
+mod unique;
 
 fn load_type(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
@@ -131,21 +132,96 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<types::Term> {
+fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<types::Value> {
+    // use tracing_chrome::ChromeLayerBuilder;
+    // use tracing_subscriber::prelude::*;
+
+    // let (chrome_layer, _guard) = ChromeLayerBuilder::new().build();
+    // tracing_subscriber::registry().with(chrome_layer).init();
+
     let last = std::time::Instant::now();
     println!("Running {:?} - {}", terms_path, hash);
     let env = env::Env::init(terms_path.parent().unwrap());
     // let res = env.load(hash);
     // println!("{:?}", res);
     let mut ir_env = ir::GlobalEnv::new(env);
-    ir_env.load(hash);
+    ir_env.load(&types::Hash::from_string(hash));
+
+    {
+        let mut file = std::fs::File::create(format!("data/source-{}.txt", hash))?;
+
+        file.write_all(b"[- ENV -]\n")?;
+        for (k, v) in ir_env.terms.iter() {
+            file.write_all(format!("] Value {:?}\n", k).as_bytes())?;
+            for (n, i) in v.iter().enumerate() {
+                file.write_all(format!("({}) {:?}\n", n, i).as_bytes())?;
+            }
+            file.write_all(b"\n")?;
+            file.write_all(
+                ir_env
+                    .env
+                    .raw_cache
+                    .get(&k.to_string())
+                    .unwrap()
+                    .to_pretty(80)
+                    .as_bytes(),
+            )?;
+            file.write_all(b"\n\n")?;
+        }
+        for (i, v) in ir_env.anon_fns.iter().enumerate() {
+            file.write_all(format!("] Fn({}) : {:?}\n", i, v.0).as_bytes())?;
+            for (n, i) in v.1.iter().enumerate() {
+                file.write_all(format!("({}) {:?}\n", n, i).as_bytes())?;
+            }
+            file.write_all(b"\n\n")?;
+        }
+    };
+
     // res.to_ir(&mut ir_env, &mut env);
-    let ret = ir_runtime::eval(ir_env, hash);
+    // let guard = pprof::ProfilerGuard::new(100).unwrap();
+    let mut trace = vec![];
+    let ret = ir_runtime::eval(ir_env, hash, &mut trace);
     println!(
         "Time: {}ms ({}ns)",
         last.elapsed().as_millis(),
         last.elapsed().as_nanos()
     );
+
+    let mut file = std::fs::File::create({
+        let mut i = 0;
+        let mut name;
+        loop {
+            name = if i == 0 {
+                format!("data/profile-{}.json", hash)
+            } else {
+                format!("data/profile-{}-{}.json", hash, i)
+            };
+            if std::path::Path::new(&name).exists() {
+                i += 1;
+            } else {
+                break;
+            }
+        }
+        name
+    })?;
+    use std::io::Write;
+    file.write_all(b"[")?;
+    let mut lines = vec![];
+    for trace in trace {
+        lines.push(format!(
+            r#"
+            {{"cat": {:?}, "pid": 1, "ph": {:?}, "ts": {}, "name": {:?}, "tid": {}, "args": {{"[file]": {:?} }} }}
+            "#,
+            trace.cat,
+            trace.ph,
+            trace.ts.as_micros(),
+            format!("{:?}", trace.name),
+            trace.tid,
+            trace.file
+        ));
+    }
+    file.write_all(lines.join(",\n").as_bytes())?;
+    file.write_all(b"]")?;
     // use runtime::Eval;
     // let ret = res.eval(
     //     &mut env,
@@ -153,6 +229,11 @@ fn run_term(terms_path: &std::path::Path, hash: &str) -> std::io::Result<types::
     // );
     // let result = parser::Buffer::from_file(file)?.get_term();
     // println!("{:?}", res);
+    // if let Ok(report) = guard.report().build() {
+    //     let file = std::fs::File::create(format!("flamegraph-{}.svg", hash)).unwrap();
+    //     report.flamegraph(file).unwrap();
+    // };
+
     Ok(ret)
 }
 
@@ -185,14 +266,14 @@ fn run_test(root: &str) -> std::io::Result<()> {
             let ret = run_term(&terms, &hash)?;
             use types::*;
             match ret {
-                Term::Sequence(results) => {
+                Value::Sequence(results) => {
                     for result in results {
-                        match *result {
-                            ABT::Tm(Term::PartialConstructor(
+                        match result {
+                            Value::PartialConstructor(
                                 Reference::DerivedId(Id(chash, _, _)),
                                 num,
                                 contents,
-                            )) if chash.to_string().starts_with("vmc06s") => {
+                            ) if chash.to_string().starts_with("vmc06s") => {
                                 if num == 0 {
                                     // failed!
                                     println!("Test {} failed! {:?}", hash, contents);

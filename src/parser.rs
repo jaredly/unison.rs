@@ -176,6 +176,7 @@ impl FromBuffer for Symbol {
         Symbol {
             num: buf.get(),
             text: buf.get(),
+            unique: 0,
         }
     }
 }
@@ -318,64 +319,11 @@ impl<Inner: std::fmt::Debug> std::fmt::Debug for ABT<Inner> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             ABT::Tm(i) => f.write_fmt(format_args!("{:?}", i)),
-            ABT::Var(i) => f.write_fmt(format_args!("〰️{}", i.text)),
+            ABT::Var(i, u) => f.write_fmt(format_args!("〰️{} (#{})", i.text, u)),
             ABT::Cycle(i) => f.write_fmt(format_args!("🚲({:?})", i)),
-            ABT::Abs(s, i) => f.write_fmt(format_args!("|{}|({:?})", s.text, i)),
-        }
-    }
-}
-
-impl std::fmt::Debug for Term {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Term::RequestWithArgs(i, n, _, _) => f.write_fmt(format_args!("req<{:?} - {}>", i, n)),
-            Term::RequestWithContinuation(i, n, _, _, _) => {
-                f.write_fmt(format_args!("req+cont<{:?} - {}>", i, n))
+            ABT::Abs(s, u, i) => {
+                f.write_fmt(format_args!("|{}/{} #{}|({:?})", s.text, s.unique, u, i))
             }
-            Term::Continuation(idx, frames) => f.write_fmt(format_args!(
-                "cont<idx: {} - frames: {}>",
-                idx,
-                frames.len()
-            )),
-            Term::RequestPure(i) => f.write_fmt(format_args!("pure<{:?}>", i)),
-            Term::Int(i) => f.write_fmt(format_args!("{}", i)),
-            Term::Nat(i) => f.write_fmt(format_args!("{}", i)),
-            Term::Float(i) => f.write_fmt(format_args!("{}", i)),
-            Term::Boolean(i) => f.write_fmt(format_args!("{}", i)),
-            Term::Text(i) => f.write_fmt(format_args!("{:?}", i)),
-            Term::Bytes(i) => f.write_fmt(format_args!("{:?}", i)),
-            Term::Char(i) => f.write_fmt(format_args!("{:?}", i)),
-            Term::Blank => f.write_str("<blank>"),
-            Term::PartialNativeApp(name, _) => f.write_fmt(format_args!("partial({})", name)),
-            Term::Ref(i) => f.write_fmt(format_args!("{:?}", i)),
-            Term::Constructor(i, n) => f.write_fmt(format_args!("[constructor]{:?}#{}", i, n)),
-            Term::Request(i, n) => f.write_fmt(format_args!("[request]{:?}#{}", i, n)),
-            Term::Handle(i, n) => f.write_fmt(format_args!("handle {:?} with {:?}", i, n)),
-            Term::App(i, n) => f.write_fmt(format_args!("{:?} <app> {:?}", i, n)),
-            Term::Ann(i, n) => f.write_fmt(format_args!("t- {:?} :: {:?} -t", i, n)),
-            Term::Sequence(i) => f.write_fmt(format_args!("{:?}", i)),
-            Term::If(i, a, b) => {
-                f.write_fmt(format_args!("if {:?} then\n{:?}\nelse\n{:?}", i, a, b))
-            }
-            Term::And(a, b) => f.write_fmt(format_args!("{:?} && {:?}", a, b)),
-            Term::Or(a, b) => f.write_fmt(format_args!("{:?} || {:?}", a, b)),
-            Term::Lam(a) => f.write_fmt(format_args!("-> {:?}", a)),
-            Term::LetRec(_, a, b) => f.write_fmt(format_args!("let(rec)\n{:?}\nin {:?}", a, b)),
-            Term::Let(_, a, b) => f.write_fmt(format_args!("let {:?} in {:?}", a, b)),
-            Term::Match(a, b) => f.write_fmt(format_args!("match {:?} with {:?}", a, b)),
-            Term::TermLink(a) => f.write_fmt(format_args!("termLink {:?}", a)),
-            Term::TypeLink(a) => f.write_fmt(format_args!("typeLink {:?}", a)),
-
-            Term::ScopedFunction(contents, term, bindings) => f.write_fmt(format_args!(
-                "[scoped fn | {} | {:?} | {:?} ]",
-                term, bindings, contents
-            )),
-            Term::PartialConstructor(reference, num, args) => {
-                f.write_fmt(format_args!("[partial]{:?}-{}({:?})", reference, num, args))
-            } // _ => f.write_str("Something Else"),
-            Term::Cycle(c, _d) => f.write_fmt(format_args!("🚲 {:?}", c)),
-            Term::CycleFnBody(a, c, _d) => f.write_fmt(format_args!("🚲 ({}) {:?}", a, c)),
-            Term::PartialFnBody(n, c) => f.write_fmt(format_args!("fn {} {:?}", n, c)),
         }
     }
 }
@@ -457,7 +405,7 @@ impl FromBufferWithEnv for Term {
             ),
             13 => Term::And(buf.get_with_env(env, fvs), buf.get_with_env(env, fvs)),
             14 => Term::Or(buf.get_with_env(env, fvs), buf.get_with_env(env, fvs)),
-            15 => Term::Lam(buf.get_with_env(env, fvs)),
+            15 => Term::Lam(buf.get_with_env(env, fvs), vec![]),
             16 => Term::LetRec(
                 false,
                 buf.get_with_env(env, fvs),
@@ -486,8 +434,8 @@ impl<Inner: FromBufferWithEnv + std::fmt::Debug> FromBufferWithEnv for ABT<Inner
             0 => {
                 let tag = u8::get(buf);
                 match tag {
-                    0 => ABT::Var(env[buf.get::<usize>()].clone()),
-                    1 => ABT::Var(fvs[buf.get::<usize>()].clone()),
+                    0 => ABT::Var(env[buf.get::<usize>()].clone(), 0),
+                    1 => ABT::Var(fvs[buf.get::<usize>()].clone(), 0),
                     _ => unreachable!(),
                 }
             }
@@ -496,7 +444,7 @@ impl<Inner: FromBufferWithEnv + std::fmt::Debug> FromBufferWithEnv for ABT<Inner
                 let v: Symbol = buf.get();
                 let mut nw = env.to_owned();
                 nw.insert(0, v.clone());
-                ABT::Abs(v, buf.get_with_env(&nw, fvs))
+                ABT::Abs(v, 0, buf.get_with_env(&nw, fvs))
             }
             3 => ABT::Cycle(buf.get_with_env(env, fvs)),
             _ => unreachable!("ABT {}", tag),

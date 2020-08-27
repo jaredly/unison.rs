@@ -11,16 +11,16 @@ pub enum IR {
     // but maybe this should be a Term?
     // I mean I should make a different `Value` deal, but not
     // just this moment
-    Fn(usize),
+    Fn(usize, Vec<(Symbol, usize, usize)>),
     // Builtin(String),
-    Cycle(Vec<String>),
+    Cycle(Vec<(Symbol, usize)>),
     // CycleFn(usize, Vec<(Symbol, usize)>),
     // Push this value onto the stack
-    Value(Term),
+    Value(Value),
     // lookup the symbol, and push it onto the stack
-    PushSym(Symbol),
+    PushSym(Symbol, usize),
     // pop the top value off the stack and give it a name
-    PopAndName(Symbol),
+    PopAndName(Symbol, usize),
     // pop the top two values off the stack, call the first with the second
     Call,
     // Swap the top two values
@@ -39,9 +39,6 @@ pub enum IR {
     // Or,
     // Dup, // duplicate the top item - might not need it
     PopUpOne,
-    // for cleaning up after blocks
-    MarkBindings,
-    PopBindings,
     // Match the given pattern.
     // If the "has_where" flag is true, bound variables
     // will be pushed onto the stack twice
@@ -57,23 +54,37 @@ pub enum IR {
 impl ABT<Term> {
     pub fn to_ir(&self, cmds: &mut IREnv, env: &mut GlobalEnv) {
         match self {
-            ABT::Var(symbol) => cmds.push(IR::PushSym(symbol.clone())),
+            ABT::Var(symbol, usage) => cmds.push(IR::PushSym(symbol.clone(), *usage)),
             ABT::Tm(term) => term.to_ir(cmds, env),
             ABT::Cycle(inner) => {
                 let mut names = vec![];
-                let (values, body) = unroll_cycle(inner, &mut names);
+                let (mut values, body) = unroll_cycle(inner, &mut names);
                 for i in 0..names.len() {
+                    match values[i].as_mut() {
+                        ABT::Tm(Term::Lam(_body, free)) => {
+                            // Filter out references to the items in the cycle
+                            *free = free
+                                .clone()
+                                .into_iter()
+                                .filter(|x| names.iter().find(|y| x.0 == y.0) == None)
+                                .collect();
+                        }
+                        _ => (),
+                    };
+                    // match &mut values[i] {
+                    //     Term::Lam(body, free) => {
+
+                    //     }
+                    // }
                     values[i].to_ir(cmds, env);
                 }
                 names.reverse();
                 cmds.push(IR::Cycle(names));
                 body.to_ir(cmds, env);
             }
-            ABT::Abs(name, body) => {
-                cmds.push(IR::MarkBindings);
-                cmds.push(IR::PopAndName(name.clone()));
+            ABT::Abs(name, uses, body) => {
+                cmds.push(IR::PopAndName(name.clone(), *uses));
                 body.to_ir(cmds, env);
-                cmds.push(IR::PopBindings);
             }
         }
     }
@@ -81,11 +92,11 @@ impl ABT<Term> {
 
 fn unroll_cycle(
     inner: &ABT<Term>,
-    names: &mut Vec<String>,
+    names: &mut Vec<(Symbol, usize)>,
 ) -> (Vec<Box<ABT<Term>>>, Box<ABT<Term>>) {
     match inner {
-        ABT::Abs(sym, inner) => {
-            names.push(sym.text.clone());
+        ABT::Abs(sym, uses, inner) => {
+            names.push((sym.clone(), *uses));
             match &**inner {
                 ABT::Tm(Term::LetRec(_, things, body)) => (things.clone(), body.clone()),
                 _ => unroll_cycle(inner, names),
@@ -97,9 +108,9 @@ fn unroll_cycle(
 
 pub struct GlobalEnv {
     pub env: env::Env,
-    pub terms: HashMap<String, Vec<IR>>,
-    pub types: HashMap<String, TypeDecl>,
-    pub anon_fns: Vec<(String, Vec<IR>)>, // I think?
+    pub terms: HashMap<Hash, Vec<IR>>,
+    pub types: HashMap<Hash, TypeDecl>,
+    pub anon_fns: Vec<(Hash, Vec<IR>)>, // I think?
 }
 
 impl GlobalEnv {
@@ -112,28 +123,30 @@ impl GlobalEnv {
         }
     }
 
-    pub fn get_type(&mut self, hash: String) -> TypeDecl {
-        match self.types.get(&hash) {
+    pub fn get_type(&mut self, hash: &Hash) -> TypeDecl {
+        match self.types.get(hash) {
             Some(v) => v.clone(),
             None => {
-                let res = self.env.load_type(&hash);
-                self.types.insert(hash, res.clone());
+                let res = self.env.load_type(&hash.to_string());
+                self.types.insert(hash.clone(), res.clone());
                 res
             }
         }
     }
 
-    pub fn load(&mut self, hash: &str) {
+    pub fn load(&mut self, hash: &Hash) {
         if self.terms.contains_key(hash) {
             // Already loaded
             return;
         }
-        let mut cmds = IREnv::new(hash.to_owned());
+        let mut cmds = IREnv::new(hash.clone());
         self.terms.insert(hash.to_owned(), vec![]);
-        let term = self.env.load(hash);
+        let term = self.env.load(&hash.to_string());
         // println!("Loaded {}", hash);
         // println!("{:?}", term);
         term.to_ir(&mut cmds, self);
+
+        resolve_marks(&mut cmds.cmds);
 
         // println!("[how]");
         // for cmd in &cmds.cmds {
@@ -143,23 +156,61 @@ impl GlobalEnv {
 
         self.terms.insert(hash.to_owned(), cmds.cmds);
     }
-    pub fn add_fn(&mut self, hash: String, contents: &ABT<Term>) -> usize {
+    pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> usize {
         let mut sub = IREnv::new(hash.clone());
         contents.to_ir(&mut sub, self);
+
+        resolve_marks(&mut sub.cmds);
+
         let v = self.anon_fns.len();
         self.anon_fns.push((hash, sub.cmds));
         v
     }
 }
 
+fn make_marks(cmds: &[IR]) -> HashMap<usize, usize> {
+    let mut marks = HashMap::new();
+    for i in 0..cmds.len() {
+        match &cmds[i] {
+            IR::Mark(m) => {
+                marks.insert(*m, i);
+            }
+            _ => (),
+        }
+    }
+
+    marks
+}
+
+fn resolve_marks(cmds: &mut Vec<IR>) {
+    let marks = make_marks(cmds);
+    for cmd in cmds {
+        match cmd {
+            IR::Handle(mark) => {
+                *mark = *marks.get(mark).unwrap();
+            }
+            IR::JumpTo(mark) => {
+                *mark = *marks.get(mark).unwrap();
+            }
+            IR::IfAndPopStack(mark) => {
+                *mark = *marks.get(mark).unwrap();
+            }
+            IR::If(mark) => {
+                *mark = *marks.get(mark).unwrap();
+            }
+            _ => (),
+        }
+    }
+}
+
 pub struct IREnv {
-    pub term: String,
+    pub term: Hash,
     pub cmds: Vec<IR>,
     pub counter: usize,
 }
 
 impl IREnv {
-    pub fn new(term: String) -> Self {
+    pub fn new(term: Hash) -> Self {
         IREnv {
             term,
             cmds: vec![],
@@ -210,10 +261,10 @@ impl Term {
                 let done_mk = cmds.mark();
                 cmds.push(IR::Mark(done_mk));
             }
-            Term::Ref(Reference::Builtin(_)) => cmds.push(IR::Value(self.clone())),
+            Term::Ref(Reference::Builtin(_)) => cmds.push(IR::Value(self.clone().into())),
             Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                env.load(&hash.to_string());
-                cmds.push(IR::Value(self.clone()))
+                env.load(&hash);
+                cmds.push(IR::Value(self.clone().into()))
             }
             Term::App(one, two) => {
                 one.to_ir(cmds, env);
@@ -246,10 +297,10 @@ impl Term {
                 cmds.push(IR::If(fail_tok));
                 b.to_ir(cmds, env);
                 cmds.push(IR::If(fail_tok));
-                cmds.push(IR::Value(Term::Boolean(true)));
+                cmds.push(IR::Value(Value::Boolean(true)));
                 cmds.push(IR::JumpTo(done_tok));
                 cmds.push(IR::Mark(fail_tok));
-                cmds.push(IR::Value(Term::Boolean(false)));
+                cmds.push(IR::Value(Value::Boolean(false)));
                 cmds.push(IR::Mark(done_tok));
             }
             Term::Or(a, b) => {
@@ -265,11 +316,11 @@ impl Term {
                 cmds.push(IR::If(fail_tok));
 
                 cmds.push(IR::Mark(good_tok));
-                cmds.push(IR::Value(Term::Boolean(true)));
+                cmds.push(IR::Value(Value::Boolean(true)));
                 cmds.push(IR::JumpTo(done_tok));
 
                 cmds.push(IR::Mark(fail_tok));
-                cmds.push(IR::Value(Term::Boolean(false)));
+                cmds.push(IR::Value(Value::Boolean(false)));
 
                 cmds.push(IR::Mark(done_tok));
             }
@@ -309,15 +360,15 @@ impl Term {
                 cmds.push(IR::Mark(done_tok));
                 cmds.push(IR::PopUpOne);
             }
-            Term::Lam(contents) => {
+            Term::Lam(contents, free_vbls) => {
                 let v = env.add_fn(cmds.term.clone(), &**contents);
-                cmds.push(IR::Fn(v));
+                cmds.push(IR::Fn(v, free_vbls.clone()));
             }
             Term::Request(Reference::Builtin(name), _) => {
                 unimplemented!("Builtin Effect! I dont know the arity: {}", name);
             }
             Term::Request(Reference::DerivedId(id), number) => {
-                let t = env.get_type(id.0.to_string());
+                let t = env.get_type(&id.0);
                 match t {
                     TypeDecl::Effect(DataDecl { constructors, .. }) => {
                         let args = calc_args(&constructors[*number].1);
@@ -327,7 +378,7 @@ impl Term {
                         //         *number,
                         //     )))
                         // } else {
-                        cmds.push(IR::Value(Term::RequestWithArgs(
+                        cmds.push(IR::Value(Value::RequestWithArgs(
                             Reference::DerivedId(id.clone()),
                             *number,
                             args,
@@ -340,7 +391,7 @@ impl Term {
                 }
             }
 
-            _ => cmds.push(IR::Value(self.clone())),
+            _ => cmds.push(IR::Value(self.clone().into())),
         }
     }
 }
@@ -353,7 +404,7 @@ fn calc_args(t: &ABT<Type>) -> usize {
             Type::Forall(inner) => calc_args(inner),
             _ => unimplemented!("Unexpected element of a request {:?}", t),
         },
-        ABT::Abs(_, inner) => calc_args(inner),
+        ABT::Abs(_, _, inner) => calc_args(inner),
         ABT::Cycle(inner) => calc_args(inner),
         _ => unimplemented!("Unexpected ABT"),
     }

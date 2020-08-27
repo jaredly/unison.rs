@@ -2,19 +2,15 @@ use serde_derive::{Deserialize, Serialize};
 use std::cmp::{PartialEq, PartialOrd};
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Hash, Eq)]
 pub struct Symbol {
     pub num: usize,
     pub text: String,
+    pub unique: usize,
 }
 impl std::fmt::Debug for Symbol {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        fmt.write_fmt(format_args!("🔣{}", self.text))
-    }
-}
-impl Symbol {
-    pub fn new(text: String) -> Self {
-        Symbol { text, num: 0 }
+        fmt.write_fmt(format_args!("🔣{}/{}", self.text, self.unique))
     }
 }
 
@@ -139,7 +135,45 @@ pub enum Type {
     IntroOuter(Box<ABT<Type>>),
 }
 
-#[allow(dead_code)]
+// Runtime values
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
+pub enum Value {
+    Int(i64),
+    Nat(u64),
+    Float(f64),
+    Boolean(bool),
+    Text(String),
+    Bytes(Vec<u64>),
+    Char(char),
+    Ref(Reference),
+
+    CycleFnBody(
+        usize,
+        Vec<(Symbol, usize, Value)>,
+        Vec<(Symbol, usize, usize)>,
+    ),
+    PartialFnBody(usize, Vec<(Symbol, usize, Value)>),
+    PartialNativeApp(String, Vec<Value>),
+    PartialConstructor(Reference, usize, Vec<Value>),
+
+    Continuation(usize, Vec<super::ir_runtime::Frame>),
+    Constructor(Reference, usize),
+    Request(Reference, usize),
+    RequestPure(Box<Value>),
+    RequestWithArgs(Reference, usize, usize, Vec<Value>),
+    RequestWithContinuation(
+        Reference,
+        usize,
+        Vec<Value>,
+        usize,
+        Vec<super::ir_runtime::Frame>,
+    ),
+
+    Sequence(Vec<Value>),
+    TermLink(Referent),
+    TypeLink(Reference),
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub enum Term {
     Int(i64),
@@ -151,28 +185,8 @@ pub enum Term {
     Char(char),
     Blank,
     Ref(Reference),
-
-    CycleFnBody(usize, Vec<(Symbol, Term)>, Vec<(Symbol, usize)>),
-    PartialFnBody(usize, Vec<(Symbol, Term)>),
-    PartialNativeApp(String, Vec<Term>),
-    PartialConstructor(Reference, usize, Vec<Term>),
-    ScopedFunction(Box<ABT<Term>>, String, Vec<(String, Term)>),
-    // CycleFunction(Box<ABT<Term>>, String, Vec<(String, Term)>, String),
-    Cycle(Box<Term>, Vec<(String, Term)>),
-
-    Continuation(usize, Vec<super::ir_runtime::Frame>),
     Constructor(Reference, usize),
     Request(Reference, usize),
-    RequestPure(Box<Term>),
-    RequestWithArgs(Reference, usize, usize, Vec<Term>),
-    RequestWithContinuation(
-        Reference,
-        usize,
-        Vec<Term>,
-        usize,
-        Vec<super::ir_runtime::Frame>,
-    ),
-
     Handle(Box<ABT<Term>>, Box<ABT<Term>>),
     App(Box<ABT<Term>>, Box<ABT<Term>>),
     Ann(Box<ABT<Term>>, ABT<Type>),
@@ -180,7 +194,7 @@ pub enum Term {
     If(Box<ABT<Term>>, Box<ABT<Term>>, Box<ABT<Term>>),
     And(Box<ABT<Term>>, Box<ABT<Term>>),
     Or(Box<ABT<Term>>, Box<ABT<Term>>),
-    Lam(Box<ABT<Term>>),
+    Lam(Box<ABT<Term>>, Vec<(Symbol, usize, usize)>),
     //   -- Note: let rec blocks have an outer ABT.Cycle which introduces as many
     //   -- variables as there are bindings
     LetRec(bool, Vec<Box<ABT<Term>>>, Box<ABT<Term>>),
@@ -202,52 +216,14 @@ pub enum Term {
     TypeLink(Reference),
 }
 
-// impl Term {
-//     fn walk<F>(&self, f: F) where F: Fn(&Term) -> () {
-//         f(self);
-//         match self {
-//             Match(a, b) =>
-//             Handle(Box<ABT<Term>>, Box<ABT<Term>>),
-//             App(Box<ABT<Term>>, Box<ABT<Term>>),
-//             Ann(Box<ABT<Term>>, ABT<Type>),
-//             Sequence(Vec<Box<ABT<Term>>>),
-//             If(Box<ABT<Term>>, Box<ABT<Term>>, Box<ABT<Term>>),
-//             And(Box<ABT<Term>>, Box<ABT<Term>>),
-//             Or(Box<ABT<Term>>, Box<ABT<Term>>),
-//             Lam(Box<ABT<Term>>),
-//             //   -- Note: let rec blocks have an outer ABT.Cycle which introduces as many
-//             //   -- variables as there are bindings
-//             LetRec(bool, a, b) => {
-//                 for m in a {
-//                     m.walk(f);
-//                 }
-//                 b.walk(f);
-//             }
-//             //   -- Note: first parameter is the binding, second is the expression which may refer
-//             //   -- to this let bound variable. Constructed as `Let b (abs v e)`
-//             Let(bool, a, b) => {
-//                 a.walk(f); b.walk(f);
-//             }
-//             ScopedFunction(a, _, _) => a.walk(f)
-//         }
-//     }
-// }
-
 #[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub enum ABT<Content> {
-    Var(Symbol),
+    Var(Symbol, usize), // usage number
     Cycle(Box<ABT<Content>>),
-    Abs(Symbol, Box<ABT<Content>>),
+    // number of usages expected
+    Abs(Symbol, usize, Box<ABT<Content>>),
     Tm(Content),
 }
-
-// fn indent(n: usize) -> String {
-//     let mut res = "".to_owned();
-//     for _ in 0..n {
-//         res += "|  ";
-//     }
-//     res
-// }
 
 #[derive(
     Serialize, Deserialize, Debug, Clone, std::cmp::Eq, std::hash::Hash, std::cmp::PartialEq,
@@ -321,5 +297,39 @@ impl<K: std::hash::Hash + std::cmp::Eq + Clone, V: Clone> Star<K, V> {
         self.d1.extend(other.d1.clone());
         self.d2.extend(other.d2.clone());
         self.d3.extend(other.d3.clone());
+    }
+}
+
+impl ABT<Term> {
+    fn to_term(self) -> Option<Term> {
+        match self {
+            ABT::Tm(t) => Some(t),
+            _ => None,
+        }
+    }
+}
+
+impl Into<Value> for Term {
+    fn into(self) -> Value {
+        match self {
+            Term::Int(i) => Value::Int(i),
+            Term::Nat(a) => Value::Nat(a),
+            Term::Float(a) => Value::Float(a),
+            Term::Boolean(a) => Value::Boolean(a),
+            Term::Text(a) => Value::Text(a),
+            Term::Bytes(a) => Value::Bytes(a),
+            Term::Char(a) => Value::Char(a),
+            Term::Ref(a) => Value::Ref(a),
+            Term::Constructor(a, b) => Value::Constructor(a, b),
+            Term::Request(a, b) => Value::Request(a, b),
+            Term::Sequence(a) => Value::Sequence(
+                a.into_iter()
+                    .map(|x| (*x).to_term().unwrap().into())
+                    .collect(),
+            ),
+            Term::TermLink(a) => Value::TermLink(a),
+            Term::TypeLink(a) => Value::TypeLink(a),
+            _ => unreachable!("Cannot convert to a value"),
+        }
     }
 }
