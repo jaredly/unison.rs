@@ -1,6 +1,117 @@
 use super::types::*;
 
 impl Pattern {
+    pub fn matches(&self, term: &Value) -> bool {
+        match (self, term) {
+            (Pattern::EffectPure(_), Value::RequestWithContinuation(_, _, _, _, _)) => false,
+            (Pattern::EffectPure(pattern), Value::RequestPure(inner)) => pattern.matches(inner),
+            (
+                Pattern::EffectBind(reference, number, args, _),
+                Value::RequestWithContinuation(tref, tnum, targs, _, _),
+            ) if reference == tref && number == tnum && args.len() == targs.len() => {
+                for i in 0..args.len() {
+                    if !args[i].matches(&targs[i]) {
+                        return false;
+                    }
+                }
+                // match &**kont {
+                //     Pattern::Unbound => (),
+                //     Pattern::Var => all.push(Value::Continuation(*tidx, tkont.clone())),
+                //     _ => unreachable!("Can't match on a continuation"),
+                // }
+                true
+            }
+            (Pattern::Unbound, _) => true,
+            (Pattern::Var, _) => true,
+            (Pattern::Boolean(a), Value::Boolean(b)) if a == b => true,
+            (Pattern::Int(a), Value::Int(b)) if a == b => true,
+            (Pattern::Nat(a), Value::Nat(b)) if a == b => true,
+            (Pattern::Float(a), Value::Float(b)) if a == b => true,
+            (Pattern::Text(a), Value::Text(b)) if a == b => true,
+            (Pattern::Char(a), Value::Char(b)) if a == b => true,
+            (Pattern::As(a), term) => a.matches(term),
+            (Pattern::SequenceLiteral(patterns), Value::Sequence(items))
+                if patterns.len() == items.len() =>
+            {
+                for i in 0..patterns.len() {
+                    if !patterns[i].matches(&items[i]) {
+                        return false;
+                    }
+                }
+                true
+            }
+            (Pattern::SequenceOp(one, op, two), Value::Sequence(contents)) => match op {
+                SeqOp::Cons => {
+                    if contents.len() > 0 {
+                        return one.matches(&contents[0])
+                            && two.matches(&Value::Sequence(contents[1..].to_vec()));
+                    } else {
+                        false
+                    }
+                }
+                SeqOp::Snoc => {
+                    if contents.len() > 0 {
+                        return one
+                            .matches(&Value::Sequence(contents[..contents.len() - 1].to_vec()))
+                            && two.matches(&contents[contents.len() - 1]);
+                    } else {
+                        false
+                    }
+                }
+                SeqOp::Concat => match (&**one, &**two) {
+                    (Pattern::SequenceLiteral(patterns), two) => {
+                        if contents.len() >= patterns.len() {
+                            return one
+                                .matches(&Value::Sequence(contents[0..patterns.len()].to_vec()))
+                                && two.matches(&Value::Sequence(
+                                    contents[patterns.len()..].to_vec(),
+                                ));
+                        } else {
+                            false
+                        }
+                    }
+                    (_, Pattern::SequenceLiteral(patterns)) => {
+                        if contents.len() >= patterns.len() {
+                            let split = contents.len() - patterns.len();
+                            return one.matches(&Value::Sequence(contents[0..split].to_vec()))
+                                && two.matches(&Value::Sequence(contents[split..].to_vec()));
+                        } else {
+                            false
+                        }
+                    }
+                    _ => unreachable!(),
+                },
+            },
+            (Pattern::Constructor(reference, number, children), inner) => {
+                if children.len() > 0 {
+                    match inner {
+                        Value::PartialConstructor(r, n, pchildren)
+                            if r == reference && n == number =>
+                        {
+                            if pchildren.len() != children.len() {
+                                return false;
+                            }
+                            for i in 0..children.len() {
+                                if !children[i].matches(&pchildren[i]) {
+                                    return false;
+                                }
+                            }
+                            true
+                        }
+                        _ => false,
+                    }
+                } else {
+                    match inner {
+                        Value::Constructor(r, n) if r == reference && n == n => true,
+                        _ => false,
+                    }
+                }
+                //
+            }
+            _ => false,
+        }
+    }
+
     pub fn match_(&self, term: &Value) -> Option<Vec<Value>> {
         match (self, term) {
             (Pattern::EffectPure(_), Value::RequestWithContinuation(_, _, _, _, _)) => None,

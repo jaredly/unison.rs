@@ -621,13 +621,13 @@ impl IR {
                         stack.push(Value::RequestWithArgs(r, i, n, args));
                     }
                     Value::Constructor(r, u) => {
-                        stack.push(Value::PartialConstructor(r, u, vec![arg]));
+                        stack.push(Value::PartialConstructor(r, u, std::rc::Rc::new(vec![arg])));
                         *idx += 1;
                     }
                     Value::PartialConstructor(r, u, c) => {
-                        let mut c = c.clone();
+                        let mut c = (*c).clone();
                         c.push(arg);
-                        stack.push(Value::PartialConstructor(r, u, c));
+                        stack.push(Value::PartialConstructor(r, u, std::rc::Rc::new(c)));
                         *idx += 1;
                     }
                     Value::CycleFnBody(fnint, mut bindings, mutuals) => {
@@ -805,7 +805,7 @@ impl IR {
                                     Value::PartialConstructor(
                                         option_ref.clone(),
                                         1,
-                                        vec![l[*a as usize].clone()],
+                                        std::rc::Rc::new(vec![l[*a as usize].clone()]),
                                     )
                                 } else {
                                     Value::Constructor(option_ref.clone(), 0)
@@ -909,19 +909,23 @@ impl IR {
             }
             IR::PatternMatch(pattern, has_where) => {
                 let value = stack.peek().unwrap();
-                match pattern.match_(&value) {
-                    None => stack.push(Value::Boolean(false)),
-                    Some(mut bindings) => {
-                        bindings.reverse();
-                        if *has_where {
-                            for term in &bindings {
-                                stack.push(term.clone());
+                if !pattern.matches(value) {
+                    stack.push(Value::Boolean(false));
+                } else {
+                    match pattern.match_(&value) {
+                        None => stack.push(Value::Boolean(false)),
+                        Some(mut bindings) => {
+                            bindings.reverse();
+                            if *has_where {
+                                for term in &bindings {
+                                    stack.push(term.clone());
+                                }
                             }
+                            for term in bindings {
+                                stack.push(term);
+                            }
+                            stack.push(Value::Boolean(true))
                         }
-                        for term in bindings {
-                            stack.push(term);
-                        }
-                        stack.push(Value::Boolean(true))
                     }
                 }
                 *idx += 1;
