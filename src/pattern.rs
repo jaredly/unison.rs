@@ -1,18 +1,17 @@
 use super::types::*;
+use std::rc::Rc;
 
 impl Pattern {
     pub fn matches(&self, term: &Value, gc: &GC) -> bool {
         match (self, term) {
             (Pattern::EffectPure(_), Value::RequestWithContinuation(_, _, _, _, _)) => false,
-            (Pattern::EffectPure(pattern), Value::RequestPure(inner)) => {
-                pattern.matches(gc.get(*inner), gc)
-            }
+            (Pattern::EffectPure(pattern), Value::RequestPure(inner)) => pattern.matches(inner, gc),
             (
                 Pattern::EffectBind(reference, number, args, _),
                 Value::RequestWithContinuation(tref, tnum, targs, _, _),
             ) if reference == tref && number == tnum && args.len() == targs.len() => {
                 for i in 0..args.len() {
-                    if !args[i].matches(gc.get(targs[i]), gc) {
+                    if !args[i].matches(&targs[i], gc) {
                         return false;
                     }
                 }
@@ -31,7 +30,7 @@ impl Pattern {
                 if patterns.len() == items.len() =>
             {
                 for i in 0..patterns.len() {
-                    if !patterns[i].matches(gc.get(items[i]), gc) {
+                    if !patterns[i].matches(&items[i], gc) {
                         return false;
                     }
                 }
@@ -40,7 +39,7 @@ impl Pattern {
             (Pattern::SequenceOp(one, op, two), Value::Sequence(contents)) => match op {
                 SeqOp::Cons => {
                     if contents.len() > 0 {
-                        return one.matches(gc.get(contents[0]), gc)
+                        return one.matches(&contents[0], gc)
                             && two.matches(&Value::Sequence(contents.skip(1)), gc);
                     } else {
                         false
@@ -50,7 +49,7 @@ impl Pattern {
                     if contents.len() > 0 {
                         return one
                             .matches(&Value::Sequence(contents.take(contents.len() - 1)), gc)
-                            && two.matches(gc.get(contents[contents.len() - 1]), gc);
+                            && two.matches(&contents[contents.len() - 1], gc);
                     } else {
                         false
                     }
@@ -88,7 +87,7 @@ impl Pattern {
                                 return false;
                             }
                             for i in 0..children.len() {
-                                if !children[i].matches(gc.get(pchildren[i]), gc) {
+                                if !children[i].matches(&pchildren[i], gc) {
                                     return false;
                                 }
                             }
@@ -108,17 +107,17 @@ impl Pattern {
         }
     }
 
-    pub fn match_(&self, id: usize, gc: &mut GC) -> Option<Vec<usize>> {
-        match (self.clone(), gc.get(id).clone()) {
+    pub fn match_(&self, id: &Value, gc: &mut GC) -> Option<Vec<Rc<Value>>> {
+        match (self.clone(), (id).clone()) {
             (Pattern::EffectPure(_), Value::RequestWithContinuation(_, _, _, _, _)) => None,
-            (Pattern::EffectPure(pattern), Value::RequestPure(inner)) => pattern.match_(inner, gc),
+            (Pattern::EffectPure(pattern), Value::RequestPure(inner)) => pattern.match_(&inner, gc),
             (
                 Pattern::EffectBind(reference, number, args, kont),
                 Value::RequestWithContinuation(tref, tnum, targs, tidx, tkont),
             ) if reference == tref && number == tnum && args.len() == targs.len() => {
                 let mut all = vec![];
                 for i in 0..args.len() {
-                    match args[i].match_(targs[i], gc) {
+                    match args[i].match_(&targs[i], gc) {
                         None => return None,
                         Some(inner) => {
                             all.extend(inner);
@@ -133,7 +132,7 @@ impl Pattern {
                 Some(all)
             }
             (Pattern::Unbound, _) => Some(vec![]),
-            (Pattern::Var, t) => Some(vec![id]),
+            (Pattern::Var, t) => Some(vec![Rc::new(t)]),
             (Pattern::Boolean(a), Value::Boolean(b)) if a == b => Some(vec![]),
             (Pattern::Int(a), Value::Int(b)) if a == b => Some(vec![]),
             (Pattern::Nat(a), Value::Nat(b)) if a == b => Some(vec![]),
@@ -143,7 +142,7 @@ impl Pattern {
             (Pattern::As(a), _term) => match a.match_(id, gc) {
                 None => None,
                 Some(mut terms) => {
-                    terms.insert(0, id);
+                    terms.insert(0, Rc::new(id.clone()));
                     Some(terms)
                 }
             },
@@ -152,7 +151,7 @@ impl Pattern {
             {
                 let mut all = vec![];
                 for i in 0..patterns.len() {
-                    match patterns[i].match_(items[i], gc) {
+                    match patterns[i].match_(&items[i], gc) {
                         None => return None,
                         Some(v) => {
                             all.extend(v);
@@ -164,11 +163,11 @@ impl Pattern {
             (Pattern::SequenceOp(one, op, two), Value::Sequence(contents)) => match op {
                 SeqOp::Cons => {
                     if contents.len() > 0 {
-                        match one.match_(contents[0], gc) {
+                        match one.match_(&contents[0], gc) {
                             None => None,
                             Some(mut ones) => {
                                 // STOPSHIP maybe we don't need to put this ...
-                                match two.match_(Rc::new(Value::Sequence(contents.skip(1))), gc) {
+                                match two.match_(&Value::Sequence(contents.skip(1)), gc) {
                                     None => None,
                                     Some(twos) => {
                                         ones.extend(twos);
@@ -183,12 +182,9 @@ impl Pattern {
                 }
                 SeqOp::Snoc => {
                     if contents.len() > 0 {
-                        match one.match_(
-                            Rc::new(Value::Sequence(contents.take(contents.len() - 1))),
-                            gc,
-                        ) {
+                        match one.match_(&Value::Sequence(contents.take(contents.len() - 1)), gc) {
                             None => None,
-                            Some(mut ones) => match two.match_(contents[contents.len() - 1], gc) {
+                            Some(mut ones) => match two.match_(&contents[contents.len() - 1], gc) {
                                 None => None,
                                 Some(twos) => {
                                     ones.extend(twos);
@@ -203,15 +199,12 @@ impl Pattern {
                 SeqOp::Concat => match (&*one, &*two) {
                     (Pattern::SequenceLiteral(patterns), two) => {
                         if contents.len() >= patterns.len() {
-                            match one
-                                .match_(Rc::new(Value::Sequence(contents.take(patterns.len()))), gc)
-                            {
+                            match one.match_(&Value::Sequence(contents.take(patterns.len())), gc) {
                                 None => None,
                                 Some(mut ones) => {
-                                    match two.match_(
-                                        Rc::new(Value::Sequence(contents.skip(patterns.len()))),
-                                        gc,
-                                    ) {
+                                    match two
+                                        .match_(&Value::Sequence(contents.skip(patterns.len())), gc)
+                                    {
                                         None => None,
                                         Some(twos) => {
                                             ones.extend(twos);
@@ -227,12 +220,10 @@ impl Pattern {
                     (_, Pattern::SequenceLiteral(patterns)) => {
                         if contents.len() >= patterns.len() {
                             let split = contents.len() - patterns.len();
-                            match one.match_(Rc::new(Value::Sequence(contents.take(split))), gc) {
+                            match one.match_(&Value::Sequence(contents.take(split)), gc) {
                                 None => None,
                                 Some(mut ones) => {
-                                    match two
-                                        .match_(Rc::new(Value::Sequence(contents.skip(split))), gc)
-                                    {
+                                    match two.match_(&Value::Sequence(contents.skip(split)), gc) {
                                         None => None,
                                         Some(twos) => {
                                             ones.extend(twos);
@@ -259,7 +250,7 @@ impl Pattern {
                                 return None;
                             }
                             for i in 0..children.len() {
-                                match children[i].match_(pchildren[i], gc) {
+                                match children[i].match_(&pchildren[i], gc) {
                                     None => return None,
                                     Some(v) => {
                                         all.extend(v);

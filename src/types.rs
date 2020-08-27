@@ -137,7 +137,7 @@ pub enum Type {
     IntroOuter(Box<ABT<Type>>),
 }
 
-pub type Rc<Value> = usize;
+// pub type Rc<Value> = usize;
 
 // Runtime values
 #[derive(Debug, Clone, PartialOrd, PartialEq)]

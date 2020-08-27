@@ -135,7 +135,7 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
 fn run_term(
     terms_path: &std::path::Path,
     hash: &str,
-) -> std::io::Result<(types::GC, types::Rc<Value>)> {
+) -> std::io::Result<(types::GC, std::rc::Rc<types::Value>)> {
     // use tracing_chrome::ChromeLayerBuilder;
     // use tracing_subscriber::prelude::*;
 
@@ -268,10 +268,10 @@ fn run_test(root: &str) -> std::io::Result<()> {
             let hash = all_terms.get(&k).unwrap().to_string();
             let (gc, ret) = run_term(&terms, &hash)?;
             use types::*;
-            match gc.get(ret) {
+            match &*ret {
                 Value::Sequence(results) => {
                     for result in results {
-                        match gc.get(*result) {
+                        match &**result {
                             Value::PartialConstructor(
                                 Reference::DerivedId(Id(chash, _, _)),
                                 num,
@@ -284,7 +284,7 @@ fn run_test(root: &str) -> std::io::Result<()> {
                                         hash,
                                         contents
                                             .iter()
-                                            .map(|m| gc.get(*m))
+                                            .map(|m| (&**m))
                                             .collect::<Vec<&types::Value>>()
                                     );
                                     return Ok(());
