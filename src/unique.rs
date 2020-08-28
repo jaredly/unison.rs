@@ -24,12 +24,12 @@ impl Bindings {
         at
     }
 
-    fn add_owned(&mut self, mut symbol: Symbol) {
-        let idx = self.mark();
-        symbol.unique = idx;
-        self.vbls.insert(0, symbol.clone());
-        self.usages.insert(symbol, 0);
-    }
+    // fn add_owned(&mut self, mut symbol: Symbol) {
+    //     let idx = self.mark();
+    //     symbol.unique = idx;
+    //     self.vbls.insert(0, symbol.clone());
+    //     self.usages.insert(symbol, 0);
+    // }
 
     fn add(&mut self, symbol: &mut Symbol) {
         let idx = self.mark();
@@ -142,25 +142,34 @@ impl Visitor for Bindings {
                 info!("Lambda: {:?}", i);
                 info!("FreeFinder: {:?} - {:?}", finder.free, finder.bound);
                 let mut inner = Bindings::new();
+
+                let mut frees = vec![];
                 // It is very important that this ordering be stable.
                 // and that the free variables are reported in first-appearence
                 // order.
                 for sym in finder.free.iter_mut() {
                     // Register the free variable in the parent context
                     *sym = self.lookup(&sym);
-                    let usage = self.usage(&sym);
-                    // This is so we know what to send it.
-                    free.push((sym.clone(), usage));
+                    // let usage = self.usage(&sym);
+                    // // This is so we know what to send it.
+                    // free.push((sym.clone(), usage, 0, false));
                     // Set up the inner context with it already defined.
-                    inner.add_owned(Symbol {
+                    let mut internal = Symbol {
                         text: sym.text.clone(),
                         num: 0,
                         unique: 0,
-                    });
+                    };
+                    inner.add(&mut internal);
+                    frees.push((sym.clone(), internal, self.usage(&sym)));
                 }
 
                 info!("Lam free: {:?}", free);
                 i.accept(&mut inner);
+
+                for (sym, internal, external_usage) in frees.into_iter() {
+                    let internal_usage = inner.usage(&internal);
+                    free.push((sym, external_usage, internal_usage, false));
+                }
 
                 // let current = self.usages.clone();
                 // i.accept(self);

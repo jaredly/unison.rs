@@ -11,7 +11,16 @@ pub enum IR {
     // but maybe this should be a Term?
     // I mean I should make a different `Value` deal, but not
     // just this moment
-    Fn(usize, Vec<(Symbol, usize)>),
+    // The bool is whether this is a cycle vbl
+    Fn(
+        usize,
+        Vec<(
+            Symbol,
+            usize, // usage number at fn creation site
+            usize, // number of usages to expect within the FN. NOTE we can get rid of this if we switch to just "is this the last" calculation.
+            bool,
+        )>,
+    ),
     // Builtin(String),
     Cycle(Vec<(Symbol, usize)>),
     // CycleFn(usize, Vec<(Symbol, usize)>),
@@ -52,12 +61,19 @@ pub enum IR {
 }
 
 fn filter_free_vbls(
-    free: &Vec<(Symbol, usize)>,
+    free: &Vec<(Symbol, usize, usize, bool)>,
     names: &Vec<(Symbol, usize)>,
-) -> Vec<(Symbol, usize)> {
+) -> Vec<(Symbol, usize, usize, bool)> {
     free.clone()
         .into_iter()
-        .filter(|x| names.iter().find(|y| x.0 == y.0) == None)
+        .map(|mut x| {
+            if names.iter().find(|y| x.0 == y.0) != None {
+                x.3 = true;
+                x
+            } else {
+                x
+            }
+        })
         .collect()
 }
 

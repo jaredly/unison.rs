@@ -171,11 +171,23 @@ pub enum Value {
     Bytes(Vec<u64>),
     Char(char),
     Ref(Reference),
+    CycleBlank(usize),
 
     CycleFnBody(
         usize,
+        // bindings for this one, with CycleBlanks
+        // where mutuals would be
         Vec<(Symbol, usize, Rc<Value>)>,
-        Vec<(Symbol, usize, usize)>,
+        // mutuals!
+        Vec<(
+            Symbol, // the ID identified in CycleBlank
+            usize,  // usage number? maybe not relevant
+            usize,  // the fn ID
+            // the bindings for this one, with CycleBlanks
+            // where mutuals would be
+            Vec<(Symbol, usize, Rc<Value>)>,
+        )>,
+        // Vec<(Symbol, usize, usize, Vec<usize>)>,
     ),
     PartialFnBody(usize, Vec<(Symbol, usize, Rc<Value>)>),
     PartialNativeApp(String, Vec<Rc<Value>>),
@@ -220,7 +232,15 @@ pub enum Term {
     And(Box<ABT<Term>>, Box<ABT<Term>>),
     Or(Box<ABT<Term>>, Box<ABT<Term>>),
     // the bool is whether this is a cycle vbl or not?
-    Lam(Box<ABT<Term>>, Vec<(Symbol, usize, bool)>),
+    Lam(
+        Box<ABT<Term>>,
+        Vec<(
+            Symbol,
+            usize, // external usage number
+            usize, // internal usage count
+            bool,
+        )>,
+    ),
     //   -- Note: let rec blocks have an outer ABT.Cycle which introduces as many
     //   -- variables as there are bindings
     LetRec(bool, Vec<Box<ABT<Term>>>, Box<ABT<Term>>),
