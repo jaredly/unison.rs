@@ -82,11 +82,14 @@ impl Stack {
 
     fn get_vbl(&mut self, sym: &Symbol, usage: usize) -> Rc<Value> {
         // if this is the final usage, then pluck it out.
-        let idx = self.frames[0]
+        let idx = match self.frames[0]
             .bindings
             .iter()
             .position(|(a, _, _)| a == sym)
-            .expect("Variable not found");
+        {
+            None => unreachable!("Variable {:?} not found!", sym),
+            Some(idx) => idx,
+        };
         // TODO take usage into account
         if self.frames[0].bindings[idx].1 == usage {
             let (_, _, v) = self.frames[0].bindings.remove(idx);
@@ -476,14 +479,7 @@ enum Ret {
 }
 
 impl IR {
-    fn eval(
-        &self,
-        // env: &GlobalEnv,
-        option_ref: &Reference,
-        stack: &mut Stack,
-        idx: &mut usize,
-        // marks: &HashMap<usize, usize>,
-    ) -> Ret {
+    fn eval(&self, option_ref: &Reference, stack: &mut Stack, idx: &mut usize) -> Ret {
         match self {
             IR::Swap => {
                 let one = stack.pop().unwrap();
@@ -561,6 +557,7 @@ impl IR {
                 *idx += 1;
             }
             IR::Fn(i, free_vbls) => {
+                info!("Binding free vbls {:?}", free_vbls);
                 let bound: Vec<(Symbol, usize, Rc<Value>)> = free_vbls
                     .iter()
                     .enumerate()
