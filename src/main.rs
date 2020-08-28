@@ -10,6 +10,7 @@ mod pattern;
 mod printer;
 mod types;
 mod unique;
+mod visitor;
 
 fn load_type(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {

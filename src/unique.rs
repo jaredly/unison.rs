@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 pub struct Bindings {
     vbls: Vec<Symbol>,
+    free: Vec<String>,
     usages: HashMap<Symbol, usize>,
     counter: usize,
 }
@@ -11,6 +12,7 @@ impl Bindings {
     pub fn new() -> Self {
         Bindings {
             vbls: vec![],
+            free: vec![],
             usages: HashMap::new(),
             counter: 0,
         }
@@ -34,12 +36,18 @@ impl Bindings {
         *self.usages.get(symbol).unwrap()
     }
 
-    fn lookup(&self, symbol: &Symbol) -> Symbol {
-        self.vbls
+    fn lookup(&mut self, symbol: &Symbol) -> Symbol {
+        match self
+            .vbls
             .iter()
             .find(|x| x.text == symbol.text && x.num == symbol.num)
-            .unwrap()
-            .clone()
+        {
+            None => {
+                self.free.push(symbol.text.clone());
+                symbol.clone()
+            }
+            Some(s) => s.clone(),
+        }
     }
 
     fn usage(&mut self, symbol: &Symbol) -> usize {
@@ -49,101 +57,44 @@ impl Bindings {
     }
 }
 
-impl ABT<Term> {
-    pub fn unique(&mut self, bindings: &mut Bindings) {
-        match self {
+impl super::visitor::Visitor for Bindings {
+    fn visit_abt(&mut self, abt: &mut ABT<Term>) -> bool {
+        match abt {
             ABT::Var(symbol, usage) => {
-                *symbol = bindings.lookup(&symbol);
-                *usage = bindings.usage(&symbol);
+                *symbol = self.lookup(&symbol);
+                *usage = self.usage(&symbol);
             }
-            ABT::Cycle(inner) => inner.unique(bindings),
-            ABT::Abs(sym, uses, inner) => {
-                bindings.add(sym); // updates the unique dealio
-                inner.unique(bindings);
-                *uses = bindings.pop(sym);
+            ABT::Abs(sym, _uses, _inner) => {
+                self.add(sym);
             }
-            ABT::Tm(inner) => inner.unique(bindings),
+            _ => (),
+        }
+        true
+    }
+    fn post_abt(&mut self, abt: &mut ABT<Term>) {
+        match abt {
+            ABT::Abs(sym, uses, _inner) => {
+                *uses = self.pop(sym);
+            }
+            _ => (),
         }
     }
-}
 
-impl Term {
-    fn unique(&mut self, bindings: &mut Bindings) {
-        use Term::*;
-        match self {
-            Handle(a, b) => {
-                a.unique(bindings);
-                b.unique(bindings)
-            }
-            App(a, b) => {
-                a.unique(bindings);
-                b.unique(bindings);
-            }
-            Ann(a, _) => a.unique(bindings),
-            Sequence(a) => {
-                for m in a {
-                    m.unique(bindings)
-                }
-            }
-            If(a, b, c) => {
-                a.unique(bindings);
-                b.unique(bindings);
-                c.unique(bindings)
-            }
-            And(a, b) => {
-                a.unique(bindings);
-                b.unique(bindings)
-            }
-            Or(a, b) => {
-                a.unique(bindings);
-                b.unique(bindings)
-            }
-            Lam(i, free) => {
-                let current = bindings.usages.clone();
-                i.unique(bindings);
+    fn visit_term(&mut self, term: &mut Term) -> bool {
+        match term {
+            Term::Lam(i, free) => {
+                let current = self.usages.clone();
+                i.accept(self);
                 for (k, pre) in current.iter() {
-                    let post = bindings.usages.get(k).unwrap();
+                    let post = self.usages.get(k).unwrap();
                     if post != pre {
                         free.push((k.clone(), *pre, *post));
                     }
                 }
+                false
             }
-            //   -- Note: let rec blocks have an outer ABT.Cycle which introduces as many
-            //   -- variables as there are bindings
-            LetRec(_, aa, b) => {
-                for a in aa {
-                    a.unique(bindings);
-                }
-                b.unique(bindings)
-            }
-            //   -- Note: first parameter is the binding, second is the expression which may refer
-            //   -- to this let bound variable. Constructed as `Let b (abs v e)`
-            Let(_, a, b) => {
-                a.unique(bindings);
-                b.unique(bindings);
-            }
-            //   -- Pattern matching / eliminating data types, example:
-            //   --  case x of
-            //   --    Just n -> rhs1
-            //   --    Nothing -> rhs2
-            //   --
-            //   -- translates to
-            //   --
-            //   --   Match x
-            //   --     [ (Constructor 0 [Var], ABT.abs n rhs1)
-            //   --     , (Constructor 1 [], rhs2) ]
-            Match(a, b) => {
-                // STOPSHIP here we should reset the usage count for each arm, and then take the max ....
-                a.unique(bindings);
-                for m in b {
-                    match &mut m.1 {
-                        None => (),
-                        Some(m) => m.unique(bindings),
-                    }
-                    m.2.unique(bindings)
-                }
-            }
-            _ => (),
+            // STOPSHIP here we should reset the usage count for each arm of a Match block, and then take the max ....
+            _ => true,
         }
     }
 }
