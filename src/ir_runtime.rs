@@ -495,7 +495,7 @@ impl IR {
             IR::Handle(mark) => return Ret::Handle(*mark),
             IR::HandlePure => {
                 let v = stack.pop().unwrap();
-                let v = match (*v) {
+                let v = match *v {
                     Value::RequestPure(_) => v,
                     _ => Rc::new(Value::RequestPure(v)),
                 };
@@ -563,7 +563,8 @@ impl IR {
             IR::Fn(i, free_vbls) => {
                 let bound: Vec<(Symbol, usize, Rc<Value>)> = free_vbls
                     .iter()
-                    .map(|(sym, _min, max)| (sym.clone(), *max, stack.get_vbl(sym, *max)))
+                    .enumerate()
+                    .map(|(i, (sym, max))| (sym.with_unique(i), *max, stack.get_vbl(sym, *max)))
                     .collect();
                 stack.push(Rc::new(Value::PartialFnBody(*i, bound)));
                 *idx += 1;
@@ -679,7 +680,7 @@ impl IR {
                             )),
                             ("Text.fromCharList", Value::Sequence(l)) => Some(Value::Text({
                                 l.iter()
-                                    .map(|c| match (**c) {
+                                    .map(|c| match **c {
                                         Value::Char(c) => c.clone(),
                                         _ => unreachable!("Not a char"),
                                     })

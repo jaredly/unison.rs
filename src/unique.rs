@@ -1,9 +1,10 @@
 use super::types::*;
+use super::visitor::Visitor;
+use log::info;
 use std::collections::HashMap;
 
 pub struct Bindings {
     vbls: Vec<Symbol>,
-    free: Vec<String>,
     usages: HashMap<Symbol, usize>,
     counter: usize,
 }
@@ -12,15 +13,22 @@ impl Bindings {
     pub fn new() -> Self {
         Bindings {
             vbls: vec![],
-            free: vec![],
             usages: HashMap::new(),
             counter: 0,
         }
     }
 
     fn mark(&mut self) -> usize {
+        let at = self.counter;
         self.counter += 1;
-        self.counter
+        at
+    }
+
+    fn add_owned(&mut self, mut symbol: Symbol) {
+        let idx = self.mark();
+        symbol.unique = idx;
+        self.vbls.insert(0, symbol.clone());
+        self.usages.insert(symbol, 0);
     }
 
     fn add(&mut self, symbol: &mut Symbol) {
@@ -37,17 +45,8 @@ impl Bindings {
     }
 
     fn lookup(&mut self, symbol: &Symbol) -> Symbol {
-        match self
-            .vbls
-            .iter()
-            .find(|x| x.text == symbol.text && x.num == symbol.num)
-        {
-            None => {
-                self.free.push(symbol.text.clone());
-                symbol.clone()
-            }
-            Some(s) => s.clone(),
-        }
+        info!("Lookup {:?}", symbol);
+        self.vbls.iter().find(|x| x.pre_eq(symbol)).unwrap().clone()
     }
 
     fn usage(&mut self, symbol: &Symbol) -> usize {
@@ -57,7 +56,62 @@ impl Bindings {
     }
 }
 
-impl super::visitor::Visitor for Bindings {
+pub struct FreeFinder {
+    bound: Vec<Symbol>,
+    free: Vec<Symbol>,
+}
+
+impl FreeFinder {
+    fn new() -> Self {
+        FreeFinder {
+            bound: vec![],
+            free: vec![],
+        }
+    }
+    fn lookup(&mut self, sym: &Symbol) {
+        if self.bound.iter().find(|x| x.pre_eq(&sym)) == None
+            && self.free.iter().find(|x| x.pre_eq(&sym)) == None
+        {
+            self.free.push(sym.clone());
+        }
+    }
+    fn add(&mut self, sym: &Symbol) {
+        self.bound.insert(0, sym.clone());
+    }
+    fn rm(&mut self, sym: &Symbol) {
+        let idx = self.bound.iter().position(|x| x == sym).unwrap();
+        self.bound.remove(idx);
+    }
+}
+
+impl Visitor for FreeFinder {
+    fn visit_abt(&mut self, abt: &mut ABT<Term>) -> bool {
+        match abt {
+            ABT::Var(symbol, _usage) => {
+                self.lookup(&symbol);
+            }
+            ABT::Abs(sym, _uses, _inner) => {
+                self.add(&sym);
+            }
+            _ => (),
+        }
+        true
+    }
+    fn post_abt(&mut self, abt: &mut ABT<Term>) {
+        match abt {
+            ABT::Abs(sym, _uses, _inner) => {
+                self.rm(&sym);
+            }
+            _ => (),
+        }
+    }
+
+    fn visit_term(&mut self, _term: &mut Term) -> bool {
+        true
+    }
+}
+
+impl Visitor for Bindings {
     fn visit_abt(&mut self, abt: &mut ABT<Term>) -> bool {
         match abt {
             ABT::Var(symbol, usage) => {
@@ -83,14 +137,39 @@ impl super::visitor::Visitor for Bindings {
     fn visit_term(&mut self, term: &mut Term) -> bool {
         match term {
             Term::Lam(i, free) => {
-                let current = self.usages.clone();
-                i.accept(self);
-                for (k, pre) in current.iter() {
-                    let post = self.usages.get(k).unwrap();
-                    if post != pre {
-                        free.push((k.clone(), *pre, *post));
-                    }
+                let mut finder = FreeFinder::new();
+                i.accept(&mut finder);
+                info!("Lambda: {:?}", i);
+                info!("FreeFinder: {:?} - {:?}", finder.free, finder.bound);
+                let mut inner = Bindings::new();
+                // It is very important that this ordering be stable.
+                // and that the free variables are reported in first-appearence
+                // order.
+                for sym in finder.free.iter_mut() {
+                    // Register the free variable in the parent context
+                    *sym = self.lookup(&sym);
+                    let usage = self.usage(&sym);
+                    // This is so we know what to send it.
+                    free.push((sym.clone(), usage));
+                    // Set up the inner context with it already defined.
+                    inner.add_owned(Symbol {
+                        text: sym.text.clone(),
+                        num: 0,
+                        unique: 0,
+                    });
                 }
+
+                info!("Lam free: {:?}", free);
+                i.accept(&mut inner);
+
+                // let current = self.usages.clone();
+                // i.accept(self);
+                // for (k, pre) in current.iter() {
+                //     let post = self.usages.get(k).unwrap();
+                //     if post != pre {
+                //         free.push((k.clone(), *pre, *post));
+                //     }
+                // }
                 false
             }
             // STOPSHIP here we should reset the usage count for each arm of a Match block, and then take the max ....

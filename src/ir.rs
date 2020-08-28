@@ -3,7 +3,7 @@ use super::types::*;
 use std::collections::HashMap;
 
 // So I think we have a scope and a stack?
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IR {
     Handle(usize), // indicate that there's a handler at `usize`
     HandlePure,
@@ -11,7 +11,7 @@ pub enum IR {
     // but maybe this should be a Term?
     // I mean I should make a different `Value` deal, but not
     // just this moment
-    Fn(usize, Vec<(Symbol, usize, usize)>),
+    Fn(usize, Vec<(Symbol, usize)>),
     // Builtin(String),
     Cycle(Vec<(Symbol, usize)>),
     // CycleFn(usize, Vec<(Symbol, usize)>),
@@ -52,9 +52,9 @@ pub enum IR {
 }
 
 fn filter_free_vbls(
-    free: &Vec<(Symbol, usize, usize)>,
+    free: &Vec<(Symbol, usize)>,
     names: &Vec<(Symbol, usize)>,
-) -> Vec<(Symbol, usize, usize)> {
+) -> Vec<(Symbol, usize)> {
     free.clone()
         .into_iter()
         .filter(|x| names.iter().find(|y| x.0 == y.0) == None)
@@ -174,9 +174,19 @@ impl GlobalEnv {
 
         resolve_marks(&mut sub.cmds);
 
-        let v = self.anon_fns.len();
-        self.anon_fns.push((hash, sub.cmds));
-        v
+        let idx = self.anon_fns.iter().position(|(_, cmds)| {
+            *cmds == sub.cmds
+            // cmds.len() == sub.cmds.len() && cmds.iter().enumerate().all(|(i, n)| n == sub.cmds[i])
+        });
+        match idx {
+            None => {
+                let v = self.anon_fns.len();
+                self.anon_fns.push((hash, sub.cmds));
+                v
+            }
+            Some(idx) => idx,
+        }
+        // v
     }
 }
 

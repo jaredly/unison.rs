@@ -13,7 +13,7 @@ impl ABT<Term> {
         }
         match self {
             ABT::Cycle(inner) => inner.accept(visitor),
-            ABT::Abs(sym, uses, inner) => {
+            ABT::Abs(_sym, _uses, inner) => {
                 inner.accept(visitor);
             }
             ABT::Tm(inner) => inner.accept(visitor),
@@ -57,7 +57,7 @@ impl Term {
                 a.accept(visitor);
                 b.accept(visitor)
             }
-            Lam(i, free) => {
+            Lam(i, _free) => {
                 i.accept(visitor);
             }
             //   -- Note: let rec blocks have an outer ABT.Cycle which introduces as many
