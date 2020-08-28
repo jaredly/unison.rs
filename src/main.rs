@@ -30,30 +30,30 @@ fn load_term(file: &std::path::Path) -> std::io::Result<()> {
 }
 
 fn resolve_branch(
-    root: &std::path::Path,
+    _root: &std::path::Path,
     branch: types::Causal<types::RawBranch>,
 ) -> std::io::Result<types::RawBranch> {
     match branch {
         types::Causal::One(c) => Ok(c),
-        types::Causal::Cons(h, mut b) => {
-            let mut p = std::path::PathBuf::from(root);
-            p.push(h.to_string() + ".ub");
-            // println!("Resolve: {:?}", p);
-            b.merge(&resolve_branch(
-                root,
-                parser::Buffer::from_file(p.as_path())?.get_branch(),
-            )?);
+        types::Causal::Cons(_, b) => {
+            // let mut p = std::path::PathBuf::from(root);
+            // p.push(h.to_string() + ".ub");
+            // // println!("Resolve: {:?}", p);
+            // b.merge(&resolve_branch(
+            //     root,
+            //     parser::Buffer::from_file(p.as_path())?.get_branch(),
+            // )?);
             Ok(b)
         }
-        types::Causal::Merge(hashes, mut b) => {
-            for hash in hashes.iter() {
-                let mut p = std::path::PathBuf::from(root);
-                p.push(hash.to_string() + ".ub");
-                b.merge(&resolve_branch(
-                    root,
-                    parser::Buffer::from_file(p.as_path())?.get_branch(),
-                )?)
-            }
+        types::Causal::Merge(_, b) => {
+            // for hash in hashes.iter() {
+            //     let mut p = std::path::PathBuf::from(root);
+            //     p.push(hash.to_string() + ".ub");
+            //     b.merge(&resolve_branch(
+            //         root,
+            //         parser::Buffer::from_file(p.as_path())?.get_branch(),
+            //     )?)
+            // }
             Ok(b)
         }
     }
@@ -260,11 +260,10 @@ fn run_test(root: &str) -> std::io::Result<()> {
     keys.sort();
     for k in keys {
         if k[k.len() - 1] == "test" {
-            println!("--> {:?}", k.join("."));
-            if k.join(".") == "base.Int.inRange.test" {
-                println!("Skipping");
-                continue;
+            if k.iter().position(|x| x.starts_with("_")) != None {
+                continue; // hidden, ignore
             }
+            println!("--> {:?}", k.join("."));
             let hash = all_terms.get(&k).unwrap().to_string();
             let ret = run_term(&terms, &hash)?;
             use types::*;
