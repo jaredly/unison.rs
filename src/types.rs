@@ -2,6 +2,7 @@ use im::Vector;
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::{PartialEq, PartialOrd};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Hash, Eq)]
 pub struct Symbol {
@@ -136,8 +137,6 @@ pub enum Type {
     IntroOuter(Box<ABT<Type>>),
 }
 
-pub type GCPointer = usize;
-
 // Runtime values
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum Value {
@@ -152,27 +151,27 @@ pub enum Value {
 
     CycleFnBody(
         usize,
-        Vec<(Symbol, usize, GCPointer)>,
+        Vec<(Symbol, usize, Rc<Value>)>,
         Vec<(Symbol, usize, usize)>,
     ),
-    PartialFnBody(usize, Vec<(Symbol, usize, GCPointer)>),
-    PartialNativeApp(String, Vec<GCPointer>),
-    PartialConstructor(Reference, usize, Vector<GCPointer>),
+    PartialFnBody(usize, Vec<(Symbol, usize, Rc<Value>)>),
+    PartialNativeApp(String, Vec<Rc<Value>>),
+    PartialConstructor(Reference, usize, Vector<Rc<Value>>),
 
     Continuation(usize, Vec<super::ir_runtime::Frame>),
     Constructor(Reference, usize),
     Request(Reference, usize),
-    RequestPure(GCPointer),
-    RequestWithArgs(Reference, usize, usize, Vec<GCPointer>),
+    RequestPure(Rc<Value>),
+    RequestWithArgs(Reference, usize, usize, Vec<Rc<Value>>),
     RequestWithContinuation(
         Reference,
         usize,
-        Vec<GCPointer>,
+        Vec<Rc<Value>>,
         usize,
         Vec<super::ir_runtime::Frame>,
     ),
 
-    Sequence(Vector<GCPointer>),
+    Sequence(Vector<Rc<Value>>),
     TermLink(Referent),
     TypeLink(Reference),
 }
@@ -312,31 +311,6 @@ impl ABT<Term> {
     }
 }
 
-pub struct GC {
-    values: Vec<Value>,
-}
-
-impl GC {
-    pub fn new() -> GC {
-        GC { values: vec![] }
-    }
-    pub fn put(&mut self, v: Value) -> usize {
-        // match v {
-        //     Value::GC(v) => v,
-        //     _ => {
-        self.values.push(v);
-        self.values.len() - 1
-        //     }
-        // }
-    }
-    pub fn get(&self, n: usize) -> &Value {
-        &self.values[n]
-    }
-    // pub fn pop(&mut self, n: usize) -> Value {
-    //     self.values.remove(n)
-    // }
-}
-
 impl Into<Value> for Term {
     fn into(self) -> Value {
         match self {
@@ -352,7 +326,7 @@ impl Into<Value> for Term {
             Term::Request(a, b) => Value::Request(a, b),
             // Term::Sequence(a) => Value::Sequence(
             //     a.into_iter()
-            //         .map(|x| gc.put(x.to_term().unwrap().into_value(gc)))
+            //         .map(|x| Rc::new(x.to_term().unwrap().into_value(gc)))
             //         .collect(),
             // ),
             Term::TermLink(a) => Value::TermLink(a),
