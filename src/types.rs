@@ -193,7 +193,7 @@ pub enum Value {
     PartialNativeApp(String, Vec<Rc<Value>>),
     PartialConstructor(Reference, usize, Vector<Rc<Value>>),
 
-    Continuation(usize, Vec<super::ir_runtime::Frame>),
+    Continuation(usize, Vec<super::frame::Frame>),
     Constructor(Reference, usize),
     Request(Reference, usize),
     RequestPure(Rc<Value>),
@@ -203,7 +203,7 @@ pub enum Value {
         usize,
         Vec<Rc<Value>>,
         usize,
-        Vec<super::ir_runtime::Frame>,
+        Vec<super::frame::Frame>,
     ),
 
     Sequence(Vector<Rc<Value>>),

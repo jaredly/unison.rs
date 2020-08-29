@@ -3,11 +3,15 @@ extern crate serde_derive;
 
 mod base32hex;
 mod env;
+mod frame;
 mod ir;
+mod ir_exec;
 mod ir_runtime;
 mod parser;
 mod pattern;
 mod printer;
+mod stack;
+mod trace;
 mod types;
 mod unique;
 mod visitor;
