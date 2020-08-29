@@ -117,12 +117,6 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                         info!("{} | {}", ln - i, frame);
                     }
                 }
-                // for frame in &stack.frames {
-                //     info!(
-                //         "> {:?} : returning to index {} below",
-                //         frame.source, frame.return_index
-                //     );
-                // }
                 idx = kidx;
                 stack.push(arg);
                 match &stack.frames[0].source {
