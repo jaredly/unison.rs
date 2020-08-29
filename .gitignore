@@ -1,2 +1,5 @@
 /target
 data
+*.u
+*.txt
+.unisonHistory

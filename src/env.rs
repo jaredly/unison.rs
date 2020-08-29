@@ -58,7 +58,10 @@ impl Env {
                         .unwrap()
                         .get_term();
                     let mut bindings = super::unique::Bindings::new();
-                    res.unique(&mut bindings);
+                    // use super::visitor::Visitor;
+                    // bindings.visit_abt(&mut res);
+                    res.accept(&mut bindings);
+                    // res.unique(&mut bindings);
                     self.raw_cache.insert(hash.to_owned(), res.clone());
                     res
                 }

@@ -4,12 +4,35 @@ use std::cmp::{PartialEq, PartialOrd};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Hash, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Hash, Eq)]
 pub struct Symbol {
     pub num: usize,
     pub text: String,
+    // TODO make this an optional, so that I can make partialeq make sense
+    // before we've uniqued.
     pub unique: usize,
 }
+
+impl Symbol {
+    pub fn with_unique(&self, unique: usize) -> Self {
+        Symbol {
+            num: self.num,
+            text: self.text.clone(),
+            unique,
+        }
+    }
+    // For when unique is uninitialized
+    pub fn pre_eq(&self, other: &Self) -> bool {
+        self.num == other.num && self.text == other.text
+    }
+}
+
+impl std::cmp::PartialEq for Symbol {
+    fn eq(&self, other: &Self) -> bool {
+        self.unique == other.unique
+    }
+}
+
 impl std::fmt::Debug for Symbol {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         fmt.write_fmt(format_args!("🔣{}/{}", self.text, self.unique))
@@ -148,11 +171,23 @@ pub enum Value {
     Bytes(Vec<u64>),
     Char(char),
     Ref(Reference),
+    CycleBlank(usize),
 
     CycleFnBody(
         usize,
+        // bindings for this one, with CycleBlanks
+        // where mutuals would be
         Vec<(Symbol, usize, Rc<Value>)>,
-        Vec<(Symbol, usize, usize)>,
+        // mutuals!
+        Vec<(
+            Symbol, // the ID identified in CycleBlank
+            usize,  // usage number? maybe not relevant
+            usize,  // the fn ID
+            // the bindings for this one, with CycleBlanks
+            // where mutuals would be
+            Vec<(Symbol, usize, Rc<Value>)>,
+        )>,
+        // Vec<(Symbol, usize, usize, Vec<usize>)>,
     ),
     PartialFnBody(usize, Vec<(Symbol, usize, Rc<Value>)>),
     PartialNativeApp(String, Vec<Rc<Value>>),
@@ -196,7 +231,16 @@ pub enum Term {
     If(Box<ABT<Term>>, Box<ABT<Term>>, Box<ABT<Term>>),
     And(Box<ABT<Term>>, Box<ABT<Term>>),
     Or(Box<ABT<Term>>, Box<ABT<Term>>),
-    Lam(Box<ABT<Term>>, Vec<(Symbol, usize, usize)>),
+    // the bool is whether this is a cycle vbl or not?
+    Lam(
+        Box<ABT<Term>>,
+        Vec<(
+            Symbol,
+            usize, // external usage number
+            usize, // internal usage count
+            bool,
+        )>,
+    ),
     //   -- Note: let rec blocks have an outer ABT.Cycle which introduces as many
     //   -- variables as there are bindings
     LetRec(bool, Vec<Box<ABT<Term>>>, Box<ABT<Term>>),
@@ -270,14 +314,14 @@ pub struct RawBranch {
     pub edits: HashMap<NameSegment, Hash>,
 }
 
-impl RawBranch {
-    pub fn merge(&mut self, other: &RawBranch) {
-        self.terms.merge(&other.terms);
-        self.types.merge(&other.types);
-        self.children.extend(other.children.clone());
-        self.edits.extend(other.edits.clone());
-    }
-}
+// impl RawBranch {
+//     pub fn merge(&mut self, other: &RawBranch) {
+//         self.terms.merge(&other.terms);
+//         self.types.merge(&other.types);
+//         self.children.extend(other.children.clone());
+//         self.edits.extend(other.edits.clone());
+//     }
+// }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Branch {
@@ -293,23 +337,23 @@ pub struct Star<K: std::hash::Hash + std::cmp::Eq + Clone, V> {
     pub d3: HashMap<K, (Reference, Reference)>,
 }
 
-impl<K: std::hash::Hash + std::cmp::Eq + Clone, V: Clone> Star<K, V> {
-    fn merge(&mut self, other: &Self) {
-        self.fact.extend(other.fact.clone());
-        self.d1.extend(other.d1.clone());
-        self.d2.extend(other.d2.clone());
-        self.d3.extend(other.d3.clone());
-    }
-}
+// impl<K: std::hash::Hash + std::cmp::Eq + Clone, V: Clone> Star<K, V> {
+//     fn merge(&mut self, other: &Self) {
+//         self.fact.extend(other.fact.clone());
+//         self.d1.extend(other.d1.clone());
+//         self.d2.extend(other.d2.clone());
+//         self.d3.extend(other.d3.clone());
+//     }
+// }
 
-impl ABT<Term> {
-    fn to_term(self) -> Option<Term> {
-        match self {
-            ABT::Tm(t) => Some(t),
-            _ => None,
-        }
-    }
-}
+// impl ABT<Term> {
+//     fn to_term(self) -> Option<Term> {
+//         match self {
+//             ABT::Tm(t) => Some(t),
+//             _ => None,
+//         }
+//     }
+// }
 
 impl Into<Value> for Term {
     fn into(self) -> Value {

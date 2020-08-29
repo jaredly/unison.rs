@@ -82,11 +82,14 @@ impl Stack {
 
     fn get_vbl(&mut self, sym: &Symbol, usage: usize) -> Rc<Value> {
         // if this is the final usage, then pluck it out.
-        let idx = self.frames[0]
+        let idx = match self.frames[0]
             .bindings
             .iter()
             .position(|(a, _, _)| a == sym)
-            .expect("Variable not found");
+        {
+            None => unreachable!("Variable {:?} not found!", sym),
+            Some(idx) => idx,
+        };
         // TODO take usage into account
         if self.frames[0].bindings[idx].1 == usage {
             let (_, _, v) = self.frames[0].bindings.remove(idx);
@@ -393,6 +396,9 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
 
                 stack.new_frame(idx, Source::Fn(fnid, env.anon_fns[fnid].0.clone()));
                 trace.push(stack.frames[0].as_trace("B", start.elapsed()));
+                // for binding in &bindings {
+                //     info!("> {:?} = {:?}", binding.0, binding.2);
+                // }
                 info!("^ fn call with {:?}", arg);
                 stack.frames[0].bindings = bindings;
                 stack.frames[0].stack.push(arg);
@@ -476,14 +482,7 @@ enum Ret {
 }
 
 impl IR {
-    fn eval(
-        &self,
-        // env: &GlobalEnv,
-        option_ref: &Reference,
-        stack: &mut Stack,
-        idx: &mut usize,
-        // marks: &HashMap<usize, usize>,
-    ) -> Ret {
+    fn eval(&self, option_ref: &Reference, stack: &mut Stack, idx: &mut usize) -> Ret {
         match self {
             IR::Swap => {
                 let one = stack.pop().unwrap();
@@ -495,7 +494,7 @@ impl IR {
             IR::Handle(mark) => return Ret::Handle(*mark),
             IR::HandlePure => {
                 let v = stack.pop().unwrap();
-                let v = match (*v) {
+                let v = match *v {
                     Value::RequestPure(_) => v,
                     _ => Rc::new(Value::RequestPure(v)),
                 };
@@ -561,9 +560,19 @@ impl IR {
                 *idx += 1;
             }
             IR::Fn(i, free_vbls) => {
+                info!("Binding free vbls {:?}", free_vbls);
                 let bound: Vec<(Symbol, usize, Rc<Value>)> = free_vbls
                     .iter()
-                    .map(|(sym, _min, max)| (sym.clone(), *max, stack.get_vbl(sym, *max)))
+                    .enumerate()
+                    .map(|(i, (sym, external, internal, cycle))| {
+                        (sym.with_unique(i), *internal, {
+                            if *cycle {
+                                Rc::new(Value::CycleBlank(sym.unique))
+                            } else {
+                                stack.get_vbl(sym, *external)
+                            }
+                        })
+                    })
                     .collect();
                 stack.push(Rc::new(Value::PartialFnBody(*i, bound)));
                 *idx += 1;
@@ -571,11 +580,14 @@ impl IR {
             IR::Cycle(names) => {
                 let mut mutuals = vec![];
                 let mut items = vec![];
+
+                // let mut all_bindings = vec![];
+
                 for (name, uses) in names {
                     let v = stack.pop().unwrap();
                     match &*v {
                         Value::PartialFnBody(fnint, bindings) => {
-                            mutuals.push((name.clone(), *uses, *fnint));
+                            mutuals.push((name.clone(), *uses, *fnint, bindings.clone()));
                             items.push((name, *uses, *fnint, bindings.clone()));
                         }
                         v => {
@@ -645,15 +657,89 @@ impl IR {
                     }
                     Value::CycleFnBody(fnint, bindings, mutuals) => {
                         *idx += 1;
+                        // let bindings = bindings.iter().map(|(sym, usage, v)| {
+                        //     match v {
+                        //         Value::CycleBlank(u) => {
+                        //             let (k, uses, fnid, sub_bindings) =
+                        //                 mutuals.iter().find(|m| m.0.unique == *u).unwrap();
+                        //             info!("Found cycle blank({}) - subbing in {:?}", u, k);
+
+                        //             binding.1 = *uses;
+                        //             binding.2 = Rc::new(Value::CycleFnBody(
+                        //                 *fnid,
+                        //                 sub_bindings.clone(),
+                        //                 mutuals.clone(),
+                        //             ));
+                        //         }
+                        //         _ => (sym.clone, *usage, v.clone())
+                        //     }
+                        // }).collect()
+                        info!("calling CycleFnBody, {} bindings", bindings.len());
                         let mut bindings = bindings.clone();
-                        let copy = bindings.clone();
-                        for (k, uses, v) in mutuals {
-                            bindings.push((
-                                k.clone(),
-                                *uses,
-                                Rc::new(Value::CycleFnBody(*v, copy.clone(), mutuals.clone())),
-                            ))
+                        for binding in bindings.iter_mut() {
+                            match &*binding.2 {
+                                Value::CycleBlank(u) => {
+                                    let (k, uses, fnid, sub_bindings) =
+                                        mutuals.iter().find(|m| m.0.unique == *u).unwrap();
+                                    info!("Found cycle blank({}) - subbing in {:?}", u, k);
+
+                                    binding.1 = *uses;
+                                    binding.2 = Rc::new(Value::CycleFnBody(
+                                        *fnid,
+                                        sub_bindings.clone(),
+                                        mutuals.clone(),
+                                    ));
+                                }
+                                _ => {
+                                    // info!("Not cycle {:?}", n);
+                                }
+                            }
                         }
+
+                        // let mut my_bindings = vec![];
+
+                        // for (i, k) in binding_keys.iter().enumerate() {
+                        //     let (sym, usage, v) =
+                        //         bindings.iter().find(|b| b.0.unique == *k).unwrap();
+                        //     let v = match **v {
+                        //         Value::CycleBlank(u) => {
+                        //             let mutual = mutuals.iter().find(|m| m.0.unique == u).unwrap();
+                        //             info!("Found cycle blank({}) - subbing in {:?}", u, k);
+                        //             Rc::new(Value::CycleFnBody(
+                        //                 mutual.2,
+                        //                 mutual.3.clone(),
+                        //                 mutuals.clone(),
+                        //             ))
+                        //         }
+                        //         _ => v.clone(),
+                        //     };
+                        //     my_bindings.push((sym.with_unique(i), *usage, v));
+                        // }
+
+                        // for (k, uses, v, binding_keys) in mutuals.into_iter() {
+                        //     for binding in bindings.iter_mut() {
+                        //         match &*binding.2 {
+                        //             Value::CycleBlank(u) if *u == k.unique => {
+                        //                 info!("Found cycle blank({}) - subbing in {:?}", u, k);
+                        //                 binding.1 = *uses;
+                        //                 binding.2 = Rc::new(Value::CycleFnBody(
+                        //                     *v,
+                        //                     binding_keys.clone(),
+                        //                     copy.clone(),
+                        //                     mutuals.clone(),
+                        //                 ));
+                        //                 break;
+                        //             }
+                        //             _ => (),
+                        //         }
+                        //         // if &binding.2 == Value::C {
+                        //         // }
+                        //     }
+                        //     // bindings.push((
+                        //     //     k.clone(),
+                        //     //     *uses,
+                        //     // ))
+                        // }
                         return Ret::FnCall(*fnint, bindings, arg);
                     }
                     Value::PartialFnBody(fnint, bindings) => {
@@ -679,7 +765,7 @@ impl IR {
                             )),
                             ("Text.fromCharList", Value::Sequence(l)) => Some(Value::Text({
                                 l.iter()
-                                    .map(|c| match (**c) {
+                                    .map(|c| match **c {
                                         Value::Char(c) => c.clone(),
                                         _ => unreachable!("Not a char"),
                                     })
