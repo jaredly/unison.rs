@@ -4,7 +4,6 @@ use im::Vector;
 use log::info;
 use serde_derive::{Deserialize, Serialize};
 use std::rc::Rc;
-// use tracing::{debug, error, info as info_, span, warn, Level};
 
 static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 
@@ -16,7 +15,6 @@ pub enum Source {
 
 #[derive(Debug, Clone)]
 pub struct Frame {
-    // span: tracing::span:
     source: Source,
     stack: Vec<Rc<Value>>,
     marks: Vec<usize>,
@@ -117,12 +115,9 @@ impl Stack {
         while self.frames[0].handler == None {
             frames.push(self.frames.remove(0));
             if self.frames.len() == 0 {
-                // unreachable!("Unhandled effect thrown: {:?}",)
                 return None;
             }
         }
-        // frames.extend(self.frames.clone());
-        // frames.push(self.frames[0].clone()); // TODO change return pointer I think?
         let idx = self.frames[0].handler.unwrap();
         self.frames[0].handler = None;
         Some((idx, frames))
@@ -134,12 +129,9 @@ impl Stack {
         while self.frames[0].handler == None {
             frames.push(self.frames.remove(0));
             if self.frames.len() == 0 {
-                // unreachable!("Unhandled effect thrown")
                 return None;
             }
         }
-        // frames.extend(self.frames.clone());
-        // frames.push(self.frames[0].clone()); // TODO change return pointer I think?
         let idx = self.frames[0].handler.unwrap();
         self.frames[0].handler = None;
         Some((idx, frames))
@@ -197,11 +189,6 @@ impl Stack {
     }
 }
 
-// pub enum TraceSource {
-//     Source(Source),
-//     Instruction(Source, )
-// }
-
 pub struct Trace {
     pub cat: String,
     pub ph: String, // B(eginning) E(nd) or I (info)
@@ -241,18 +228,9 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
 
     let mut n = 0;
 
-    // let mut longest = 10;
-    // let mut last = std::time::Instant::now();
-
     let start = std::time::Instant::now();
 
     while idx < cmds.len() {
-        // let t = last.elapsed().as_millis();
-        // if t > longest {
-        //     longest = t;
-        //     println!("Longest {}", t);
-        // }
-        // last = std::time::Instant::now();
         if n % 100 == 0 {
             if start.elapsed().as_secs() > 20 {
                 let n = Rc::new(Value::Text(format!("Ran out of time after {} ticks", n)));
@@ -264,14 +242,6 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
         let cidx = idx;
 
         n += 1;
-        // if n % 300 == 0 {
-        //     println!("{}", n);
-        // }
-        // print!(".");
-        // if n > 10_000 {
-        //     println!("\n< > < > Sorry folks < > < >\n");
-        //     return Value::Int(0);
-        // }
 
         let cmd = &cmds[idx];
         info!("----- <{}>    {:?}", idx, cmd);
@@ -311,12 +281,11 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
             Ret::Continue(kidx, mut frames, arg) => {
                 info!("** CONTINUE ** ({}) {} with {:?}", kidx, frames.len(), arg,);
                 let last = frames.len() - 1;
-                frames[last].return_index = idx; // ok I think this is the return pointer?
+                frames[last].return_index = idx;
                 stack.frames = {
                     frames.extend(stack.frames);
                     frames
                 };
-                // stack.frames = frames;
                 for frame in &stack.frames {
                     info!(
                         "> {:?} : returning to index {} below",
@@ -329,10 +298,6 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                     Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
                 }
-                // umm
-                // ok, so do we need to clone the absolutely whole stack?
-                // Or .. is it just "when we go down a level, we need to clone"
-                // well let's just clone everything to start, because why not I guess?
             }
             Ret::ReRequest(kind, number, args, final_index, mut frames) => {
                 let (nidx, saved_frames) = match stack.back_again_to_handler() {
@@ -361,13 +326,6 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
             }
             Ret::Request(kind, number, args) => {
                 let final_index = idx;
-                // So, the continuation will always contain the top level, even if the handler is on the top level.
-                // So we can't just "pop" things, unfortunately.
-                // Right?
-                // Or. ... maybe we should add a new frame when we pass through a handler?
-                // hrm, yeah, seems like if we want to be able to keep stack variables the way they were ...
-                // ok, so we add a new frame, that's a clone of the old frame, hm.
-                // Which means, every frame will have at most one handler.
                 let (nidx, saved_frames) = match stack.back_to_handler() {
                     None => unreachable!("Unhandled Request: {:?} / {}", kind, number),
                     Some((a, b)) => (a, b),
@@ -402,11 +360,6 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                 info!("^ fn call with {:?}", arg);
                 stack.frames[0].bindings = bindings;
                 stack.frames[0].stack.push(arg);
-                // // cmds = env.anon_fns.get(&hash.to_string()).unwrap();
-                // info!("[Fn Instructions - {}]", fnid);
-                // for cmd in cmds {
-                //     info!("{:?}", cmd);
-                // }
                 idx = 0;
             }
             Ret::Value(hash) => {
@@ -414,17 +367,11 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                 cmds = env.terms.get(&hash).unwrap();
                 stack.new_frame(idx, Source::Value(hash));
                 trace.push(stack.frames[0].as_trace("B", start.elapsed()));
-                // info!("[Value Instructions]");
-                // for cmd in cmds {
-                //     info!("{:?}", cmd);
-                // }
                 idx = 0;
             }
             Ret::HandlePure => {
                 let (idx1, value) = stack.pop_frame();
                 idx = idx1;
-                // stack.pop_frame();
-                // stack.frames.remove(0);
                 stack.push(value);
                 match stack.frames[0].source.clone() {
                     Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
@@ -432,11 +379,6 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                 };
             }
         }
-
-        // if time > 5 {
-        //     println!("Took: {}", time);
-        //     println!("{:?}", cmd);
-        // }
 
         // Multi-pop
         while idx >= cmds.len() {
@@ -499,9 +441,7 @@ impl IR {
                     _ => Rc::new(Value::RequestPure(v)),
                 };
                 stack.push(v);
-                // *idx += 1;
                 return Ret::HandlePure;
-                // return Ret::RequestPure(v);
             }
             IR::Value(term) => {
                 match term {
@@ -514,14 +454,8 @@ impl IR {
                         return Ret::Request(a.clone(), *b, args.clone());
                     }
                     Value::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                        // Jump!
                         *idx += 1;
                         return Ret::Value(hash.clone());
-                        // let value = env.terms.get(&hash.to_string()).clone();
-                        // stack.push_frame(idx, hash.to_string());
-                        // *idx = 0;
-                        // cmds = value;
-                        // JUMP!
                     }
                     _ => {
                         stack.push(Rc::new(term.clone()));
@@ -529,27 +463,9 @@ impl IR {
                     }
                 };
             }
-            // IR::Reference()
-            // IR::Ref(hash) => {
-            //     stack.push(Value::Ref(Reference::))
-            //     // let res = env.load(&hash.to_string());
-            // }
-            // IR::Builtin(name) => {
-            //     stack.push(Value::Ref(Reference::Builtin(name.clone())));
-            //     *idx += 1;
-            // }
             IR::PushSym(symbol, usage) => {
                 let v = stack.get_vbl(symbol, *usage);
                 stack.push(v);
-                // let i = match stack.frames[0]
-                //     .bindings
-                //     .iter()
-                //     .position(|(k, _, _)| symbol == k)
-                // {
-                //     None => unreachable!("Vbl not found {}", symbol.text),
-                //     Some(idx) => idx,
-                // };
-                // stack.push(stack.frames[0].bindings[i].1.clone());
                 *idx += 1;
             }
             IR::PopAndName(symbol, uses) => {
@@ -606,22 +522,8 @@ impl IR {
                         Rc::new(Value::CycleFnBody(fnint, bindings, mutuals.clone())),
                     ))
                 }
-
-                // stack.push(Value::CycleFnBody(
-                //     *i,
-                //     stack.frames[0].bindings.clone(),
-                //     mutuals.clone(),
-                // ));
                 *idx += 1;
             }
-            // IR::CycleFn(i, mutuals) => {
-            //     stack.push(Value::CycleFnBody(
-            //         *i,
-            //         stack.frames[0].bindings.clone(),
-            //         mutuals.clone(),
-            //     ));
-            //     *idx += 1;
-            // }
             IR::Call => {
                 info!("Call");
                 let arg = stack.pop().unwrap();
@@ -657,23 +559,6 @@ impl IR {
                     }
                     Value::CycleFnBody(fnint, bindings, mutuals) => {
                         *idx += 1;
-                        // let bindings = bindings.iter().map(|(sym, usage, v)| {
-                        //     match v {
-                        //         Value::CycleBlank(u) => {
-                        //             let (k, uses, fnid, sub_bindings) =
-                        //                 mutuals.iter().find(|m| m.0.unique == *u).unwrap();
-                        //             info!("Found cycle blank({}) - subbing in {:?}", u, k);
-
-                        //             binding.1 = *uses;
-                        //             binding.2 = Rc::new(Value::CycleFnBody(
-                        //                 *fnid,
-                        //                 sub_bindings.clone(),
-                        //                 mutuals.clone(),
-                        //             ));
-                        //         }
-                        //         _ => (sym.clone, *usage, v.clone())
-                        //     }
-                        // }).collect()
                         info!("calling CycleFnBody, {} bindings", bindings.len());
                         let mut bindings = bindings.clone();
                         for binding in bindings.iter_mut() {
@@ -690,56 +575,10 @@ impl IR {
                                         mutuals.clone(),
                                     ));
                                 }
-                                _ => {
-                                    // info!("Not cycle {:?}", n);
-                                }
+                                _ => (),
                             }
                         }
 
-                        // let mut my_bindings = vec![];
-
-                        // for (i, k) in binding_keys.iter().enumerate() {
-                        //     let (sym, usage, v) =
-                        //         bindings.iter().find(|b| b.0.unique == *k).unwrap();
-                        //     let v = match **v {
-                        //         Value::CycleBlank(u) => {
-                        //             let mutual = mutuals.iter().find(|m| m.0.unique == u).unwrap();
-                        //             info!("Found cycle blank({}) - subbing in {:?}", u, k);
-                        //             Rc::new(Value::CycleFnBody(
-                        //                 mutual.2,
-                        //                 mutual.3.clone(),
-                        //                 mutuals.clone(),
-                        //             ))
-                        //         }
-                        //         _ => v.clone(),
-                        //     };
-                        //     my_bindings.push((sym.with_unique(i), *usage, v));
-                        // }
-
-                        // for (k, uses, v, binding_keys) in mutuals.into_iter() {
-                        //     for binding in bindings.iter_mut() {
-                        //         match &*binding.2 {
-                        //             Value::CycleBlank(u) if *u == k.unique => {
-                        //                 info!("Found cycle blank({}) - subbing in {:?}", u, k);
-                        //                 binding.1 = *uses;
-                        //                 binding.2 = Rc::new(Value::CycleFnBody(
-                        //                     *v,
-                        //                     binding_keys.clone(),
-                        //                     copy.clone(),
-                        //                     mutuals.clone(),
-                        //                 ));
-                        //                 break;
-                        //             }
-                        //             _ => (),
-                        //         }
-                        //         // if &binding.2 == Value::C {
-                        //         // }
-                        //     }
-                        //     // bindings.push((
-                        //     //     k.clone(),
-                        //     //     *uses,
-                        //     // ))
-                        // }
                         return Ret::FnCall(*fnint, bindings, arg);
                     }
                     Value::PartialFnBody(fnint, bindings) => {
@@ -857,7 +696,6 @@ impl IR {
                                     Value::Nat(a - b)
                                 }
                             }
-                            // , ("Nat.drop", 2, DropN (Slot 1) (Slot 0))
                             // , ("Nat.sub", 2, SubN (Slot 1) (Slot 0))
                             // , ("Nat.mod", 2, ModN (Slot 1) (Slot 0))
                             // , ("Nat.pow", 2, PowN (Slot 1) (Slot 0))
