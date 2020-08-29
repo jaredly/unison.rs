@@ -19,6 +19,7 @@ pub enum Ret {
 
 impl IR {
     pub fn eval(&self, option_ref: &Reference, stack: &mut Stack, idx: &mut usize) -> Ret {
+        info!("----- <{}>    {:?}", idx, self);
         match self {
             IR::Swap => {
                 let one = stack.pop().unwrap();

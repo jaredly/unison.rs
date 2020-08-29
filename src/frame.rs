@@ -18,6 +18,15 @@ pub struct Frame {
     pub bindings: Vec<(Symbol, usize, Rc<Value>)>, // the number of usages to expect
 }
 
+impl std::fmt::Display for Frame {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fmt.write_fmt(format_args!(
+            "Frame<{:?}> : handler {:?} : return_index {}",
+            self.source, self.handler, self.return_index
+        ))
+    }
+}
+
 impl std::cmp::PartialEq for Frame {
     fn eq(&self, other: &Self) -> bool {
         self.source == other.source

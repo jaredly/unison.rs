@@ -10,7 +10,7 @@ pub struct Stack {
 
 impl Stack {
     pub fn new(source: Source) -> Self {
-        info!("{})> Initial frame {:?}", 0, source);
+        info!("{} | Initial frame {:?}", 0, source);
         Stack {
             frames: vec![Frame::new(source, 0)],
         }
@@ -90,19 +90,19 @@ impl Stack {
     }
     // TODO : fn replace_frame
     pub fn push(&mut self, t: Rc<Value>) {
-        info!("{} | Stack push: {:?}", self.frames.len(), t);
+        // info!("{} | Stack push: {:?}", self.frames.len(), t);
         self.frames[0].stack.push(t);
     }
     pub fn pop(&mut self) -> Option<Rc<Value>> {
         let t = self.frames[0].stack.pop();
-        info!("{} | Stack pop: {:?}", self.frames.len(), t);
+        // info!("{} | Stack pop: {:?}", self.frames.len(), t);
         t
     }
     // TODO maybe return a & ref to the Rc?
     pub fn peek(&mut self) -> Option<Rc<Value>> {
         let l = self.frames[0].stack.len();
         if l > 0 {
-            info!("Stack peek: {:?}", self.frames[0].stack[l - 1]);
+            // info!("Stack peek: {:?}", self.frames[0].stack[l - 1]);
             Some(self.frames[0].stack[l - 1].clone())
         } else {
             None

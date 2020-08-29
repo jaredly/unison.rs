@@ -55,7 +55,6 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
         n += 1;
 
         let cmd = &cmds[idx];
-        info!("----- <{}>    {:?}", idx, cmd);
 
         let ret = cmd.eval(&option_ref, &mut stack, &mut idx);
 
@@ -84,8 +83,21 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
             Ret::Nothing => (),
             Ret::Handle(mark_idx) => {
                 idx += 1;
-                info!("Setting handle, mark idx {}", mark_idx);
+                info!(
+                    "{} | Setting handle, mark idx {}",
+                    stack.frames.len(),
+                    mark_idx
+                );
+                if stack.frames[0].handler != None {
+                    unreachable!("Can't set a handle on a frame that already has one...");
+                }
                 stack.frames[0].handler = Some(mark_idx);
+                let ln = stack.frames.len();
+                for (i, frame) in stack.frames.iter().enumerate() {
+                    if frame.handler != None {
+                        info!("{} | {}", ln - i, frame);
+                    }
+                }
                 stack.clone_frame(mark_idx);
                 stack.frames[0].handler = None;
             }
@@ -97,17 +109,25 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                     frames.extend(stack.frames);
                     frames
                 };
-                for frame in &stack.frames {
-                    info!(
-                        "> {:?} : returning to index {} below",
-                        frame.source, frame.return_index
-                    );
+                info!("New Top Frame: {}", stack.frames[0]);
+                info!("Handlers:");
+                let ln = stack.frames.len();
+                for (i, frame) in stack.frames.iter().enumerate() {
+                    if frame.handler != None {
+                        info!("{} | {}", ln - i, frame);
+                    }
                 }
+                // for frame in &stack.frames {
+                //     info!(
+                //         "> {:?} : returning to index {} below",
+                //         frame.source, frame.return_index
+                //     );
+                // }
                 idx = kidx;
                 stack.push(arg);
-                match stack.frames[0].source.clone() {
-                    Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
-                    Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
+                match &stack.frames[0].source {
+                    Source::Value(hash) => cmds = env.terms.get(hash).unwrap(),
+                    Source::Fn(fnid, _) => cmds = &env.anon_fns[*fnid].1,
                 }
             }
             Ret::ReRequest(kind, number, args, final_index, mut frames) => {
@@ -117,10 +137,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                 };
                 frames.extend(saved_frames);
                 idx = nidx;
-                info!(
-                    "Handling a bubbled request : {} - {:?}",
-                    idx, stack.frames[0].source
-                );
+                info!("Handling a bubbled request : {} - {}", idx, stack.frames[0]);
 
                 match stack.frames[0].source.clone() {
                     Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
@@ -136,6 +153,10 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                 )))
             }
             Ret::Request(kind, number, args) => {
+                info!(
+                    "Got a request! {:?}/{} - at {} ; idx {}",
+                    kind, number, stack.frames[0], idx
+                );
                 let final_index = idx;
                 let (nidx, saved_frames) = match stack.back_to_handler() {
                     None => unreachable!("Unhandled Request: {:?} / {}", kind, number),
@@ -143,8 +164,10 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                 };
                 idx = nidx;
                 info!(
-                    "Jumping back to idx {} to {:?}",
-                    idx, stack.frames[0].source
+                    "Found handler at frame {} - {:?} - idx {}",
+                    stack.frames.len(),
+                    stack.frames[0].source,
+                    idx
                 );
 
                 match stack.frames[0].source.clone() {
@@ -168,7 +191,12 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                 // for binding in &bindings {
                 //     info!("> {:?} = {:?}", binding.0, binding.2);
                 // }
-                info!("^ fn call with {:?}", arg);
+                // info!(
+                //     "{} |  Fn({}) fn call with arg: {:?}",
+                //     stack.frames.len(),
+                //     fnid,
+                //     arg
+                // );
                 stack.frames[0].bindings = bindings;
                 stack.frames[0].stack.push(arg);
                 idx = 0;
