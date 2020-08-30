@@ -13,6 +13,9 @@ and continuing. If it gets re-thrown, we go back to thr drawing board (I think, 
 And if it gets "continued", we take the subset of frames that were the difference between the top and the handler, and put that on top of the current stack.
 
 So essentually, the `Request` instance needs a pointer to the "currently handling handle" thing.
+So that once the continuation is called, we can drop everything below it.
+But if the fallthrough happens, then we need to jump back to that stack,
+forgetting everything that happened up till then.
 
 ```
 ability Both a where

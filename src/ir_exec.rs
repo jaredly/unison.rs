@@ -11,7 +11,7 @@ pub enum Ret {
     Value(Hash),
     Nothing,
     Request(Reference, usize, Vec<Rc<Value>>),
-    ReRequest(Reference, usize, Vec<Rc<Value>>, usize, Vec<Frame>),
+    ReRequest(Reference, usize, Vec<Rc<Value>>, usize, Vec<Frame>, usize),
     Handle(usize),
     HandlePure,
     Continue(usize, Vec<Frame>, Rc<Value>),
@@ -479,7 +479,7 @@ impl IR {
             IR::PatternMatchFail => {
                 let value = stack.pop().unwrap();
                 match &*value {
-                    Value::RequestWithContinuation(req, i, args, back_idx, frames) => {
+                    Value::RequestWithContinuation(req, i, args, back_idx, frames, current_idx) => {
                         info!("Bubbling up a continuation {:?} # {}", req, i);
                         return Ret::ReRequest(
                             req.clone(),
@@ -487,6 +487,7 @@ impl IR {
                             args.clone(),
                             *back_idx,
                             frames.clone(),
+                            *current_idx,
                         );
                     }
                     _ => unreachable!("Pattern match failure! {:?}", value),

@@ -4,11 +4,11 @@ use std::rc::Rc;
 impl Pattern {
     pub fn matches(&self, term: &Value) -> bool {
         match (self, term) {
-            (Pattern::EffectPure(_), Value::RequestWithContinuation(_, _, _, _, _)) => false,
+            (Pattern::EffectPure(_), Value::RequestWithContinuation(_, _, _, _, _, _)) => false,
             (Pattern::EffectPure(pattern), Value::RequestPure(inner)) => pattern.matches(inner),
             (
                 Pattern::EffectBind(reference, number, args, _),
-                Value::RequestWithContinuation(tref, tnum, targs, _, _),
+                Value::RequestWithContinuation(tref, tnum, targs, _, _, _),
             ) if reference == tref && number == tnum && args.len() == targs.len() => {
                 for i in 0..args.len() {
                     if !args[i].matches(&targs[i]) {
@@ -106,11 +106,11 @@ impl Pattern {
 
     pub fn match_(&self, id: &Value) -> Option<Vec<Rc<Value>>> {
         match (self.clone(), (id).clone()) {
-            (Pattern::EffectPure(_), Value::RequestWithContinuation(_, _, _, _, _)) => None,
+            (Pattern::EffectPure(_), Value::RequestWithContinuation(_, _, _, _, _, _)) => None,
             (Pattern::EffectPure(pattern), Value::RequestPure(inner)) => pattern.match_(&inner),
             (
                 Pattern::EffectBind(reference, number, args, kont),
-                Value::RequestWithContinuation(tref, tnum, targs, tidx, tkont),
+                Value::RequestWithContinuation(tref, tnum, targs, tidx, mut tkont, current_idx),
             ) if reference == tref && number == tnum && args.len() == targs.len() => {
                 let mut all = vec![];
                 for i in 0..args.len() {
@@ -121,6 +121,7 @@ impl Pattern {
                         }
                     }
                 }
+                tkont = tkont.drain(0..current_idx + 1).collect();
                 match *kont {
                     Pattern::Unbound => (),
                     Pattern::Var => all.push(Rc::new(Value::Continuation(tidx, tkont))),

@@ -124,12 +124,12 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                     Source::Fn(fnid, _) => cmds = &env.anon_fns[*fnid].1,
                 }
             }
-            Ret::ReRequest(kind, number, args, final_index, mut frames) => {
-                let (nidx, saved_frames) = match stack.back_again_to_handler() {
-                    None => unreachable!("Unhandled ReRequest: {:?} / {}", kind, number),
-                    Some((a, b)) => (a, b),
-                };
-                frames.extend(saved_frames);
+            Ret::ReRequest(kind, number, args, final_index, frames, current_frame_idx) => {
+                let (nidx, frame_index) =
+                    match stack.back_again_to_handler(&frames, current_frame_idx) {
+                        None => unreachable!("Unhandled ReRequest: {:?} / {}", kind, number),
+                        Some((a, b)) => (a, b),
+                    };
                 idx = nidx;
                 info!("Handling a bubbled request : {} - {}", idx, stack.frames[0]);
 
@@ -144,6 +144,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                     args,
                     final_index,
                     frames,
+                    frame_index,
                 )))
             }
             Ret::Request(kind, number, args) => {
@@ -152,9 +153,9 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                     kind, number, stack.frames[0], idx
                 );
                 let final_index = idx;
-                let (nidx, saved_frames) = match stack.back_to_handler() {
+                let (nidx, saved_frames, frame_idx) = match stack.back_to_handler() {
                     None => unreachable!("Unhandled Request: {:?} / {}", kind, number),
-                    Some((a, b)) => (a, b),
+                    Some((a, b, c)) => (a, b, c),
                 };
                 idx = nidx;
                 info!(
@@ -175,6 +176,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                     args,
                     final_index,
                     saved_frames,
+                    frame_idx,
                 )))
             }
             Ret::FnCall(fnid, bindings, arg) => {

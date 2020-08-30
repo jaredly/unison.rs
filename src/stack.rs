@@ -47,22 +47,31 @@ impl Stack {
     }
 
     // TODO there should be a way to ... get back .. to the thing ... that we wanted ...
-    pub fn back_again_to_handler(&mut self) -> Option<(usize, Vec<Frame>)> {
-        let mut frames = vec![];
-        self.frames.remove(0); // ignore the current one, it was a clone anyway
-        while self.frames[0].handler == None {
-            frames.push(self.frames.remove(0));
-            if self.frames.len() == 0 {
-                return None;
-            }
+    pub fn back_again_to_handler(
+        &mut self,
+        frames: &Vec<Frame>,
+        current_idx: usize,
+    ) -> Option<(usize, usize)> {
+        // let mut frames = vec![];
+        // self.frames.remove(0); // ignore the current one, it was a clone anyway
+        let mut new_idx = current_idx + 1;
+        while frames[new_idx].handler == None {
+            new_idx += 1;
         }
+        self.frames = frames[new_idx..].to_vec();
+        // while self.frames[0].handler == None {
+        //     frames.push(self.frames.remove(0));
+        //     if self.frames.len() == 0 {
+        //         return None;
+        //     }
+        // }
         let idx = self.frames[0].handler.unwrap();
         self.frames[0].handler = None;
-        Some((idx, frames))
+        Some((idx, new_idx))
     }
 
     // TODO there should be a way to ... get back .. to the thing ... that we wanted ...
-    pub fn back_to_handler(&mut self) -> Option<(usize, Vec<Frame>)> {
+    pub fn back_to_handler(&mut self) -> Option<(usize, Vec<Frame>, usize)> {
         let mut frames = vec![];
         while self.frames[0].handler == None {
             frames.push(self.frames.remove(0));
@@ -70,9 +79,14 @@ impl Stack {
                 return None;
             }
         }
+        let current_idx = frames.len() - 1;
+        // We need the full stack, in case this gets rethrown.
+        // PERF: we could check up the stack and only do this if
+        // there's another handler somewhere.
+        frames.extend(self.frames.clone());
         let idx = self.frames[0].handler.unwrap();
         self.frames[0].handler = None;
-        Some((idx, frames))
+        Some((idx, frames, current_idx))
     }
 
     pub fn pop_frame(&mut self) -> (usize, Rc<Value>) {

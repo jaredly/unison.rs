@@ -204,6 +204,7 @@ pub enum Value {
         Vec<Rc<Value>>,
         usize,
         Vec<super::frame::Frame>,
+        usize,
     ),
 
     Sequence(Vector<Rc<Value>>),
