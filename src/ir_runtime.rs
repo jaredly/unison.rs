@@ -1,4 +1,4 @@
-use super::ir::{GlobalEnv, IR};
+use super::ir::{RuntimeEnv, IR};
 use super::types::*;
 use log::info;
 use std::rc::Rc;
@@ -11,7 +11,7 @@ use super::trace::Trace;
 static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 
 #[allow(while_true)]
-pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
+pub fn eval(env: RuntimeEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
     let hash = Hash::from_string(hash);
     info!("[- ENV -]");
     for (k, v) in env.terms.iter() {

@@ -78,7 +78,7 @@ fn filter_free_vbls(
 }
 
 impl ABT<Term> {
-    pub fn to_ir(&self, cmds: &mut IREnv, env: &mut GlobalEnv) {
+    pub fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) {
         match self {
             ABT::Var(symbol, usage) => cmds.push(IR::PushSym(symbol.clone(), *usage)),
             ABT::Tm(term) => term.to_ir(cmds, env),
@@ -134,16 +134,30 @@ fn unroll_cycle(
     }
 }
 
-pub struct GlobalEnv {
+pub struct TranslationEnv {
     pub env: env::Env,
     pub terms: HashMap<Hash, Vec<IR>>,
-    pub types: HashMap<Hash, TypeDecl>,
+    types: HashMap<Hash, TypeDecl>,
     pub anon_fns: Vec<(Hash, Vec<IR>)>, // I think?
 }
 
-impl GlobalEnv {
+impl Into<RuntimeEnv> for TranslationEnv {
+    fn into(self) -> RuntimeEnv {
+        RuntimeEnv {
+            terms: self.terms,
+            anon_fns: self.anon_fns,
+        }
+    }
+}
+
+pub struct RuntimeEnv {
+    pub terms: HashMap<Hash, Vec<IR>>,
+    pub anon_fns: Vec<(Hash, Vec<IR>)>, // I think?
+}
+
+impl TranslationEnv {
     pub fn new(env: env::Env) -> Self {
-        GlobalEnv {
+        TranslationEnv {
             env,
             terms: HashMap::new(),
             types: HashMap::new(),
@@ -267,7 +281,7 @@ impl IREnv {
 }
 
 impl Term {
-    pub fn to_ir(&self, cmds: &mut IREnv, env: &mut GlobalEnv) {
+    pub fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) {
         match self {
             Term::Handle(handler, expr) => {
                 /*

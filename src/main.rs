@@ -152,7 +152,7 @@ fn run_term(
     let env = env::Env::init(terms_path.parent().unwrap());
     // let res = env.load(hash);
     // println!("{:?}", res);
-    let mut ir_env = ir::GlobalEnv::new(env);
+    let mut ir_env = ir::TranslationEnv::new(env);
     ir_env.load(&types::Hash::from_string(hash));
 
     {
@@ -185,10 +185,10 @@ fn run_term(
         }
     };
 
-    // res.to_ir(&mut ir_env, &mut env);
-    // let guard = pprof::ProfilerGuard::new(100).unwrap();
+    let runtime_env: ir::RuntimeEnv = ir_env.into();
+
     let mut trace = vec![];
-    let ret = ir_runtime::eval(ir_env, hash, &mut trace);
+    let ret = ir_runtime::eval(runtime_env, hash, &mut trace);
     println!(
         "Time: {}ms ({}ns)",
         last.elapsed().as_millis(),
