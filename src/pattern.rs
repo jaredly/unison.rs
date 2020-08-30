@@ -122,6 +122,8 @@ impl Pattern {
                     }
                 }
                 tkont = tkont.drain(0..current_idx + 1).collect();
+                // Clear out the handler
+                tkont[current_idx].handler = None;
                 match *kont {
                     Pattern::Unbound => (),
                     Pattern::Var => all.push(Rc::new(Value::Continuation(tidx, tkont))),
