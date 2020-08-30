@@ -186,6 +186,7 @@ impl IR {
                             ("Int.negate", Value::Int(i)) => Some(Value::Int(-i)),
                             ("Int.isEven", Value::Int(i)) => Some(Value::Boolean(i % 2 == 0)),
                             ("Int.isOdd", Value::Int(i)) => Some(Value::Boolean(i % 2 == 1)),
+                            ("Int.toText", Value::Int(i)) => Some(Value::Text(i.to_string())),
                             ("Nat.increment", Value::Nat(i)) => Some(Value::Nat(i + 1)),
                             ("Nat.isEvent", Value::Nat(i)) => Some(Value::Boolean(i % 2 == 0)),
                             ("Nat.isOdd", Value::Nat(i)) => Some(Value::Boolean(i % 2 == 1)),
@@ -336,6 +337,12 @@ impl IR {
                             ("Text.>=", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a >= b),
                             ("Text.>", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a > b),
                             ("Text.<", [Value::Text(a)], Value::Text(b)) => Value::Boolean(a < b),
+                            ("Text.take", [Value::Nat(a)], Value::Text(b)) => {
+                                Value::Text(b[0..*a as usize].to_owned())
+                            }
+                            ("Text.drop", [Value::Nat(a)], Value::Text(b)) => {
+                                Value::Text(b[*a as usize..].to_owned())
+                            }
                             // , mk2 "Text.take" atn att (pure . T) (Text.take . fromIntegral)
                             // , mk2 "Text.drop" atn att (pure . T) (Text.drop . fromIntegral)
                             // , mk2 "Text.=="   att att (pure . B) (==)
