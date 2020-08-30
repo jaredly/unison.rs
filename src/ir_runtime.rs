@@ -43,7 +43,7 @@ pub fn eval(env: GlobalEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
 
     while idx < cmds.len() {
         if n % 100 == 0 {
-            if start.elapsed().as_secs() > 20 {
+            if start.elapsed().as_secs() > 90 {
                 let n = Rc::new(Value::Text(format!("Ran out of time after {} ticks", n)));
                 return n;
             }

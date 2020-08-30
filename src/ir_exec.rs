@@ -187,11 +187,13 @@ impl IR {
                             ("Int.isEven", Value::Int(i)) => Some(Value::Boolean(i % 2 == 0)),
                             ("Int.isOdd", Value::Int(i)) => Some(Value::Boolean(i % 2 == 1)),
                             ("Int.toText", Value::Int(i)) => Some(Value::Text(i.to_string())),
+                            ("Int.complement", Value::Int(i)) => Some(Value::Int(!i)),
                             ("Nat.increment", Value::Nat(i)) => Some(Value::Nat(i + 1)),
-                            ("Nat.isEvent", Value::Nat(i)) => Some(Value::Boolean(i % 2 == 0)),
+                            ("Nat.isEven", Value::Nat(i)) => Some(Value::Boolean(i % 2 == 0)),
                             ("Nat.isOdd", Value::Nat(i)) => Some(Value::Boolean(i % 2 == 1)),
                             ("Nat.toInt", Value::Nat(i)) => Some(Value::Int(*i as i64)),
                             ("Nat.toText", Value::Nat(i)) => Some(Value::Text(i.to_string())),
+                            ("Nat.complement", Value::Nat(i)) => Some(Value::Nat(!i)),
                             ("Boolean.not", Value::Boolean(i)) => Some(Value::Boolean(!i)),
                             ("List.size", Value::Sequence(s)) => Some(Value::Nat(s.len() as u64)),
                             ("Text.size", Value::Text(t)) => Some(Value::Nat(t.len() as u64)),
@@ -254,10 +256,10 @@ impl IR {
                                 Value::Int(a.pow(*b as u32))
                             }
                             ("Int.shiftLeft", [Value::Int(a)], Value::Nat(b)) => {
-                                Value::Int(a >> *b as u32)
+                                Value::Int(a << *b as u64)
                             }
                             ("Int.shiftRight", [Value::Int(a)], Value::Nat(b)) => {
-                                Value::Int(a << *b as u32)
+                                Value::Int(a >> *b as u64)
                             }
 
                             ("Nat.+", [Value::Nat(a)], Value::Nat(b)) => {
@@ -279,10 +281,10 @@ impl IR {
                                 Value::Nat(a.pow(*b as u32))
                             }
                             ("Nat.shiftLeft", [Value::Nat(a)], Value::Nat(b)) => {
-                                Value::Nat(a >> *b as u32)
+                                Value::Nat(a << *b as u64)
                             }
                             ("Nat.shiftRight", [Value::Nat(a)], Value::Nat(b)) => {
-                                Value::Nat(a << *b as u32)
+                                Value::Nat(a >> *b as u64)
                             }
 
                             ("Nat.drop", [Value::Nat(a)], Value::Nat(b)) => {

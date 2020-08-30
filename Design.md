@@ -1,5 +1,16 @@
 
 
+It would be nice to have runtime testcases.
+you know.
+
+Basics: 
+- test cases for each "native" fn.
+- test cases for scoping, shadowing
+- recursive functions (like I've been making)
+- handlers, nested handlers, fall-throughs, etc.
+
+
+
 
 The issue with the effects:
 If we have a stack
