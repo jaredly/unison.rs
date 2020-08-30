@@ -7,6 +7,29 @@ The assumption is that if a term has been written to disk, that's because unison
 
 The main goal of this project is to allow unison programs to run in the browser, through wasm. 🤞
 
+## Contributing
+
+It's all managed by cargo, so once you [have it set up](https://www.rust-lang.org/tools/install), this should be all you need:
+```
+$ cargo build
+```
+
+## Usage
+
+### To run all ".test" terms found in a codebase:
+
+```
+$ env RUST_BACKTRACE=1 cargo run --release -- test ~/.unison/v1
+```
+
+### To evaluate a single term:
+
+```
+env RUST_BACKTRACE=1 cargo run --release --  ~/.unison/v1/terms/\#6l3pt38c2du7su2pecirpf2mjs7fv5prjr7utm956nb7j8u6msh0a3o8tihit595iudjijhm4u04jhoakr59qm3th3git62o4qsnvto/
+```
+
+ For verbose logging, add `RUST_LOG=uruson::ir_runtime,uruson::stack,uruson::ir_exec` before `RUST_BACKTRACE`.
+
 
 ## What about javascript compilation?
 
