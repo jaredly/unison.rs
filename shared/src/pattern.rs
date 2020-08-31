@@ -71,7 +71,7 @@ impl Pattern {
                             false
                         }
                     }
-                    _ => unreachable!(),
+                    _ => unreachable!("Concat pattern not a sequence literal on either side"),
                 },
             },
             (Pattern::Constructor(reference, number, children), inner) => {
@@ -236,7 +236,7 @@ impl Pattern {
                             None
                         }
                     }
-                    _ => unreachable!(),
+                    _ => unreachable!("Concat pattern not a sequence literal on either side"),
                 },
             },
             (Pattern::Constructor(reference, number, children), inner) => {

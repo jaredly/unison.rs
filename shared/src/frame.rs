@@ -1,14 +1,15 @@
 use super::trace::Trace;
 use super::types::*;
+use serde_derive::{Deserialize, Serialize};
 use std::rc::Rc;
 
-#[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Hash)]
+#[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Hash, Serialize, Deserialize)]
 pub enum Source {
     Value(Hash),
     Fn(usize, Hash),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Frame {
     pub source: Source,
     pub stack: Vec<Rc<Value>>,

@@ -147,6 +147,17 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
+fn pack_term(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
+    let env = env::Env::init(terms_path.parent().unwrap());
+    let mut ir_env = ir::TranslationEnv::new(env);
+    ir_env.load(&types::Hash::from_string(hash));
+    let runtime_env: shared::types::RuntimeEnv = ir_env.into();
+
+    std::fs::write(out, shared::pack(&runtime_env, hash))?;
+
+    Ok(())
+}
+
 fn run_term(
     terms_path: &std::path::Path,
     hash: &str,
@@ -189,7 +200,7 @@ fn run_term(
 
     let runtime_env: shared::types::RuntimeEnv = ir_env.into();
 
-    let mut trace = vec![];
+    let mut trace = shared::trace::Traces::new();
     let ret = shared::ir_runtime::eval(runtime_env, hash, &mut trace);
     println!(
         "Time: {}ms ({}ns)",
@@ -215,23 +226,7 @@ fn run_term(
         name
     })?;
     use std::io::Write;
-    file.write_all(b"[")?;
-    let mut lines = vec![];
-    for trace in trace {
-        lines.push(format!(
-            r#"
-            {{"cat": {:?}, "pid": 1, "ph": {:?}, "ts": {}, "name": {:?}, "tid": {}, "args": {{"[file]": {:?} }} }}
-            "#,
-            trace.cat,
-            trace.ph,
-            trace.ts.as_micros(),
-            format!("{:?}", trace.name),
-            trace.tid,
-            trace.file
-        ));
-    }
-    file.write_all(lines.join(",\n").as_bytes())?;
-    file.write_all(b"]")?;
+    trace.to_file(&mut file)?;
 
     Ok(ret)
 }
@@ -298,6 +293,17 @@ fn run_test(root: &str) -> std::io::Result<()> {
     }
 
     Ok(())
+}
+
+fn pack(file: &String, outfile: &String) -> std::io::Result<()> {
+    let path = std::path::PathBuf::from(file);
+
+    pack_term(
+        path.parent().unwrap(),
+        &path.file_name().unwrap().to_str().unwrap()[1..],
+        outfile,
+    )?;
+    return Ok(());
 }
 
 fn run(file: &String) -> std::io::Result<()> {
@@ -389,6 +395,7 @@ fn main() -> std::io::Result<()> {
     println!("Hello, world!");
     match std::env::args().collect::<Vec<String>>().as_slice() {
         [_, cmd, path] if cmd == "test" => run_test(path),
+        [_, cmd, path, outpath] if cmd == "path" => pack(path, outpath),
         [_, file] => run(file),
         _ => {
             println!("Usage: process file.ub");

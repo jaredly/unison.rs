@@ -65,7 +65,7 @@ impl Stack {
         //         return None;
         //     }
         // }
-        let idx = self.frames[0].handler.unwrap();
+        let idx = self.frames[0].handler.expect("Not a handler (back again)");
         self.frames[0].handler = None;
         Some((idx, new_idx))
     }
@@ -84,14 +84,14 @@ impl Stack {
         // PERF: we could check up the stack and only do this if
         // there's another handler somewhere.
         frames.extend(self.frames.clone());
-        let idx = self.frames[0].handler.unwrap();
+        let idx = self.frames[0].handler.expect("No handler");
         self.frames[0].handler = None;
         Some((idx, frames, current_idx))
     }
 
     pub fn pop_frame(&mut self) -> (usize, Rc<Value>) {
         let idx = self.frames[0].return_index;
-        let value = self.pop().unwrap();
+        let value = self.pop().expect("No return value to pop");
         self.frames.remove(0);
         info!(
             "{} | <---- Return to idx {} with value {:?} - {:?}",
@@ -123,7 +123,7 @@ impl Stack {
         }
     }
     pub fn pop_to_mark(&mut self) {
-        let mark = self.frames[0].marks.pop().unwrap();
+        let mark = self.frames[0].marks.pop().expect("pop to mark");
         while self.frames[0].stack.len() > mark {
             self.frames[0].stack.pop();
         }

@@ -190,7 +190,7 @@ pub enum Type {
 }
 
 // Runtime values
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub enum Value {
     Int(i64),
     Nat(u64),
@@ -403,7 +403,7 @@ impl Into<Value> for Term {
 }
 
 // So I think we have a scope and a stack?
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum IR {
     Handle(usize), // indicate that there's a handler at `usize`
     HandlePure,
@@ -460,7 +460,17 @@ pub enum IR {
     IfAndPopStack(usize),
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct RuntimeEnv {
     pub terms: HashMap<Hash, Vec<IR>>,
     pub anon_fns: Vec<(Hash, Vec<IR>)>, // I think?
+}
+
+impl RuntimeEnv {
+    pub fn new() -> RuntimeEnv {
+        RuntimeEnv {
+            terms: HashMap::new(),
+            anon_fns: vec![],
+        }
+    }
 }

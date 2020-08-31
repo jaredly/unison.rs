@@ -6,13 +6,18 @@ use std::rc::Rc;
 use super::frame::Source;
 use super::ir_exec::Ret;
 use super::stack::Stack;
-use super::trace::Trace;
+use super::trace::{Trace, Traces};
 
 static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 
-#[allow(while_true)]
-pub fn eval(env: RuntimeEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
-    let hash = Hash::from_string(hash);
+pub struct State<'a> {
+    pub env: &'a RuntimeEnv,
+    pub cmds: &'a Vec<IR>,
+    pub stack: Stack,
+    pub idx: usize,
+}
+
+fn show_env(env: &RuntimeEnv) {
     info!("[- ENV -]");
     for (k, v) in env.terms.iter() {
         info!("] Value {:?}", k);
@@ -28,117 +33,157 @@ pub fn eval(env: RuntimeEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
         }
         info!("\n");
     }
+}
 
-    let mut cmds: &Vec<IR> = env.terms.get(&hash).unwrap();
-
-    let mut stack = Stack::new(Source::Value(hash.clone()));
+pub fn eval(env: RuntimeEnv, hash: &str, trace: &mut Traces) -> Rc<Value> {
+    let hash = Hash::from_string(hash);
 
     let option_ref = Reference::from_hash(OPTION_HASH);
 
-    let mut idx = 0;
+    let mut state = State {
+        cmds: env.terms.get(&hash).unwrap(),
+        stack: Stack::new(Source::Value(hash.clone())),
+        idx: 0,
+        env: &env,
+    };
 
     let mut n = 0;
 
-    let start = std::time::Instant::now();
-
-    while idx < cmds.len() {
+    while state.idx < state.cmds.len() {
+        #[cfg(not(target_arch = "wasm32"))]
         if n % 100 == 0 {
-            if start.elapsed().as_secs() > 90 {
+            if trace.start.elapsed().as_secs() > 90 {
                 let n = Rc::new(Value::Text(format!("Ran out of time after {} ticks", n)));
                 return n;
             }
         }
-
+        #[cfg(not(target_arch = "wasm32"))]
         let cstart = std::time::Instant::now();
-        let cidx = idx;
-
         n += 1;
+        let cidx = state.idx;
 
-        let cmd = &cmds[idx];
+        let ret = state.cmds[state.idx].eval(&option_ref, &mut state.stack, &mut state.idx);
 
-        let ret = cmd.eval(&option_ref, &mut stack, &mut idx);
-
-        let ctime = cstart.elapsed();
-        if ctime.as_millis() > 1 {
-            trace.push(Trace {
-                cat: "Instruction".to_owned(),
-                ph: "B".to_owned(),
-                ts: start.elapsed() - ctime,
-                name: (stack.frames[0].source.clone(), Some(cidx)),
-                file: "".to_owned(),
-                tid: 1,
-            });
-
-            trace.push(Trace {
-                cat: "Instruction".to_owned(),
-                ph: "E".to_owned(),
-                ts: start.elapsed(),
-                name: (stack.frames[0].source.clone(), Some(cidx)),
-                file: "".to_owned(),
-                tid: 1,
-            });
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let ctime = cstart.elapsed();
+            if ctime.as_millis() > 1 {
+                trace.traces.push(Trace {
+                    cat: "Instruction".to_owned(),
+                    ph: "B".to_owned(),
+                    ts: trace.start.elapsed() - ctime,
+                    name: (state.stack.frames[0].source.clone(), Some(cidx)),
+                    file: "".to_owned(),
+                    tid: 1,
+                });
+                trace.traces.push(Trace {
+                    cat: "Instruction".to_owned(),
+                    ph: "E".to_owned(),
+                    ts: trace.start.elapsed(),
+                    name: (state.stack.frames[0].source.clone(), Some(cidx)),
+                    file: "".to_owned(),
+                    tid: 1,
+                });
+            };
         };
 
+        state.handle_ret(ret, trace);
+        state.handle_tail(trace);
+    }
+
+    info!("Final stack: {:?}", state.stack);
+    state.stack.pop().unwrap()
+}
+
+impl<'a> State<'a> {
+    fn handle_tail(&mut self, trace: &mut Traces) {
+        while self.idx >= self.cmds.len() {
+            #[cfg(not(target_arch = "wasm32"))]
+            trace.push(&self.stack.frames[0], "E");
+            if self.stack.frames.len() > 1 {
+                let (idx1, value) = self.stack.pop_frame();
+                self.idx = idx1;
+                self.stack.push(value);
+                self.cmds = self.env.cmds(&self.stack.frames[0].source);
+            } else {
+                info!("Got only one frame left, and self.idx is larger than the self.cmds len");
+                break;
+            }
+        }
+    }
+
+    fn handle_ret(&mut self, ret: Ret, trace: &mut Traces) {
+        // let self = self;
+        // let env = self.env;
         match ret {
             Ret::Nothing => (),
             Ret::Handle(mark_idx) => {
-                idx += 1;
+                self.idx += 1;
                 info!(
-                    "{} | Setting handle, mark idx {}",
-                    stack.frames.len(),
+                    "{} | Setting handle, mark self.idx {}",
+                    self.stack.frames.len(),
                     mark_idx
                 );
-                if stack.frames[0].handler != None {
+                if self.stack.frames[0].handler != None {
                     unreachable!("Can't set a handle on a frame that already has one...");
                 }
-                stack.frames[0].handler = Some(mark_idx);
-                let ln = stack.frames.len();
-                for (i, frame) in stack.frames.iter().enumerate() {
+                self.stack.frames[0].handler = Some(mark_idx);
+                let ln = self.stack.frames.len();
+                for (i, frame) in self.stack.frames.iter().enumerate() {
                     if frame.handler != None {
                         info!("{} | {}", ln - i, frame);
                     }
                 }
-                stack.clone_frame(mark_idx);
-                stack.frames[0].handler = None;
+                self.stack.clone_frame(mark_idx);
+                self.stack.frames[0].handler = None;
             }
             Ret::Continue(kidx, mut frames, arg) => {
-                info!("** CONTINUE ** ({}) {} with {:?}", kidx, frames.len(), arg,);
                 let last = frames.len() - 1;
-                frames[last].return_index = idx;
-                stack.frames = {
-                    frames.extend(stack.frames);
-                    frames
-                };
-                info!("New Top Frame: {}", stack.frames[0]);
-                info!("Handlers:");
-                let ln = stack.frames.len();
-                for (i, frame) in stack.frames.iter().enumerate() {
-                    if frame.handler != None {
-                        info!("{} | {}", ln - i, frame);
-                    }
-                }
-                idx = kidx;
-                stack.push(arg);
-                match &stack.frames[0].source {
-                    Source::Value(hash) => cmds = env.terms.get(hash).unwrap(),
-                    Source::Fn(fnid, _) => cmds = &env.anon_fns[*fnid].1,
-                }
+                frames[last].return_index = self.idx;
+                frames.extend(
+                    self.stack
+                        .frames
+                        .drain(..)
+                        .collect::<Vec<crate::frame::Frame>>(),
+                );
+                self.stack.frames = frames;
+                // LOGG
+                // info!("** CONTINUE ** ({}) {} with {:?}", kidx, frames.len(), arg,);
+                // info!("New Top Frame: {}", self.stack.frames[0]);
+                // info!("Handlers:");
+                // let ln = self.stack.frames.len();
+                // for (i, frame) in self.stack.frames.iter().enumerate() {
+                //     if frame.handler != None {
+                //         info!("{} | {}", ln - i, frame);
+                //     }
+                // }
+                self.idx = kidx;
+                self.stack.push(arg);
+                self.cmds = self.env.cmds(&self.stack.frames[0].source);
+                // match &self.stack.frames[0].source {
+                //     Source::Value(hash) => self.cmds = env.terms.get(hash).unwrap(),
+                //     Source::Fn(fnid, _) => self.cmds = &env.anon_fns[*fnid].1,
+                // }
             }
             Ret::ReRequest(kind, number, args, final_index, frames, current_frame_idx) => {
                 let (nidx, frame_index) =
-                    match stack.back_again_to_handler(&frames, current_frame_idx) {
+                    match self.stack.back_again_to_handler(&frames, current_frame_idx) {
                         None => unreachable!("Unhandled ReRequest: {:?} / {}", kind, number),
                         Some((a, b)) => (a, b),
                     };
-                idx = nidx;
-                info!("Handling a bubbled request : {} - {}", idx, stack.frames[0]);
+                self.idx = nidx;
+                info!(
+                    "Handling a bubbled request : {} - {}",
+                    self.idx, self.stack.frames[0]
+                );
 
-                match stack.frames[0].source.clone() {
-                    Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
-                    Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
-                };
+                // match self.stack.frames[0].source.clone() {
+                //     Source::Value(hash) => self.cmds = env.terms.get(&hash).unwrap(),
+                //     Source::Fn(fnid, _) => self.cmds = &env.anon_fns[fnid].1,
+                // };
+                self.cmds = self.env.cmds(&self.stack.frames[0].source);
 
-                stack.push(Rc::new(Value::RequestWithContinuation(
+                self.stack.push(Rc::new(Value::RequestWithContinuation(
                     kind,
                     number,
                     args,
@@ -149,28 +194,29 @@ pub fn eval(env: RuntimeEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
             }
             Ret::Request(kind, number, args) => {
                 info!(
-                    "Got a request! {:?}/{} - at {} ; idx {}",
-                    kind, number, stack.frames[0], idx
+                    "Got a request! {:?}/{} - at {} ; self.idx {}",
+                    kind, number, self.stack.frames[0], self.idx
                 );
-                let final_index = idx;
-                let (nidx, saved_frames, frame_idx) = match stack.back_to_handler() {
+                let final_index = self.idx;
+                let (nidx, saved_frames, frame_idx) = match self.stack.back_to_handler() {
                     None => unreachable!("Unhandled Request: {:?} / {}", kind, number),
                     Some((a, b, c)) => (a, b, c),
                 };
-                idx = nidx;
+                self.idx = nidx;
                 info!(
-                    "Found handler at frame {} - {:?} - idx {}",
-                    stack.frames.len(),
-                    stack.frames[0].source,
-                    idx
+                    "Found handler at frame {} - {:?} - self.idx {}",
+                    self.stack.frames.len(),
+                    self.stack.frames[0].source,
+                    self.idx
                 );
 
-                match stack.frames[0].source.clone() {
-                    Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
-                    Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
-                };
+                // match self.stack.frames[0].source.clone() {
+                //     Source::Value(hash) => self.cmds = env.terms.get(&hash).unwrap(),
+                //     Source::Fn(fnid, _) => self.cmds = &env.anon_fns[fnid].1,
+                // };
+                self.cmds = self.env.cmds(&self.stack.frames[0].source);
 
-                stack.push(Rc::new(Value::RequestWithContinuation(
+                self.stack.push(Rc::new(Value::RequestWithContinuation(
                     kind,
                     number,
                     args,
@@ -180,69 +226,40 @@ pub fn eval(env: RuntimeEnv, hash: &str, trace: &mut Vec<Trace>) -> Rc<Value> {
                 )))
             }
             Ret::FnCall(fnid, bindings, arg) => {
-                cmds = &env.anon_fns[fnid].1;
+                self.cmds = &self.env.anon_fns[fnid].1;
 
-                stack.new_frame(idx, Source::Fn(fnid, env.anon_fns[fnid].0.clone()));
-                trace.push(stack.frames[0].as_trace("B", start.elapsed()));
-                // for binding in &bindings {
-                //     info!("> {:?} = {:?}", binding.0, binding.2);
-                // }
-                // info!(
-                //     "{} |  Fn({}) fn call with arg: {:?}",
-                //     stack.frames.len(),
-                //     fnid,
-                //     arg
-                // );
-                stack.frames[0].bindings = bindings;
-                stack.frames[0].stack.push(arg);
-                idx = 0;
+                self.stack.new_frame(
+                    self.idx,
+                    Source::Fn(fnid, self.env.anon_fns[fnid].0.clone()),
+                );
+                #[cfg(not(target_arch = "wasm32"))]
+                trace.push(&self.stack.frames[0], "B");
+                self.stack.frames[0].bindings = bindings;
+                self.stack.frames[0].stack.push(arg);
+                self.idx = 0;
             }
             Ret::Value(hash) => {
-                // info!("Jumping to {:?}", hash);
-                cmds = env.terms.get(&hash).unwrap();
-                stack.new_frame(idx, Source::Value(hash));
-                trace.push(stack.frames[0].as_trace("B", start.elapsed()));
-                idx = 0;
+                self.cmds = self.env.terms.get(&hash).unwrap();
+                self.stack.new_frame(self.idx, Source::Value(hash));
+                #[cfg(not(target_arch = "wasm32"))]
+                trace.push(&self.stack.frames[0], "B");
+                self.idx = 0;
             }
             Ret::HandlePure => {
-                let (idx1, value) = stack.pop_frame();
-                idx = idx1;
-                stack.push(value);
-                match stack.frames[0].source.clone() {
-                    Source::Value(hash) => cmds = env.terms.get(&hash).unwrap(),
-                    Source::Fn(fnid, _) => cmds = &env.anon_fns[fnid].1,
-                };
-            }
-        }
-
-        // Multi-pop
-        while idx >= cmds.len() {
-            trace.push(stack.frames[0].as_trace("E", start.elapsed()));
-            if stack.frames.len() > 1 {
-                // info!("<<-- jump down");
-                let (idx1, value) = stack.pop_frame();
-                idx = idx1;
-                // stack.pop_frame();
-                // stack.frames.remove(0);
-                match stack.frames[0].source.clone() {
-                    Source::Value(hash) => {
-                        // info!("Going back to {}", hash);
-                        stack.push(value);
-                        cmds = env.terms.get(&hash).unwrap();
-                    }
-                    Source::Fn(fnid, _) => {
-                        // info!("Going back to fn {}", fnid);
-                        stack.push(value);
-                        cmds = &env.anon_fns[fnid].1;
-                    }
-                }
-            } else {
-                info!("Got only one frame left, and idx is larger than the cmds len");
-                break;
+                let (idx1, value) = self.stack.pop_frame();
+                self.idx = idx1;
+                self.stack.push(value);
+                self.cmds = self.env.cmds(&self.stack.frames[0].source);
             }
         }
     }
+}
 
-    info!("Final stack: {:?}", stack);
-    stack.pop().unwrap()
+impl RuntimeEnv {
+    fn cmds(&self, source: &Source) -> &Vec<IR> {
+        match source {
+            Source::Value(hash) => self.terms.get(hash).unwrap(),
+            Source::Fn(fnid, _) => &self.anon_fns[*fnid].1,
+        }
+    }
 }

@@ -1,9 +1,18 @@
 [package]
-name = "wasm"
+name = "unison_wasm"
 version = "0.1.0"
 authors = ["Jared Forsyth <jared@jaredforsyth.com>"]
-edition = "2018"
+description = "A Unison runtime, compiled to wasm"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/jaredly/unison.rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib"]
 
 [dependencies]
+wasm-bindgen = {version = "0.2", features = ["serde-serialize"]}
+base64 = ""
+serde_json = ""
+shared = { path = "../shared" }
+wasm-logger = "0.2.0"
+console_error_panic_hook = ""
