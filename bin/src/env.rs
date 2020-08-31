@@ -1,6 +1,7 @@
 use super::parser;
-use super::types::*;
+use crate::visitor::Accept;
 use log::info;
+use shared::types::*;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]

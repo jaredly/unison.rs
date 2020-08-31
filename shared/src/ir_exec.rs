@@ -1,6 +1,6 @@
 use super::frame::Frame;
-use super::ir::IR;
 use super::stack::Stack;
+use super::types::IR;
 use super::types::*;
 use im::Vector;
 use log::info;

@@ -57,7 +57,6 @@ impl Frame {
             bindings: vec![],
         }
     }
-
     pub fn as_trace(&self, ph: &str, ts: std::time::Duration) -> Trace {
         Trace {
             cat: "frame".to_owned(),

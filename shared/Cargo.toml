@@ -1,0 +1,17 @@
+[package]
+name = "shared"
+version = "0.1.0"
+authors = ["Jared Forsyth <jared@jaredforsyth.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = ""
+serde_derive = ""
+bincode = ""
+byteorder = ""
+base64 = ""
+log = "0.4"
+im = ""
+

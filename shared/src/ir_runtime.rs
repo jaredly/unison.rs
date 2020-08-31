@@ -1,5 +1,5 @@
-use super::ir::{RuntimeEnv, IR};
 use super::types::*;
+use super::types::{RuntimeEnv, IR};
 use log::info;
 use std::rc::Rc;
 

@@ -1,15 +1,25 @@
-use super::types::*;
 use pretty::{Doc, RcDoc};
+use shared::types::*;
 
 use Term::*;
 
-impl ABT<Term> {
-    pub fn to_pretty(&self, width: usize) -> String {
+pub trait ToDoc {
+    fn to_doc(&self) -> pretty::RcDoc<()>;
+}
+
+pub trait ToPretty {
+    fn to_pretty(&self, width: usize) -> String;
+}
+
+impl ToPretty for ABT<Term> {
+    fn to_pretty(&self, width: usize) -> String {
         let mut w = Vec::new();
         self.to_doc().render(width, &mut w).unwrap();
         String::from_utf8(w).unwrap()
     }
+}
 
+impl ToDoc for ABT<Term> {
     fn to_doc(&self) -> pretty::RcDoc<()> {
         use ABT::*;
         match self {
@@ -23,7 +33,7 @@ impl ABT<Term> {
     }
 }
 
-impl Pattern {
+impl ToDoc for Pattern {
     fn to_doc(&self) -> RcDoc<()> {
         use Pattern::*;
         match self {
@@ -58,7 +68,7 @@ impl Pattern {
     }
 }
 
-impl MatchCase {
+impl ToDoc for MatchCase {
     fn to_doc(&self) -> RcDoc<()> {
         let m = self.0.to_doc();
         let m = match &self.1 {
@@ -69,7 +79,7 @@ impl MatchCase {
     }
 }
 
-impl Term {
+impl ToDoc for Term {
     fn to_doc(&self) -> pretty::RcDoc<()> {
         match self {
             Int(i) => RcDoc::as_string(i),
@@ -152,47 +162,6 @@ impl Term {
                 .append(RcDoc::intersperse(b.iter().map(|b| b.to_doc()), Doc::hardline()).nest(1)),
             TermLink(a) => RcDoc::text(format!("termLink {:?}", a)),
             TypeLink(a) => RcDoc::text(format!("typeLink {:?}", a)),
-        }
-    }
-}
-
-impl std::fmt::Debug for Term {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            // RequestWithArgs(i, n, _, _) => f.write_fmt(format_args!("req<{:?} - {}>", i, n)),
-            // RequestWithContinuation(i, n, _, _, _) => {
-            //     f.write_fmt(format_args!("req+cont<{:?} - {}>", i, n))
-            // }
-            // Continuation(idx, frames) => f.write_fmt(format_args!(
-            //     "cont<idx: {} - frames: {}>",
-            //     idx,
-            //     frames.len()
-            // )),
-            // RequestPure(i) => f.write_fmt(format_args!("pure<{:?}>", i)),
-            Int(i) => f.write_fmt(format_args!("{}", i)),
-            Nat(i) => f.write_fmt(format_args!("{}", i)),
-            Float(i) => f.write_fmt(format_args!("{}", i)),
-            Boolean(i) => f.write_fmt(format_args!("{}", i)),
-            Text(i) => f.write_fmt(format_args!("{:?}", i)),
-            Bytes(i) => f.write_fmt(format_args!("{:?}", i)),
-            Char(i) => f.write_fmt(format_args!("{:?}", i)),
-            Blank => f.write_str("<blank>"),
-            Ref(i) => f.write_fmt(format_args!("{:?}", i)),
-            Constructor(i, n) => f.write_fmt(format_args!("[constructor]{:?}#{}", i, n)),
-            Request(i, n) => f.write_fmt(format_args!("[request]{:?}#{}", i, n)),
-            Handle(i, n) => f.write_fmt(format_args!("handle {:?} with {:?}", i, n)),
-            App(i, n) => f.write_fmt(format_args!("{:?} <app> {:?}", i, n)),
-            Ann(i, n) => f.write_fmt(format_args!("t- {:?} :: {:?} -t", i, n)),
-            Sequence(i) => f.write_fmt(format_args!("{:?}", i)),
-            If(i, a, b) => f.write_fmt(format_args!("if {:?} then\n{:?}\nelse\n{:?}", i, a, b)),
-            And(a, b) => f.write_fmt(format_args!("{:?} && {:?}", a, b)),
-            Or(a, b) => f.write_fmt(format_args!("{:?} || {:?}", a, b)),
-            Lam(a, _free) => f.write_fmt(format_args!("-> {:?}", a)),
-            LetRec(_, a, b) => f.write_fmt(format_args!("let(rec)\n{:?}\nin {:?}", a, b)),
-            Let(_, a, b) => f.write_fmt(format_args!("let {:?} in {:?}", a, b)),
-            Match(a, b) => f.write_fmt(format_args!("match {:?} with {:?}", a, b)),
-            TermLink(a) => f.write_fmt(format_args!("termLink {:?}", a)),
-            TypeLink(a) => f.write_fmt(format_args!("typeLink {:?}", a)),
         }
     }
 }

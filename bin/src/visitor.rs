@@ -1,4 +1,4 @@
-use super::types::*;
+use shared::types::*;
 
 pub trait Visitor {
     fn visit_abt(&mut self, abt: &mut ABT<Term>) -> bool;
@@ -6,8 +6,12 @@ pub trait Visitor {
     fn post_abt(&mut self, abt: &mut ABT<Term>);
 }
 
-impl ABT<Term> {
-    pub fn accept<T: Visitor>(&mut self, visitor: &mut T) {
+pub trait Accept {
+    fn accept<T: Visitor>(&mut self, visitor: &mut T);
+}
+
+impl Accept for ABT<Term> {
+    fn accept<T: Visitor>(&mut self, visitor: &mut T) {
         if !visitor.visit_abt(self) {
             return;
         }
@@ -23,7 +27,7 @@ impl ABT<Term> {
     }
 }
 
-impl Term {
+impl Accept for Term {
     fn accept<T: Visitor>(&mut self, visitor: &mut T) {
         if !visitor.visit_term(self) {
             return;

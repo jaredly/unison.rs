@@ -1,20 +1,13 @@
 extern crate env_logger;
 extern crate serde_derive;
 
-mod base32hex;
 mod env;
-mod frame;
 mod ir;
-mod ir_exec;
-mod ir_runtime;
 mod parser;
-mod pattern;
 mod printer;
-mod stack;
-mod trace;
-mod types;
 mod unique;
 mod visitor;
+use shared::types;
 
 fn load_type(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
@@ -36,11 +29,11 @@ fn load_term(file: &std::path::Path) -> std::io::Result<()> {
 
 fn resolve_branch(
     _root: &std::path::Path,
-    branch: types::Causal<types::RawBranch>,
-) -> std::io::Result<types::RawBranch> {
+    branch: Causal<RawBranch>,
+) -> std::io::Result<RawBranch> {
     match branch {
-        types::Causal::One(c) => Ok(c),
-        types::Causal::Cons(_, b) => {
+        Causal::One(c) => Ok(c),
+        Causal::Cons(_, b) => {
             // let mut p = std::path::PathBuf::from(root);
             // p.push(h.to_string() + ".ub");
             // // println!("Resolve: {:?}", p);
@@ -50,7 +43,7 @@ fn resolve_branch(
             // )?);
             Ok(b)
         }
-        types::Causal::Merge(_, b) => {
+        Causal::Merge(_, b) => {
             // for hash in hashes.iter() {
             //     let mut p = std::path::PathBuf::from(root);
             //     p.push(hash.to_string() + ".ub");
@@ -64,14 +57,38 @@ fn resolve_branch(
     }
 }
 
-impl types::Branch {
-    fn load(root: &std::path::PathBuf, hash: String) -> std::io::Result<types::Branch> {
+use printer::ToPretty;
+use shared::types::*;
+use std::collections::HashMap;
+#[derive(Debug, Clone)]
+pub enum Causal<Contents> {
+    One(Contents),
+    Cons(Hash, Contents),
+    Merge(Vec<Hash>, Contents),
+}
+
+#[derive(Debug, Clone)]
+pub struct RawBranch {
+    pub terms: Star<Referent, NameSegment>,
+    pub types: Star<Reference, NameSegment>,
+    pub children: HashMap<NameSegment, Hash>,
+    pub edits: HashMap<NameSegment, Hash>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Branch {
+    pub raw: RawBranch,
+    pub children: HashMap<NameSegment, Branch>,
+}
+
+impl Branch {
+    fn load(root: &std::path::PathBuf, hash: String) -> std::io::Result<Branch> {
         let mut head = root.clone();
         head.push(hash + ".ub");
         // println!("Yes: {:?}", head);
         let head = parser::Buffer::from_file(head.as_path())?.get_branch();
         let head = resolve_branch(&root, head)?;
-        Ok(types::Branch {
+        Ok(Branch {
             raw: head,
             children: std::collections::HashMap::new(),
         })
@@ -79,7 +96,7 @@ impl types::Branch {
 
     fn load_children(&mut self, root: &std::path::PathBuf, deep: bool) -> std::io::Result<()> {
         for (k, v) in self.raw.children.iter() {
-            let mut child = types::Branch::load(root, v.to_string())?;
+            let mut child = Branch::load(root, v.to_string())?;
             if deep {
                 child.load_children(root, deep)?;
             }
@@ -122,13 +139,6 @@ fn get_head(root: &std::path::Path) -> std::io::Result<String> {
     Ok(name)
 }
 
-// fn load_full_branch(root: &std::path::Path) -> std::io::Result<types::Branch> {
-//     let root = std::path::PathBuf::from(root);
-//     let mut branch = types::Branch::load(&root, get_head(&root)?)?;
-//     branch.load_children(&root, true)?;
-//     Ok(branch)
-// }
-
 fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
         return Ok(());
@@ -141,17 +151,9 @@ fn run_term(
     terms_path: &std::path::Path,
     hash: &str,
 ) -> std::io::Result<std::rc::Rc<types::Value>> {
-    // use tracing_chrome::ChromeLayerBuilder;
-    // use tracing_subscriber::prelude::*;
-
-    // let (chrome_layer, _guard) = ChromeLayerBuilder::new().build();
-    // tracing_subscriber::registry().with(chrome_layer).init();
-
     let last = std::time::Instant::now();
     println!("Running {:?} - {}", terms_path, hash);
     let env = env::Env::init(terms_path.parent().unwrap());
-    // let res = env.load(hash);
-    // println!("{:?}", res);
     let mut ir_env = ir::TranslationEnv::new(env);
     ir_env.load(&types::Hash::from_string(hash));
 
@@ -185,10 +187,10 @@ fn run_term(
         }
     };
 
-    let runtime_env: ir::RuntimeEnv = ir_env.into();
+    let runtime_env: shared::types::RuntimeEnv = ir_env.into();
 
     let mut trace = vec![];
-    let ret = ir_runtime::eval(runtime_env, hash, &mut trace);
+    let ret = shared::ir_runtime::eval(runtime_env, hash, &mut trace);
     println!(
         "Time: {}ms ({}ns)",
         last.elapsed().as_millis(),
@@ -230,17 +232,6 @@ fn run_term(
     }
     file.write_all(lines.join(",\n").as_bytes())?;
     file.write_all(b"]")?;
-    // use runtime::Eval;
-    // let ret = res.eval(
-    //     &mut env,
-    //     &env::Stack(vec![env::Frame::new(hash.to_owned())]),
-    // );
-    // let result = parser::Buffer::from_file(file)?.get_term();
-    // println!("{:?}", res);
-    // if let Ok(report) = guard.report().build() {
-    //     let file = std::fs::File::create(format!("flamegraph-{}.svg", hash)).unwrap();
-    //     report.flamegraph(file).unwrap();
-    // };
 
     Ok(ret)
 }
@@ -255,7 +246,7 @@ fn run_test(root: &str) -> std::io::Result<()> {
     let root = std::path::PathBuf::from(root);
     println!("Running all tests I can find");
     let paths = path_with(&root, "paths");
-    let mut branch = types::Branch::load(&paths, get_head(&paths)?)?;
+    let mut branch = Branch::load(&paths, get_head(&paths)?)?;
     branch.load_children(&paths, true)?;
 
     let terms = path_with(&root, "terms");
@@ -303,8 +294,6 @@ fn run_test(root: &str) -> std::io::Result<()> {
                 ret => println!("Test result, not a sequence: {:?}", ret),
             }
             println!("<-- all passed");
-            // println!("-> {:?}", ret);
-            // run_term_(&terms, &all_terms.get(&k).unwrap().to_string())?;
         }
     }
 
@@ -315,44 +304,35 @@ fn run(file: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
 
     if path.ends_with("paths") {
-        // let base = path.parent().unwrap();
-        let cache = std::path::PathBuf::from(".tests-cache");
+        // let cache = std::path::PathBuf::from(".tests-cache");
 
-        let branch = if cache.as_path().exists() {
-            println!("Using cache");
-            let mut buf = vec![];
-            use std::io::Read;
-            let mut file = std::fs::File::open(cache)?;
-            file.read_to_end(&mut buf)?;
-            bincode::deserialize(&buf).unwrap()
-        } else {
-            let mut branch = types::Branch::load(&path, get_head(&path)?)?;
-            branch.load_children(&path, true)?;
-            let buf = bincode::serialize(&branch).unwrap();
-            use std::io::Write;
-            let mut file = std::fs::File::create(cache)?;
-            file.write_all(&buf)?;
-            branch
-        };
-        // let root = std::path::PathBuf::from(root);
+        // let branch = if cache.as_path().exists() {
+        //     println!("Using cache");
+        //     let mut buf = vec![];
+        //     use std::io::Read;
+        //     let mut file = std::fs::File::open(cache)?;
+        //     file.read_to_end(&mut buf)?;
+        //     bincode::deserialize(&buf).unwrap()
+        // } else {
+        //     let mut branch = Branch::load(&path, get_head(&path)?)?;
+        //     branch.load_children(&path, true)?;
+        //     let buf = bincode::serialize(&branch).unwrap();
+        //     use std::io::Write;
+        //     let mut file = std::fs::File::create(cache)?;
+        //     file.write_all(&buf)?;
+        //     branch
+        // };
+        let mut branch = Branch::load(&path, get_head(&path)?)?;
+        branch.load_children(&path, true)?;
+        // let buf = bincode::serialize(&branch).unwrap();
+        // use std::io::Write;
+        // let mut file = std::fs::File::create(cache)?;
+        // file.write_all(&buf)?;
 
-        // Ok(branch)
-
-        // let _full = load_full_branch(path.as_path())?;
         println!("Terms {:?}", branch.raw.terms.d1.values());
         println!("Sub {:?}", branch.children.keys());
         println!("Terms: {}", branch.raw.terms.d1.len());
 
-        // let entries = std::fs::read_dir(path)?
-        //     .map(|res| res.map(|e| e.path()))
-        //     .collect::<Result<Vec<_>, std::io::Error>>()?;
-
-        // for mut entry in entries {
-        //     println!("Checking folder: {:?}", entry);
-        //     entry.push("compiled.ub");
-        //     let branch = load_branch(entry.as_path())?;
-        // }
-        // println!("Parsed them all");
         return Ok(());
     }
 

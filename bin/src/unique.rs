@@ -1,6 +1,7 @@
-use super::types::*;
 use super::visitor::Visitor;
+use crate::visitor::Accept;
 use log::info;
+use shared::types::*;
 use std::collections::HashMap;
 
 pub struct Bindings {

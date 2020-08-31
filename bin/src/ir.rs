@@ -1,64 +1,6 @@
 use super::env;
-use super::types::*;
+use shared::types::*;
 use std::collections::HashMap;
-
-// So I think we have a scope and a stack?
-#[derive(Debug, Clone, PartialEq)]
-pub enum IR {
-    Handle(usize), // indicate that there's a handler at `usize`
-    HandlePure,
-    // This means "grab the function identified by usize"
-    // but maybe this should be a Term?
-    // I mean I should make a different `Value` deal, but not
-    // just this moment
-    // The bool is whether this is a cycle vbl
-    Fn(
-        usize,
-        Vec<(
-            Symbol,
-            usize, // usage number at fn creation site
-            usize, // number of usages to expect within the FN. NOTE we can get rid of this if we switch to just "is this the last" calculation.
-            bool,
-        )>,
-    ),
-    // Builtin(String),
-    Cycle(Vec<(Symbol, usize)>),
-    // CycleFn(usize, Vec<(Symbol, usize)>),
-    // Push this value onto the stack
-    Value(Value),
-    // lookup the symbol, and push it onto the stack
-    PushSym(Symbol, usize),
-    // pop the top value off the stack and give it a name
-    PopAndName(Symbol, usize),
-    // pop the top two values off the stack, call the first with the second
-    Call,
-    // Swap the top two values
-    Swap,
-    // Pop the top N values from the stack, assemble into a seq
-    Seq(usize),
-    JumpTo(usize),
-    Mark(usize),
-    // pop the last value off the stack;
-    // if it's true, advance.
-    /// otherwise, jump to the given mark
-    If(usize),
-    // If2(usize, usize),
-    // hmm I might want to short-circut?
-    // And,
-    // Or,
-    // Dup, // duplicate the top item - might not need it
-    PopUpOne,
-    // Match the given pattern.
-    // If the "has_where" flag is true, bound variables
-    // will be pushed onto the stack twice
-    PatternMatch(Pattern, bool),
-    PatternMatchFail,
-    MarkStack,
-    ClearStackMark,
-    // if false, then pop up to the stack mark.
-    // if true, the following code will bind those vbls, its fine.
-    IfAndPopStack(usize),
-}
 
 fn filter_free_vbls(
     free: &Vec<(Symbol, usize, usize, bool)>,
@@ -77,8 +19,12 @@ fn filter_free_vbls(
         .collect()
 }
 
-impl ABT<Term> {
-    pub fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) {
+pub trait ToIR {
+    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv);
+}
+
+impl ToIR for ABT<Term> {
+    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) {
         match self {
             ABT::Var(symbol, usage) => cmds.push(IR::PushSym(symbol.clone(), *usage)),
             ABT::Tm(term) => term.to_ir(cmds, env),
@@ -150,11 +96,6 @@ impl Into<RuntimeEnv> for TranslationEnv {
     }
 }
 
-pub struct RuntimeEnv {
-    pub terms: HashMap<Hash, Vec<IR>>,
-    pub anon_fns: Vec<(Hash, Vec<IR>)>, // I think?
-}
-
 impl TranslationEnv {
     pub fn new(env: env::Env) -> Self {
         TranslationEnv {
@@ -184,17 +125,9 @@ impl TranslationEnv {
         let mut cmds = IREnv::new(hash.clone());
         self.terms.insert(hash.to_owned(), vec![]);
         let term = self.env.load(&hash.to_string());
-        // println!("Loaded {}", hash);
-        // println!("{:?}", term);
         term.to_ir(&mut cmds, self);
 
         resolve_marks(&mut cmds.cmds);
-
-        // println!("[how]");
-        // for cmd in &cmds.cmds {
-        //     println!("{:?}", cmd);
-        // }
-        // println!("[---]");
 
         self.terms.insert(hash.to_owned(), cmds.cmds);
     }
@@ -204,10 +137,7 @@ impl TranslationEnv {
 
         resolve_marks(&mut sub.cmds);
 
-        let idx = self.anon_fns.iter().position(|(_, cmds)| {
-            *cmds == sub.cmds
-            // cmds.len() == sub.cmds.len() && cmds.iter().enumerate().all(|(i, n)| n == sub.cmds[i])
-        });
+        let idx = self.anon_fns.iter().position(|(_, cmds)| *cmds == sub.cmds);
         match idx {
             None => {
                 let v = self.anon_fns.len();
@@ -216,7 +146,6 @@ impl TranslationEnv {
             }
             Some(idx) => idx,
         }
-        // v
     }
 }
 
@@ -280,8 +209,8 @@ impl IREnv {
     }
 }
 
-impl Term {
-    pub fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) {
+impl ToIR for Term {
+    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) {
         match self {
             Term::Handle(handler, expr) => {
                 /*
@@ -424,12 +353,6 @@ impl Term {
                 match t {
                     TypeDecl::Effect(DataDecl { constructors, .. }) => {
                         let args = calc_args(&constructors[*number].1);
-                        // if args == 0 {
-                        //     cmds.push(IR::Value(Term::Request(
-                        //         Reference::DerivedId(id.clone()),
-                        //         *number,
-                        //     )))
-                        // } else {
                         cmds.push(IR::Value(Value::RequestWithArgs(
                             Reference::DerivedId(id.clone()),
                             *number,
@@ -437,7 +360,6 @@ impl Term {
                             // ok, this is useless allocation if there are no
                             vec![],
                         )))
-                        // }
                     }
                     _ => unimplemented!("ok"),
                 }
