@@ -3,7 +3,7 @@ use im::Vector;
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::{PartialEq, PartialOrd};
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Hash, Eq)]
 pub struct Symbol {
@@ -212,7 +212,7 @@ pub enum Value {
         usize,
         // bindings for this one, with CycleBlanks
         // where mutuals would be
-        Vec<(Symbol, usize, Rc<Value>)>,
+        Vec<(Symbol, usize, Arc<Value>)>,
         // mutuals!
         Vec<(
             Symbol, // the ID identified in CycleBlank
@@ -220,29 +220,29 @@ pub enum Value {
             usize,  // the fn ID
             // the bindings for this one, with CycleBlanks
             // where mutuals would be
-            Vec<(Symbol, usize, Rc<Value>)>,
+            Vec<(Symbol, usize, Arc<Value>)>,
         )>,
         // Vec<(Symbol, usize, usize, Vec<usize>)>,
     ),
-    PartialFnBody(usize, Vec<(Symbol, usize, Rc<Value>)>),
-    PartialNativeApp(String, Vec<Rc<Value>>),
-    PartialConstructor(Reference, usize, Vector<Rc<Value>>),
+    PartialFnBody(usize, Vec<(Symbol, usize, Arc<Value>)>),
+    PartialNativeApp(String, Vec<Arc<Value>>),
+    PartialConstructor(Reference, usize, Vector<Arc<Value>>),
 
     Continuation(usize, Vec<super::frame::Frame>),
     Constructor(Reference, usize),
     Request(Reference, usize),
-    RequestPure(Rc<Value>),
-    RequestWithArgs(Reference, usize, usize, Vec<Rc<Value>>),
+    RequestPure(Arc<Value>),
+    RequestWithArgs(Reference, usize, usize, Vec<Arc<Value>>),
     RequestWithContinuation(
         Reference,
         usize,
-        Vec<Rc<Value>>,
+        Vec<Arc<Value>>,
         usize,
         Vec<super::frame::Frame>,
         usize,
     ),
 
-    Sequence(Vector<Rc<Value>>),
+    Sequence(Vector<Arc<Value>>),
     TermLink(Referent),
     TypeLink(Reference),
 }

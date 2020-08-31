@@ -27,6 +27,7 @@ pub fn greet(name: &str) {
     log(&format!("Hello, {}!", name));
 }
 
+#[wasm_bindgen]
 pub fn load(data: &str) {
     console_error_panic_hook::set_once();
     let env = shared::unpack(data);
@@ -42,9 +43,12 @@ pub fn eval_fn(hash: &str, values: Vec<JsValue>) -> JsValue {
         .map(|x| x.into_serde().unwrap())
         .collect();
 
-    let eval_hash = ENV.lock().unwrap().unwrap().add_eval(&hash, args);
+    let mut l = ENV.lock().unwrap();
+    let env: &mut shared::types::RuntimeEnv = l.as_mut().unwrap();
 
-    let mut state = shared::ir_runtime::State::new_value(&ENV.lock().unwrap().unwrap(), eval_hash);
+    let eval_hash = env.add_eval(&hash, args);
+
+    let mut state = shared::ir_runtime::State::new_value(&l.as_ref().unwrap(), eval_hash);
     let mut trace = shared::trace::Traces::new();
     let val = state.run_to_end(&mut trace);
     JsValue::from_serde(&val).unwrap()
@@ -55,6 +59,7 @@ pub fn evalit(hash: &str) -> JsValue {
     console_error_panic_hook::set_once();
 
     let mut trace = shared::trace::Traces::new();
-    let val = shared::ir_runtime::eval(&ENV.lock().unwrap().unwrap(), &hash, &mut trace);
+    let l = ENV.lock().unwrap();
+    let val = shared::ir_runtime::eval(&l.as_ref().unwrap(), &hash, &mut trace);
     JsValue::from_serde(&val).unwrap()
 }

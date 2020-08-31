@@ -1,7 +1,7 @@
 use super::types::*;
 use super::types::{RuntimeEnv, IR};
 use log::info;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use super::frame::Source;
 use super::ir_exec::Ret;
@@ -35,7 +35,7 @@ pub fn show_env(env: &RuntimeEnv) {
     }
 }
 
-pub fn eval(env: &RuntimeEnv, hash: &str, trace: &mut Traces) -> Rc<Value> {
+pub fn eval(env: &RuntimeEnv, hash: &str, trace: &mut Traces) -> Arc<Value> {
     let mut state = State::new_value(&env, Hash::from_string(hash));
     state.run_to_end(trace)
 }
@@ -72,7 +72,7 @@ impl<'a> State<'a> {
                 if trace.start.elapsed().as_secs() > 90 {
                     println!("Ran out of time after {} ticks", n);
                     return;
-                    // let message = Rc::new(Value::Text(format!("Ran out of time after {} ticks", n)));
+                    // let message = Arc::new(Value::Text(format!("Ran out of time after {} ticks", n)));
                     // return message;
                 }
             }
@@ -111,7 +111,7 @@ impl<'a> State<'a> {
         }
     }
 
-    pub fn run_to_end(&mut self, trace: &mut Traces) -> Rc<Value> {
+    pub fn run_to_end(&mut self, trace: &mut Traces) -> Arc<Value> {
         let option_ref = Reference::from_hash(OPTION_HASH);
 
         self.run(trace, &option_ref);
@@ -196,7 +196,7 @@ impl<'a> State<'a> {
 
                 self.cmds = self.env.cmds(&self.stack.frames[0].source);
 
-                self.stack.push(Rc::new(Value::RequestWithContinuation(
+                self.stack.push(Arc::new(Value::RequestWithContinuation(
                     kind,
                     number,
                     args,
@@ -225,7 +225,7 @@ impl<'a> State<'a> {
 
                 self.cmds = self.env.cmds(&self.stack.frames[0].source);
 
-                self.stack.push(Rc::new(Value::RequestWithContinuation(
+                self.stack.push(Arc::new(Value::RequestWithContinuation(
                     kind,
                     number,
                     args,

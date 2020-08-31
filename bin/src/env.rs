@@ -15,10 +15,7 @@ pub struct Env {
 
 impl Env {
     pub fn init(root: &std::path::Path) -> Self {
-        // let root = path.parent().unwrap().parent();
-        // let hash = &path.file_name().unwrap().to_str().unwrap()[1..];
         Env {
-            // stack: vec![],
             root: std::path::PathBuf::from(root),
             raw_cache: HashMap::new(),
             cache: HashMap::new(),
@@ -55,9 +52,11 @@ impl Env {
                     full.push("#".to_owned() + hash);
                     full.push("compiled.ub");
                     info!("Trying to load {:?}", full);
-                    let mut res = parser::Buffer::from_file(full.as_path())
-                        .unwrap()
-                        .get_term();
+                    let file = full.as_path();
+                    if !file.exists() {
+                        unreachable!("Not a good hash folks {}", hash);
+                    }
+                    let mut res = parser::Buffer::from_file(file).unwrap().get_term();
                     let mut bindings = super::unique::Bindings::new();
                     // use super::visitor::Visitor;
                     // bindings.visit_abt(&mut res);

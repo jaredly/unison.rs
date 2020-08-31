@@ -147,13 +147,50 @@ fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
+fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> {
+    println!("Packing all the terms I can find");
+    let root = terms_path.parent().unwrap();
+    let paths = path_with(&root, "paths");
+    let mut branch = Branch::load(&paths, get_head(&paths)?)?;
+    branch.load_children(&paths, true)?;
+
+    // let terms = path_with(&root, "terms");
+    let mut all_terms = std::collections::HashMap::new();
+    branch.collect_terms(&vec![], &mut all_terms);
+
+    let env = env::Env::init(root);
+    let mut ir_env = ir::TranslationEnv::new(env);
+
+    // let entries = std::fs::read_dir(terms_path)?
+    //     .map(|res| res.map(|e| e.path()))
+    //     .collect::<Result<Vec<_>, std::io::Error>>()?;
+
+    // for entry in entries {
+    //     let name = entry.file_name().unwrap().to_str().unwrap();
+    //     if name.contains(".") {
+    //         continue;
+    //     }
+    //     println!("Lodaing {}", name);
+    //     ir_env.load(&types::Hash::from_string(&name[1..]));
+    // }
+    for hash in all_terms.values() {
+        ir_env.load(hash);
+    }
+
+    let runtime_env: shared::types::RuntimeEnv = ir_env.into();
+
+    std::fs::write(out, shared::pack(&runtime_env))?;
+
+    Ok(())
+}
+
 fn pack_term(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
     let env = env::Env::init(terms_path.parent().unwrap());
     let mut ir_env = ir::TranslationEnv::new(env);
     ir_env.load(&types::Hash::from_string(hash));
     let runtime_env: shared::types::RuntimeEnv = ir_env.into();
 
-    std::fs::write(out, shared::pack(&runtime_env, hash))?;
+    std::fs::write(out, shared::pack(&runtime_env))?;
 
     Ok(())
 }
@@ -161,7 +198,7 @@ fn pack_term(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Re
 fn run_term(
     terms_path: &std::path::Path,
     hash: &str,
-) -> std::io::Result<std::rc::Rc<types::Value>> {
+) -> std::io::Result<std::sync::Arc<types::Value>> {
     let last = std::time::Instant::now();
     println!("Running {:?} - {}", terms_path, hash);
     let env = env::Env::init(terms_path.parent().unwrap());
@@ -201,7 +238,7 @@ fn run_term(
     let runtime_env: shared::types::RuntimeEnv = ir_env.into();
 
     let mut trace = shared::trace::Traces::new();
-    let ret = shared::ir_runtime::eval(runtime_env, hash, &mut trace);
+    let ret = shared::ir_runtime::eval(&runtime_env, hash, &mut trace);
     println!(
         "Time: {}ms ({}ns)",
         last.elapsed().as_millis(),
@@ -395,7 +432,10 @@ fn main() -> std::io::Result<()> {
     println!("Hello, world!");
     match std::env::args().collect::<Vec<String>>().as_slice() {
         [_, cmd, path] if cmd == "test" => run_test(path),
-        [_, cmd, path, outpath] if cmd == "path" => pack(path, outpath),
+        [_, cmd, path, outpath] if cmd == "pack" => pack(path, outpath),
+        [_, cmd, path, outpath] if cmd == "pack-all" => {
+            pack_all(&std::path::PathBuf::from(path), outpath)
+        }
         [_, file] => run(file),
         _ => {
             println!("Usage: process file.ub");
