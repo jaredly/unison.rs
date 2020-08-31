@@ -17,7 +17,7 @@ pub struct State<'a> {
     pub idx: usize,
 }
 
-fn show_env(env: &RuntimeEnv) {
+pub fn show_env(env: &RuntimeEnv) {
     info!("[- ENV -]");
     for (k, v) in env.terms.iter() {
         info!("] Value {:?}", k);
@@ -35,67 +35,91 @@ fn show_env(env: &RuntimeEnv) {
     }
 }
 
-pub fn eval(env: RuntimeEnv, hash: &str, trace: &mut Traces) -> Rc<Value> {
-    let hash = Hash::from_string(hash);
+pub fn eval(env: &RuntimeEnv, hash: &str, trace: &mut Traces) -> Rc<Value> {
+    let mut state = State::new_value(&env, Hash::from_string(hash));
+    state.run_to_end(trace)
+}
 
-    let option_ref = Reference::from_hash(OPTION_HASH);
-
-    let mut state = State {
-        cmds: env.terms.get(&hash).unwrap(),
-        stack: Stack::new(Source::Value(hash.clone())),
-        idx: 0,
-        env: &env,
-    };
-
-    let mut n = 0;
-
-    while state.idx < state.cmds.len() {
-        #[cfg(not(target_arch = "wasm32"))]
-        if n % 100 == 0 {
-            if trace.start.elapsed().as_secs() > 90 {
-                let n = Rc::new(Value::Text(format!("Ran out of time after {} ticks", n)));
-                return n;
-            }
+impl RuntimeEnv {
+    pub fn add_eval(&mut self, hash: &str, args: Vec<Value>) -> Hash {
+        let mut cmds = vec![IR::Value(Value::Ref(Reference::from_hash(hash)))];
+        for arg in args {
+            cmds.push(IR::Value(arg));
+            cmds.push(IR::Call);
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        let cstart = std::time::Instant::now();
-        n += 1;
-        let cidx = state.idx;
-
-        let ret = state.cmds[state.idx].eval(&option_ref, &mut state.stack, &mut state.idx);
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let ctime = cstart.elapsed();
-            if ctime.as_millis() > 1 {
-                trace.traces.push(Trace {
-                    cat: "Instruction".to_owned(),
-                    ph: "B".to_owned(),
-                    ts: trace.start.elapsed() - ctime,
-                    name: (state.stack.frames[0].source.clone(), Some(cidx)),
-                    file: "".to_owned(),
-                    tid: 1,
-                });
-                trace.traces.push(Trace {
-                    cat: "Instruction".to_owned(),
-                    ph: "E".to_owned(),
-                    ts: trace.start.elapsed(),
-                    name: (state.stack.frames[0].source.clone(), Some(cidx)),
-                    file: "".to_owned(),
-                    tid: 1,
-                });
-            };
-        };
-
-        state.handle_ret(ret, trace);
-        state.handle_tail(trace);
+        let hash = Hash::from_string("<eval>");
+        self.terms.insert(hash.clone(), cmds);
+        hash
     }
-
-    info!("Final stack: {:?}", state.stack);
-    state.stack.pop().unwrap()
 }
 
 impl<'a> State<'a> {
+    pub fn new_value(env: &'a RuntimeEnv, hash: Hash) -> Self {
+        let source = Source::Value(hash);
+        State {
+            cmds: env.cmds(&source),
+            stack: Stack::new(source),
+            idx: 0,
+            env: &env,
+        }
+    }
+
+    fn run(&mut self, trace: &mut Traces, option_ref: &Reference) {
+        let mut n = 0;
+        while self.idx < self.cmds.len() {
+            #[cfg(not(target_arch = "wasm32"))]
+            if n % 100 == 0 {
+                if trace.start.elapsed().as_secs() > 90 {
+                    println!("Ran out of time after {} ticks", n);
+                    return;
+                    // let message = Rc::new(Value::Text(format!("Ran out of time after {} ticks", n)));
+                    // return message;
+                }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            let cstart = std::time::Instant::now();
+            n += 1;
+            let cidx = self.idx;
+
+            let ret = self.cmds[self.idx].eval(&option_ref, &mut self.stack, &mut self.idx);
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let ctime = cstart.elapsed();
+                if ctime.as_millis() > 1 {
+                    trace.traces.push(Trace {
+                        cat: "Instruction".to_owned(),
+                        ph: "B".to_owned(),
+                        ts: trace.start.elapsed() - ctime,
+                        name: (self.stack.frames[0].source.clone(), Some(cidx)),
+                        file: "".to_owned(),
+                        tid: 1,
+                    });
+                    trace.traces.push(Trace {
+                        cat: "Instruction".to_owned(),
+                        ph: "E".to_owned(),
+                        ts: trace.start.elapsed(),
+                        name: (self.stack.frames[0].source.clone(), Some(cidx)),
+                        file: "".to_owned(),
+                        tid: 1,
+                    });
+                };
+            };
+
+            self.handle_ret(ret, trace);
+            self.handle_tail(trace);
+        }
+    }
+
+    pub fn run_to_end(&mut self, trace: &mut Traces) -> Rc<Value> {
+        let option_ref = Reference::from_hash(OPTION_HASH);
+
+        self.run(trace, &option_ref);
+
+        info!("Final stack: {:?}", self.stack);
+        self.stack.pop().unwrap()
+    }
+
     fn handle_tail(&mut self, trace: &mut Traces) {
         while self.idx >= self.cmds.len() {
             #[cfg(not(target_arch = "wasm32"))]
@@ -113,8 +137,6 @@ impl<'a> State<'a> {
     }
 
     fn handle_ret(&mut self, ret: Ret, trace: &mut Traces) {
-        // let self = self;
-        // let env = self.env;
         match ret {
             Ret::Nothing => (),
             Ret::Handle(mark_idx) => {
@@ -138,6 +160,7 @@ impl<'a> State<'a> {
                 self.stack.frames[0].handler = None;
             }
             Ret::Continue(kidx, mut frames, arg) => {
+                info!("** CONTINUE ** ({}) {} with {:?}", kidx, frames.len(), arg,);
                 let last = frames.len() - 1;
                 frames[last].return_index = self.idx;
                 frames.extend(
@@ -147,23 +170,17 @@ impl<'a> State<'a> {
                         .collect::<Vec<crate::frame::Frame>>(),
                 );
                 self.stack.frames = frames;
-                // LOGG
-                // info!("** CONTINUE ** ({}) {} with {:?}", kidx, frames.len(), arg,);
-                // info!("New Top Frame: {}", self.stack.frames[0]);
-                // info!("Handlers:");
-                // let ln = self.stack.frames.len();
-                // for (i, frame) in self.stack.frames.iter().enumerate() {
-                //     if frame.handler != None {
-                //         info!("{} | {}", ln - i, frame);
-                //     }
-                // }
+                info!("New Top Frame: {}", self.stack.frames[0]);
+                info!("Handlers:");
+                let ln = self.stack.frames.len();
+                for (i, frame) in self.stack.frames.iter().enumerate() {
+                    if frame.handler != None {
+                        info!("{} | {}", ln - i, frame);
+                    }
+                }
                 self.idx = kidx;
                 self.stack.push(arg);
                 self.cmds = self.env.cmds(&self.stack.frames[0].source);
-                // match &self.stack.frames[0].source {
-                //     Source::Value(hash) => self.cmds = env.terms.get(hash).unwrap(),
-                //     Source::Fn(fnid, _) => self.cmds = &env.anon_fns[*fnid].1,
-                // }
             }
             Ret::ReRequest(kind, number, args, final_index, frames, current_frame_idx) => {
                 let (nidx, frame_index) =
@@ -177,10 +194,6 @@ impl<'a> State<'a> {
                     self.idx, self.stack.frames[0]
                 );
 
-                // match self.stack.frames[0].source.clone() {
-                //     Source::Value(hash) => self.cmds = env.terms.get(&hash).unwrap(),
-                //     Source::Fn(fnid, _) => self.cmds = &env.anon_fns[fnid].1,
-                // };
                 self.cmds = self.env.cmds(&self.stack.frames[0].source);
 
                 self.stack.push(Rc::new(Value::RequestWithContinuation(
@@ -210,10 +223,6 @@ impl<'a> State<'a> {
                     self.idx
                 );
 
-                // match self.stack.frames[0].source.clone() {
-                //     Source::Value(hash) => self.cmds = env.terms.get(&hash).unwrap(),
-                //     Source::Fn(fnid, _) => self.cmds = &env.anon_fns[fnid].1,
-                // };
                 self.cmds = self.env.cmds(&self.stack.frames[0].source);
 
                 self.stack.push(Rc::new(Value::RequestWithContinuation(

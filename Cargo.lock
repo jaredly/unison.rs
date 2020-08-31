@@ -865,6 +865,7 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "console_error_panic_hook",
+ "lazy_static",
  "serde_json",
  "shared",
  "wasm-bindgen",

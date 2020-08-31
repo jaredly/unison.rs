@@ -80,18 +80,6 @@ impl std::fmt::Debug for Hash {
     }
 }
 
-impl Hash {
-    pub fn from_string(hash: &str) -> Self {
-        let data = base32hex::decode(hash);
-        Hash(data)
-    }
-    pub fn to_string(&self) -> String {
-        let mut m = base32hex::encode(&self.0);
-        m.pop();
-        m
-    }
-}
-
 impl Reference {
     pub fn from_hash(hash: &str) -> Self {
         Reference::DerivedId(Id(Hash::from_string(hash), 0, 1))
@@ -102,6 +90,24 @@ impl Reference {
     Serialize, Deserialize, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd,
 )]
 pub struct Hash(pub Vec<u8>);
+
+impl Hash {
+    pub fn from_string(hash: &str) -> Self {
+        if hash == "<eval>" {
+            return Hash(vec![]);
+        }
+        let data = base32hex::decode(hash);
+        Hash(data)
+    }
+    pub fn to_string(&self) -> String {
+        if self.0.len() == 0 {
+            return "<eval>".to_owned();
+        }
+        let mut m = base32hex::encode(&self.0);
+        m.pop();
+        m
+    }
+}
 
 #[derive(
     Serialize,
