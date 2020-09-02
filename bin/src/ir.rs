@@ -126,13 +126,19 @@ impl TranslationEnv {
             return Ok(());
         }
         let mut cmds = IREnv::new(hash.clone());
-        self.terms.insert(hash.to_owned(), vec![]);
-        let term = self.env.load(&hash.to_string())?;
+        self.terms.insert(
+            hash.to_owned(),
+            (
+                vec![],
+                ABT::Tm(Type::Ref(Reference::Builtin("nvm".to_owned()))),
+            ),
+        );
+        let (term, typ) = self.env.load(&hash.to_string())?;
         term.to_ir(&mut cmds, self)?;
 
         resolve_marks(&mut cmds.cmds);
 
-        self.terms.insert(hash.to_owned(), cmds.cmds);
+        self.terms.insert(hash.to_owned(), (cmds.cmds, typ));
         Ok(())
     }
     pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> Result<usize> {

@@ -50,9 +50,9 @@ impl Env {
         }
     }
 
-    pub fn load(&mut self, hash: &str) -> Result<ABT<Term>> {
+    pub fn load(&mut self, hash: &str) -> Result<(ABT<Term>, ABT<Type>)> {
         match self.term_cache.get(hash) {
-            Some((v, _)) => Ok(v.clone()),
+            Some(v) => Ok(v.clone()),
             None => {
                 let mut full = self.root.clone();
                 full.push("terms");
@@ -80,8 +80,9 @@ impl Env {
                 let mut bindings = super::unique::Bindings::new();
                 res.accept(&mut bindings);
 
-                self.term_cache.insert(hash.to_owned(), (res.clone(), typ));
-                Ok(res)
+                self.term_cache
+                    .insert(hash.to_owned(), (res.clone(), typ.clone()));
+                Ok((res, typ))
             }
         }
     }

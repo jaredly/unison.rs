@@ -17,3 +17,4 @@ shared = { path = "../shared" }
 wasm-logger = "0.2.0"
 console_error_panic_hook = ""
 lazy_static = ""
+im = ""

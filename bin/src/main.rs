@@ -363,8 +363,9 @@ fn run_term(
         let mut file = std::fs::File::create(format!("data/source-{}.txt", hash))?;
 
         file.write_all(b"[- ENV -]\n")?;
-        for (k, v) in ir_env.terms.iter() {
+        for (k, (v, t)) in ir_env.terms.iter() {
             file.write_all(format!("] Value {:?}\n", k).as_bytes())?;
+            file.write_all(format!("Type signature: {:?}\n", t).as_bytes())?;
             for (n, i) in v.iter().enumerate() {
                 file.write_all(format!("({}) {:?}\n", n, i).as_bytes())?;
             }
@@ -582,19 +583,43 @@ fn run(file: &String) -> std::io::Result<()> {
     Ok(())
 }
 
+fn run_cli_term(file: &String, args: &[String]) -> std::io::Result<()> {
+    Ok(())
+}
+
 fn main() -> std::io::Result<()> {
     env_logger::init();
     println!("Hello, world!");
-    match std::env::args().collect::<Vec<String>>().as_slice() {
-        [_, cmd, path] if cmd == "test" => run_test(path),
-        [_, cmd, path, outpath] if cmd == "pack" => pack(path, outpath),
-        [_, cmd, path, outpath] if cmd == "pack-all" => {
-            pack_all(&std::path::PathBuf::from(path), outpath)
-        }
-        [_, file] => run(file),
-        _ => {
-            println!("Usage: process file.ub");
-            Ok(())
+    let mut args = std::env::args().collect::<Vec<String>>();
+    args.remove(0);
+    if args.len() == 0 {
+        println!("Commands: test, pack, pack-all, run, test-all");
+        Ok(())
+    } else {
+        let cmd = args.remove(0);
+        match (cmd.as_str(), args.as_slice()) {
+            ("test", [path]) => run_test(path),
+            ("pack", [path, output]) => pack(path, output),
+            ("pack-all", [path, output]) => pack_all(&std::path::PathBuf::from(path), output),
+            // ("test-all", [path]) => run_all_tests(path),
+            ("run", args) => run_cli_term(&args[0], &args[1..]),
+            _ => {
+                println!("Unknown command");
+                Ok(())
+            }
         }
     }
+    // match args.as_slice() {
+    //     [_, cmd, path] if cmd == "test" => run_test(path),
+    //     [_, cmd, path, outpath] if cmd == "pack" => pack(path, outpath),
+    //     [_, cmd, path, outpath] if cmd == "pack-all" => {
+    //         pack_all(&std::path::PathBuf::from(path), outpath)
+    //     }
+    //     [_, cmd, path, ...rest] if cmd == "run" => pack(path, outpath),
+    //     [_, file] => run(file),
+    //     _ => {
+    //         println!("Usage: process file.ub");
+    //         Ok(())
+    //     }
+    // }
 }

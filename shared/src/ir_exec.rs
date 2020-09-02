@@ -63,6 +63,10 @@ impl IR {
                 stack.push(v);
                 *idx += 1;
             }
+            IR::Pop => {
+                stack.pop().unwrap();
+                *idx += 1;
+            }
             IR::PopAndName(symbol, uses) => {
                 let v = stack.pop().unwrap();
                 stack.frames[0]

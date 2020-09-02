@@ -8,7 +8,7 @@ use super::ir_exec::Ret;
 use super::stack::Stack;
 use super::trace::{Trace, Traces};
 
-static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
+pub static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 
 pub struct State<'a> {
     pub env: &'a RuntimeEnv,
@@ -35,17 +35,17 @@ pub fn show_env(env: &RuntimeEnv) {
     }
 }
 
-pub fn extract_args(typ: &ABT<Type>) -> (Vec<Type>, Vec<Hash>, ABT<Type>) {
+pub fn extract_args(typ: &ABT<Type>) -> (Vec<ABT<Type>>, Vec<Hash>, ABT<Type>) {
     use Type::*;
     match typ {
         ABT::Tm(typ) => match typ {
             Arrow(one, two) => {
                 let (mut a, b, c) = extract_args(two);
-                let one = match &**one {
-                    ABT::Tm(t) => t.clone(),
-                    _ => unreachable!("Not a tm {:?}", one),
-                };
-                a.insert(0, one.clone());
+                // let one = match &**one {
+                //     ABT::Tm(t) => t.clone(),
+                //     _ => unreachable!("Not a tm {:?}", one),
+                // };
+                a.insert(0, (**one).clone());
                 (a, b, c)
             }
             Ann(t, _) => extract_args(t),
@@ -64,14 +64,14 @@ impl RuntimeEnv {
     pub fn add_eval(&mut self, hash: &str, args: Vec<Value>) -> Result<Hash, String> {
         let typ = self.terms.get(&Hash::from_string(hash)).unwrap().1.clone();
         let mut cmds = vec![IR::Pop, IR::Value(Value::Ref(Reference::from_hash(hash)))];
-        let (arg_typs, effects, typ) = extract_args(&typ);
-        for (i, arg) in args.into_iter().enumerate() {
-            if typ_check(&arg, arg_typs[i]) {
-                cmds.push(IR::Value(arg));
-                cmds.push(IR::Call);
-            } else {
-                return Err("NOPE".to_owned());
-            };
+        let (_arg_typs, _effects, typ) = extract_args(&typ);
+        for (_, arg) in args.into_iter().enumerate() {
+            // if typ_check(&arg, arg_typs[i]) {
+            cmds.push(IR::Value(arg));
+            cmds.push(IR::Call);
+            // } else {
+            //     return Err("NOPE".to_owned());
+            // };
         }
         let hash = Hash::from_string("<eval>");
         self.terms.insert(hash.clone(), (cmds, typ));
@@ -91,6 +91,7 @@ impl<'a> State<'a> {
     }
 
     fn run(&mut self, trace: &mut Traces, option_ref: &Reference) {
+        #[cfg(not(target_arch = "wasm32"))]
         let mut n = 0;
         while self.idx < self.cmds.len() {
             #[cfg(not(target_arch = "wasm32"))]
@@ -104,7 +105,10 @@ impl<'a> State<'a> {
             }
             #[cfg(not(target_arch = "wasm32"))]
             let cstart = std::time::Instant::now();
-            n += 1;
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                n += 1;
+            };
             let cidx = self.idx;
 
             let ret = self.cmds[self.idx].eval(&option_ref, &mut self.stack, &mut self.idx);
