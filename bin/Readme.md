@@ -7,6 +7,72 @@ The assumption is that if a term has been written to disk, that's because unison
 
 The main goal of this project is to allow unison programs to run in the browser, through wasm. 🤞
 
+## Running unison programs with Wasm
+
+### 1) Packaging up a term or namespace
+
+```
+$ unison.rs pack ~/.unison/ my.term
+```
+
+```
+$ unison.rs pack-ns ~/.unison/ my.namespace
+```
+
+### 2) Running things
+
+```js
+import unison from 'unison-wasm';
+import workspace from 'raw-loader!./my-workspace.bin';
+
+unison.load(workspace).then(workspace => {
+    // this is a nested object, where the functions are available
+    // where a term and a namespace have the same name ... then ...
+    // workspace.run()
+    workspace.get('one.two.three')
+    workspace.run('one.two.three', 2, 3, 4)
+})
+
+```
+
+
+
+
+
+
+### 1) Packaging up the terms
+There are currently two options: pack a single term, or pack up the whole workspace.
+
+To pack a single term, run
+```sh
+$ unison.rs pack ~/.unison/v1/terms/[the hash] my-term.bin
+```
+This will create `my-term.bin` and `my-term.bin.json` (which contains a mapping of hashes to names, for debugging).
+
+To pack a whole workspace, run
+```sh
+$ unison.rs pack-all ~/.unison/v1/terms workspace.bin
+```
+
+### 2) Running your code
+Currently webpack is required to make everything work. See the `example` directory for a full working example.
+
+```js
+import unison from 'unison-wasm';
+import workspace from 'raw-loader!./my-workspace.bin';
+
+unison.load(workspace).then(workspace => {
+    workspace.run()
+})
+
+```
+
+
+## Usage
+
+
+
+
 ## Contributing
 
 It's all managed by cargo, so once you [have it set up](https://www.rust-lang.org/tools/install), this should be all you need:

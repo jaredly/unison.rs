@@ -432,6 +432,7 @@ pub enum IR {
     // CycleFn(usize, Vec<(Symbol, usize)>),
     // Push this value onto the stack
     Value(Value),
+    Pop,
     // lookup the symbol, and push it onto the stack
     PushSym(Symbol, usize),
     // pop the top value off the stack and give it a name
@@ -468,7 +469,8 @@ pub enum IR {
 
 #[derive(Serialize, Deserialize)]
 pub struct RuntimeEnv {
-    pub terms: HashMap<Hash, Vec<IR>>,
+    pub terms: HashMap<Hash, (Vec<IR>, ABT<Type>)>,
+    pub types: HashMap<Hash, TypeDecl>,
     pub anon_fns: Vec<(Hash, Vec<IR>)>, // I think?
 }
 
@@ -476,6 +478,7 @@ impl RuntimeEnv {
     pub fn new() -> RuntimeEnv {
         RuntimeEnv {
             terms: HashMap::new(),
+            types: HashMap::new(),
             anon_fns: vec![],
         }
     }

@@ -1,4 +1,5 @@
 use super::env;
+use crate::env::Result;
 use shared::types::*;
 use std::collections::HashMap;
 
@@ -20,14 +21,14 @@ fn filter_free_vbls(
 }
 
 pub trait ToIR {
-    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv);
+    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) -> Result<()>;
 }
 
 impl ToIR for ABT<Term> {
-    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) {
+    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) -> Result<()> {
         match self {
             ABT::Var(symbol, usage) => cmds.push(IR::PushSym(symbol.clone(), *usage)),
-            ABT::Tm(term) => term.to_ir(cmds, env),
+            ABT::Tm(term) => term.to_ir(cmds, env)?,
             ABT::Cycle(inner) => {
                 let mut names = vec![];
                 let (mut values, body) = unroll_cycle(inner, &mut names);
@@ -50,17 +51,18 @@ impl ToIR for ABT<Term> {
                             // println!("NOT A TM {:?}", x);
                         }
                     };
-                    values[i].to_ir(cmds, env);
+                    values[i].to_ir(cmds, env)?;
                 }
                 names.reverse();
                 cmds.push(IR::Cycle(names));
-                body.to_ir(cmds, env);
+                body.to_ir(cmds, env)?;
             }
             ABT::Abs(name, uses, body) => {
                 cmds.push(IR::PopAndName(name.clone(), *uses));
-                body.to_ir(cmds, env);
+                body.to_ir(cmds, env)?;
             }
-        }
+        };
+        Ok(())
     }
 }
 
@@ -82,7 +84,7 @@ fn unroll_cycle(
 
 pub struct TranslationEnv {
     pub env: env::Env,
-    pub terms: HashMap<Hash, Vec<IR>>,
+    pub terms: HashMap<Hash, (Vec<IR>, ABT<Type>)>,
     types: HashMap<Hash, TypeDecl>,
     pub anon_fns: Vec<(Hash, Vec<IR>)>, // I think?
 }
@@ -91,6 +93,7 @@ impl Into<RuntimeEnv> for TranslationEnv {
     fn into(self) -> RuntimeEnv {
         RuntimeEnv {
             terms: self.terms,
+            types: self.types,
             anon_fns: self.anon_fns,
         }
     }
@@ -117,35 +120,36 @@ impl TranslationEnv {
         }
     }
 
-    pub fn load(&mut self, hash: &Hash) {
+    pub fn load(&mut self, hash: &Hash) -> Result<()> {
         if self.terms.contains_key(hash) {
             // Already loaded
-            return;
+            return Ok(());
         }
         let mut cmds = IREnv::new(hash.clone());
         self.terms.insert(hash.to_owned(), vec![]);
-        let term = self.env.load(&hash.to_string());
-        term.to_ir(&mut cmds, self);
+        let term = self.env.load(&hash.to_string())?;
+        term.to_ir(&mut cmds, self)?;
 
         resolve_marks(&mut cmds.cmds);
 
         self.terms.insert(hash.to_owned(), cmds.cmds);
+        Ok(())
     }
-    pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> usize {
+    pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> Result<usize> {
         let mut sub = IREnv::new(hash.clone());
-        contents.to_ir(&mut sub, self);
+        contents.to_ir(&mut sub, self)?;
 
         resolve_marks(&mut sub.cmds);
 
         let idx = self.anon_fns.iter().position(|(_, cmds)| *cmds == sub.cmds);
-        match idx {
+        Ok(match idx {
             None => {
                 let v = self.anon_fns.len();
                 self.anon_fns.push((hash, sub.cmds));
                 v
             }
             Some(idx) => idx,
-        }
+        })
     }
 }
 
@@ -210,7 +214,7 @@ impl IREnv {
 }
 
 impl ToIR for Term {
-    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) {
+    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) -> Result<()> {
         match self {
             Term::Handle(handler, expr) => {
                 /*
@@ -232,10 +236,10 @@ impl ToIR for Term {
 
                 let handle_mk = cmds.mark();
                 cmds.push(IR::Handle(handle_mk));
-                expr.to_ir(cmds, env);
+                expr.to_ir(cmds, env)?;
                 cmds.push(IR::HandlePure);
                 cmds.push(IR::Mark(handle_mk));
-                handler.to_ir(cmds, env);
+                handler.to_ir(cmds, env)?;
                 cmds.push(IR::Swap);
                 cmds.push(IR::Call);
 
@@ -244,39 +248,39 @@ impl ToIR for Term {
             }
             Term::Ref(Reference::Builtin(_)) => cmds.push(IR::Value(self.clone().into())),
             Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                env.load(&hash);
+                env.load(&hash)?;
                 cmds.push(IR::Value(self.clone().into()))
             }
             Term::App(one, two) => {
-                one.to_ir(cmds, env);
-                two.to_ir(cmds, env);
+                one.to_ir(cmds, env)?;
+                two.to_ir(cmds, env)?;
                 cmds.push(IR::Call)
             }
-            Term::Ann(term, _) => term.to_ir(cmds, env),
+            Term::Ann(term, _) => term.to_ir(cmds, env)?,
             Term::Sequence(terms) => {
                 let ln = terms.len();
                 for inner in terms {
-                    inner.to_ir(cmds, env);
+                    inner.to_ir(cmds, env)?;
                 }
                 cmds.push(IR::Seq(ln))
             }
             Term::If(cond, yes, no) => {
                 let no_tok = cmds.mark();
                 let done_tok = cmds.mark();
-                cond.to_ir(cmds, env);
+                cond.to_ir(cmds, env)?;
                 cmds.push(IR::If(no_tok));
-                yes.to_ir(cmds, env);
+                yes.to_ir(cmds, env)?;
                 cmds.push(IR::JumpTo(done_tok));
                 cmds.push(IR::Mark(no_tok));
-                no.to_ir(cmds, env);
+                no.to_ir(cmds, env)?;
                 cmds.push(IR::Mark(done_tok));
             }
             Term::And(a, b) => {
                 let fail_tok = cmds.mark();
                 let done_tok = cmds.mark();
-                a.to_ir(cmds, env);
+                a.to_ir(cmds, env)?;
                 cmds.push(IR::If(fail_tok));
-                b.to_ir(cmds, env);
+                b.to_ir(cmds, env)?;
                 cmds.push(IR::If(fail_tok));
                 cmds.push(IR::Value(Value::Boolean(true)));
                 cmds.push(IR::JumpTo(done_tok));
@@ -289,11 +293,11 @@ impl ToIR for Term {
                 let fail_tok = cmds.mark();
                 let b_tok = cmds.mark();
                 let done_tok = cmds.mark();
-                a.to_ir(cmds, env);
+                a.to_ir(cmds, env)?;
                 cmds.push(IR::If(b_tok));
                 cmds.push(IR::JumpTo(good_tok));
                 cmds.push(IR::Mark(b_tok));
-                b.to_ir(cmds, env);
+                b.to_ir(cmds, env)?;
                 cmds.push(IR::If(fail_tok));
 
                 cmds.push(IR::Mark(good_tok));
@@ -306,12 +310,12 @@ impl ToIR for Term {
                 cmds.push(IR::Mark(done_tok));
             }
             Term::Let(_, v, body) => {
-                v.to_ir(cmds, env);
-                body.to_ir(cmds, env);
+                v.to_ir(cmds, env)?;
+                body.to_ir(cmds, env)?;
             }
             Term::Match(item, arms) => {
                 let done_tok = cmds.mark();
-                item.to_ir(cmds, env);
+                item.to_ir(cmds, env)?;
                 let mut next_tok = cmds.mark();
                 for MatchCase(pattern, cond, body) in arms {
                     match cond {
@@ -325,13 +329,13 @@ impl ToIR for Term {
                             cmds.push(IR::MarkStack);
                             cmds.push(IR::PatternMatch(pattern.clone(), true));
                             cmds.push(IR::IfAndPopStack(next_tok));
-                            cond.to_ir(cmds, env);
+                            cond.to_ir(cmds, env)?;
                             cmds.push(IR::IfAndPopStack(next_tok));
                             cmds.push(IR::ClearStackMark);
                         }
                     }
 
-                    body.to_ir(cmds, env);
+                    body.to_ir(cmds, env)?;
                     cmds.push(IR::JumpTo(done_tok));
 
                     cmds.push(IR::Mark(next_tok));
@@ -342,7 +346,7 @@ impl ToIR for Term {
                 cmds.push(IR::PopUpOne);
             }
             Term::Lam(contents, free_vbls) => {
-                let v = env.add_fn(cmds.term.clone(), &**contents);
+                let v = env.add_fn(cmds.term.clone(), &**contents)?;
                 cmds.push(IR::Fn(v, free_vbls.clone()));
             }
             Term::Request(Reference::Builtin(name), _) => {
@@ -366,7 +370,8 @@ impl ToIR for Term {
             }
 
             _ => cmds.push(IR::Value(self.clone().into())),
-        }
+        };
+        Ok(())
     }
 }
 

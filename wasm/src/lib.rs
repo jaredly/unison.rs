@@ -22,12 +22,6 @@ extern "C" {
 }
 
 #[wasm_bindgen]
-pub fn greet(name: &str) {
-    println!("Yo folks");
-    log(&format!("Hello, {}!", name));
-}
-
-#[wasm_bindgen]
 pub fn load(data: &str) {
     console_error_panic_hook::set_once();
     let env = shared::unpack(data);

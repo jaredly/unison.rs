@@ -74,6 +74,10 @@ impl Buffer {
         self.get()
     }
 
+    pub fn get_term_type(&mut self) -> ABT<Type> {
+        self.get()
+    }
+
     pub fn get_term(&mut self) -> ABT<Term> {
         self.get()
     }

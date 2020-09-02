@@ -86,7 +86,10 @@ impl FreeFinder {
 }
 
 impl Visitor for FreeFinder {
-    fn visit_abt(&mut self, abt: &mut ABT<Term>) -> bool {
+    fn visit_type(&mut self, _: &mut Type) -> bool {
+        true
+    }
+    fn visit_abt<Inner: Accept>(&mut self, abt: &mut ABT<Inner>) -> bool {
         match abt {
             ABT::Var(symbol, _usage) => {
                 self.lookup(&symbol);
@@ -98,7 +101,7 @@ impl Visitor for FreeFinder {
         }
         true
     }
-    fn post_abt(&mut self, abt: &mut ABT<Term>) {
+    fn post_abt<Inner: Accept>(&mut self, abt: &mut ABT<Inner>) {
         match abt {
             ABT::Abs(sym, _uses, _inner) => {
                 self.rm(&sym);
@@ -113,7 +116,10 @@ impl Visitor for FreeFinder {
 }
 
 impl Visitor for Bindings {
-    fn visit_abt(&mut self, abt: &mut ABT<Term>) -> bool {
+    fn visit_type(&mut self, _: &mut Type) -> bool {
+        true
+    }
+    fn visit_abt<Inner: Accept>(&mut self, abt: &mut ABT<Inner>) -> bool {
         match abt {
             ABT::Var(symbol, usage) => {
                 *symbol = self.lookup(&symbol);
@@ -126,7 +132,7 @@ impl Visitor for Bindings {
         }
         true
     }
-    fn post_abt(&mut self, abt: &mut ABT<Term>) {
+    fn post_abt<Inner: Accept>(&mut self, abt: &mut ABT<Inner>) {
         match abt {
             ABT::Abs(sym, uses, _inner) => {
                 *uses = self.pop(sym);

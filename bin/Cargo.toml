@@ -9,8 +9,8 @@ edition = "2018"
 [dependencies]
 serde = ""
 serde_derive = ""
+serde_json = ""
 bincode = ""
-pprof = { version = "0.3", features = ["flamegraph"] }
 byteorder = ""
 base64 = ""
 log = "0.4"
@@ -18,6 +18,3 @@ env_logger = "0.7.1"
 pretty = "0.10.0"
 im = ""
 shared = { path = "../shared" }
-
-[profile.release]
-debug = true

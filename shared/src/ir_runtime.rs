@@ -19,7 +19,7 @@ pub struct State<'a> {
 
 pub fn show_env(env: &RuntimeEnv) {
     info!("[- ENV -]");
-    for (k, v) in env.terms.iter() {
+    for (k, (v, _)) in env.terms.iter() {
         info!("] Value {:?}", k);
         for (n, i) in v.iter().enumerate() {
             info!("({}) {:?}", n, i);
@@ -35,21 +35,47 @@ pub fn show_env(env: &RuntimeEnv) {
     }
 }
 
+pub fn extract_args(typ: &ABT<Type>) -> (Vec<Type>, Vec<Hash>, ABT<Type>) {
+    use Type::*;
+    match typ {
+        ABT::Tm(typ) => match typ {
+            Arrow(one, two) => {
+                let (mut a, b, c) = extract_args(two);
+                let one = match &**one {
+                    ABT::Tm(t) => t.clone(),
+                    _ => unreachable!("Not a tm {:?}", one),
+                };
+                a.insert(0, one.clone());
+                (a, b, c)
+            }
+            Ann(t, _) => extract_args(t),
+            t => (vec![], vec![], ABT::Tm(t.clone())),
+        },
+        _ => unreachable!("Um not a Tm {:?}", typ),
+    }
+}
+
 pub fn eval(env: &RuntimeEnv, hash: &str, trace: &mut Traces) -> Arc<Value> {
     let mut state = State::new_value(&env, Hash::from_string(hash));
     state.run_to_end(trace)
 }
 
 impl RuntimeEnv {
-    pub fn add_eval(&mut self, hash: &str, args: Vec<Value>) -> Hash {
-        let mut cmds = vec![IR::Value(Value::Ref(Reference::from_hash(hash)))];
-        for arg in args {
-            cmds.push(IR::Value(arg));
-            cmds.push(IR::Call);
+    pub fn add_eval(&mut self, hash: &str, args: Vec<Value>) -> Result<Hash, String> {
+        let typ = self.terms.get(&Hash::from_string(hash)).unwrap().1.clone();
+        let mut cmds = vec![IR::Pop, IR::Value(Value::Ref(Reference::from_hash(hash)))];
+        let (arg_typs, effects, typ) = extract_args(&typ);
+        for (i, arg) in args.into_iter().enumerate() {
+            if typ_check(&arg, arg_typs[i]) {
+                cmds.push(IR::Value(arg));
+                cmds.push(IR::Call);
+            } else {
+                return Err("NOPE".to_owned());
+            };
         }
         let hash = Hash::from_string("<eval>");
-        self.terms.insert(hash.clone(), cmds);
-        hash
+        self.terms.insert(hash.clone(), (cmds, typ));
+        Ok(hash)
     }
 }
 
@@ -248,7 +274,7 @@ impl<'a> State<'a> {
                 self.idx = 0;
             }
             Ret::Value(hash) => {
-                self.cmds = self.env.terms.get(&hash).unwrap();
+                self.cmds = &self.env.terms.get(&hash).unwrap().0;
                 self.stack.new_frame(self.idx, Source::Value(hash));
                 #[cfg(not(target_arch = "wasm32"))]
                 trace.push(&self.stack.frames[0], "B");
@@ -267,7 +293,7 @@ impl<'a> State<'a> {
 impl RuntimeEnv {
     fn cmds(&self, source: &Source) -> &Vec<IR> {
         match source {
-            Source::Value(hash) => self.terms.get(hash).unwrap(),
+            Source::Value(hash) => &self.terms.get(hash).unwrap().0,
             Source::Fn(fnid, _) => &self.anon_fns[*fnid].1,
         }
     }
