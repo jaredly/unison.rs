@@ -198,7 +198,7 @@ impl FromBuffer for ConstructorType {
 impl FromBuffer for Hash {
     fn get(buf: &mut Buffer) -> Self {
         let len: usize = buf.get();
-        let res = Hash(buf.get_n(len).to_owned());
+        let res = Hash(crate::base32hex::encode(buf.get_n(len)));
         info!("{}Hash: #{:?}", indent(buf.indent), res);
         res
     }

@@ -1,4 +1,3 @@
-use super::base32hex;
 use im::Vector;
 use serde_derive::{Deserialize, Serialize};
 use std::cmp::{PartialEq, PartialOrd};
@@ -73,10 +72,28 @@ impl std::fmt::Debug for Reference {
     }
 }
 
+impl Into<String> for Hash {
+    fn into(self) -> String {
+        self.to_string()
+    }
+}
+
+impl From<String> for Hash {
+    fn from(other: String) -> Self {
+        Hash::from_string(&other)
+    }
+}
+
+impl From<&String> for Hash {
+    fn from(other: &String) -> Self {
+        Hash::from_string(other)
+    }
+}
+
 impl std::fmt::Debug for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         f.write_str("#")?;
-        f.write_str(&base32hex::encode(&self.0)[0..10])
+        f.write_str(&self.to_string()[0..10])
     }
 }
 
@@ -89,23 +106,25 @@ impl Reference {
 #[derive(
     Serialize, Deserialize, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd,
 )]
-pub struct Hash(pub Vec<u8>);
+pub struct Hash(pub String);
 
 impl Hash {
     pub fn from_string(hash: &str) -> Self {
-        if hash == "<eval>" {
-            return Hash(vec![]);
-        }
-        let data = base32hex::decode(hash);
-        Hash(data)
+        // if hash == "<eval>" {
+        //     return Hash(vec![]);
+        // }
+        // let data = base32hex::decode(hash);
+        // Hash(data)
+        Hash(hash.to_owned())
     }
     pub fn to_string(&self) -> String {
-        if self.0.len() == 0 {
-            return "<eval>".to_owned();
-        }
-        let mut m = base32hex::encode(&self.0);
-        m.pop();
-        m
+        // if self.0.len() == 0 {
+        //     return "<eval>".to_owned();
+        // }
+        // let mut m = base32hex::encode(&self.0);
+        // m.pop();
+        // m
+        self.0.clone()
     }
 }
 

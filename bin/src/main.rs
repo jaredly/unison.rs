@@ -2,6 +2,7 @@ extern crate env_logger;
 extern crate serde_derive;
 extern crate serde_json;
 
+use serde_derive::Serialize;
 mod env;
 mod ir;
 mod parser;
@@ -9,6 +10,7 @@ mod printer;
 mod unique;
 mod visitor;
 use shared::types;
+mod base32hex;
 
 fn load_type(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
@@ -318,8 +320,7 @@ fn env_names(
     (term_names, constr_names, type_names)
 }
 
-fn pack_term(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
-    let root = terms_path.parent().unwrap();
+fn term_to_env(root: &std::path::Path, hash: &str, out: &str) -> std::io::Result<RuntimeEnv> {
     let env = env::Env::init(&root);
     let mut ir_env = ir::TranslationEnv::new(env);
     ir_env.load(&types::Hash::from_string(hash)).unwrap();
@@ -334,7 +335,45 @@ fn pack_term(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Re
         }
     }
 
-    let runtime_env: shared::types::RuntimeEnv = ir_env.into();
+    Ok(ir_env.into())
+}
+
+#[derive(Serialize, Debug)]
+struct JsonEnv {
+    terms: HashMap<String, (Vec<IR>, ABT<Type>)>,
+    types: HashMap<String, TypeDecl>,
+    anon_fns: Vec<(Hash, Vec<IR>)>,
+}
+impl JsonEnv {
+    fn from_runtime(
+        RuntimeEnv {
+            terms,
+            types,
+            anon_fns,
+        }: RuntimeEnv,
+    ) -> JsonEnv {
+        use std::iter::FromIterator;
+        JsonEnv {
+            terms: HashMap::from_iter(terms.iter().map(|(k, v)| (k.to_string(), v.clone()))),
+            types: HashMap::from_iter(types.iter().map(|(k, v)| (k.to_string(), v.clone()))),
+            anon_fns,
+        }
+    }
+}
+
+fn pack_term_json(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
+    let root = terms_path.parent().unwrap();
+    let runtime_env = term_to_env(root, hash, out)?;
+
+    std::fs::write(
+        out,
+        serde_json::to_string(&JsonEnv::from_runtime(runtime_env)).unwrap(),
+    )
+}
+
+fn pack_term(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
+    let root = terms_path.parent().unwrap();
+    let runtime_env = term_to_env(root, hash, out)?;
 
     let paths = path_with(&root, "paths");
     let mut branch = Branch::load(&paths, get_head(&paths)?)?;
@@ -486,6 +525,17 @@ fn run_test(root: &str) -> std::io::Result<()> {
     }
 
     Ok(())
+}
+
+fn pack_json(file: &String, outfile: &String) -> std::io::Result<()> {
+    let path = std::path::PathBuf::from(file);
+
+    pack_term_json(
+        path.parent().unwrap(),
+        &path.file_name().unwrap().to_str().unwrap()[1..],
+        outfile,
+    )?;
+    return Ok(());
 }
 
 fn pack(file: &String, outfile: &String) -> std::io::Result<()> {
@@ -650,6 +700,7 @@ fn main() -> std::io::Result<()> {
         match (cmd.as_str(), args.as_slice()) {
             ("test", [path]) => run_test(path),
             ("pack", [path, output]) => pack(path, output),
+            ("pack-json", [path, output]) => pack_json(path, output),
             ("pack-all", [path, output]) => pack_all(&std::path::PathBuf::from(path), output),
             // ("test-all", [path]) => run_all_tests(path),
             ("run", args) => run_cli_term(&args[0], &args[1..]),
