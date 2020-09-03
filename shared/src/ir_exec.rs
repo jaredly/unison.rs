@@ -1,20 +1,20 @@
 use super::frame::Frame;
-use super::ir::IR;
 use super::stack::Stack;
+use super::types::IR;
 use super::types::*;
 use im::Vector;
 use log::info;
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub enum Ret {
-    FnCall(usize, Vec<(Symbol, usize, Rc<Value>)>, Rc<Value>),
+    FnCall(usize, Vec<(Symbol, usize, Arc<Value>)>, Arc<Value>),
     Value(Hash),
     Nothing,
-    Request(Reference, usize, Vec<Rc<Value>>),
-    ReRequest(Reference, usize, Vec<Rc<Value>>, usize, Vec<Frame>, usize),
+    Request(Reference, usize, Vec<Arc<Value>>),
+    ReRequest(Reference, usize, Vec<Arc<Value>>, usize, Vec<Frame>, usize),
     Handle(usize),
     HandlePure,
-    Continue(usize, Vec<Frame>, Rc<Value>),
+    Continue(usize, Vec<Frame>, Arc<Value>),
 }
 
 impl IR {
@@ -33,7 +33,7 @@ impl IR {
                 let v = stack.pop().unwrap();
                 let v = match *v {
                     Value::RequestPure(_) => v,
-                    _ => Rc::new(Value::RequestPure(v)),
+                    _ => Arc::new(Value::RequestPure(v)),
                 };
                 stack.push(v);
                 return Ret::HandlePure;
@@ -53,7 +53,7 @@ impl IR {
                         return Ret::Value(hash.clone());
                     }
                     _ => {
-                        stack.push(Rc::new(term.clone()));
+                        stack.push(Arc::new(term.clone()));
                         *idx += 1;
                     }
                 };
@@ -61,6 +61,10 @@ impl IR {
             IR::PushSym(symbol, usage) => {
                 let v = stack.get_vbl(symbol, *usage);
                 stack.push(v);
+                *idx += 1;
+            }
+            IR::Pop => {
+                stack.pop().unwrap();
                 *idx += 1;
             }
             IR::PopAndName(symbol, uses) => {
@@ -72,20 +76,20 @@ impl IR {
             }
             IR::Fn(i, free_vbls) => {
                 info!("Binding free vbls {:?}", free_vbls);
-                let bound: Vec<(Symbol, usize, Rc<Value>)> = free_vbls
+                let bound: Vec<(Symbol, usize, Arc<Value>)> = free_vbls
                     .iter()
                     .enumerate()
                     .map(|(i, (sym, external, internal, cycle))| {
                         (sym.with_unique(i), *internal, {
                             if *cycle {
-                                Rc::new(Value::CycleBlank(sym.unique))
+                                Arc::new(Value::CycleBlank(sym.unique))
                             } else {
                                 stack.get_vbl(sym, *external)
                             }
                         })
                     })
                     .collect();
-                stack.push(Rc::new(Value::PartialFnBody(*i, bound)));
+                stack.push(Arc::new(Value::PartialFnBody(*i, bound)));
                 *idx += 1;
             }
             IR::Cycle(names) => {
@@ -105,7 +109,7 @@ impl IR {
                             stack.frames[0].bindings.push((
                                 name.clone(),
                                 *uses,
-                                Rc::new(v.clone()),
+                                Arc::new(v.clone()),
                             ));
                         }
                     }
@@ -114,7 +118,7 @@ impl IR {
                     stack.frames[0].bindings.push((
                         name.clone(),
                         uses,
-                        Rc::new(Value::CycleFnBody(fnint, bindings, mutuals.clone())),
+                        Arc::new(Value::CycleFnBody(fnint, bindings, mutuals.clone())),
                     ))
                 }
                 *idx += 1;
@@ -136,10 +140,10 @@ impl IR {
                             return Ret::Request(r.clone(), *i, args);
                         }
                         info!("- request - {:?} - {}", args, n);
-                        stack.push(Rc::new(Value::RequestWithArgs(r.clone(), *i, *n, args)));
+                        stack.push(Arc::new(Value::RequestWithArgs(r.clone(), *i, *n, args)));
                     }
                     Value::Constructor(r, u) => {
-                        stack.push(Rc::new(Value::PartialConstructor(
+                        stack.push(Arc::new(Value::PartialConstructor(
                             r.clone(),
                             *u,
                             Vector::from(vec![arg]),
@@ -149,7 +153,7 @@ impl IR {
                     Value::PartialConstructor(r, u, c) => {
                         let mut c = c.clone();
                         c.push_back(arg);
-                        stack.push(Rc::new(Value::PartialConstructor(r.clone(), *u, c)));
+                        stack.push(Arc::new(Value::PartialConstructor(r.clone(), *u, c)));
                         *idx += 1;
                     }
                     Value::CycleFnBody(fnint, bindings, mutuals) => {
@@ -164,7 +168,7 @@ impl IR {
                                     info!("Found cycle blank({}) - subbing in {:?}", u, k);
 
                                     binding.1 = *uses;
-                                    binding.2 = Rc::new(Value::CycleFnBody(
+                                    binding.2 = Arc::new(Value::CycleFnBody(
                                         *fnid,
                                         sub_bindings.clone(),
                                         mutuals.clone(),
@@ -198,7 +202,7 @@ impl IR {
                             ("List.size", Value::Sequence(s)) => Some(Value::Nat(s.len() as u64)),
                             ("Text.size", Value::Text(t)) => Some(Value::Nat(t.len() as u64)),
                             ("Text.toCharList", Value::Text(t)) => Some(Value::Sequence(
-                                t.chars().map(|c| Rc::new(Value::Char(c))).collect(),
+                                t.chars().map(|c| Arc::new(Value::Char(c))).collect(),
                             )),
                             ("Text.fromCharList", Value::Sequence(l)) => Some(Value::Text({
                                 l.iter()
@@ -210,14 +214,14 @@ impl IR {
                             })),
                             ("Bytes.size", Value::Bytes(t)) => Some(Value::Nat(t.len() as u64)),
                             ("Bytes.toList", Value::Bytes(t)) => Some(Value::Sequence(
-                                t.iter().map(|t| Rc::new(Value::Nat(*t))).collect(),
+                                t.iter().map(|t| Arc::new(Value::Nat(*t))).collect(),
                             )),
                             _ => None,
                         };
                         match res {
-                            Some(v) => stack.push(Rc::new(v)),
+                            Some(v) => stack.push(Arc::new(v)),
                             None => {
-                                stack.push(Rc::new(Value::PartialNativeApp(
+                                stack.push(Arc::new(Value::PartialNativeApp(
                                     builtin.clone(),
                                     vec![arg.clone()],
                                 )));
@@ -367,7 +371,7 @@ impl IR {
                             ("List.cons", [value], Value::Sequence(l)) => {
                                 let mut l = l.clone();
                                 // WOOP
-                                l.insert(0, Rc::new((*value).clone()));
+                                l.insert(0, Arc::new((*value).clone()));
                                 Value::Sequence(l)
                             }
                             ("List.snoc", [Value::Sequence(l)], _value) => {
@@ -412,7 +416,7 @@ impl IR {
                                 a, b, c
                             ),
                         };
-                        stack.push(Rc::new(res));
+                        stack.push(Arc::new(res));
                         *idx += 1;
                     }
                     term => unimplemented!("Call {:?}", term),
@@ -425,7 +429,7 @@ impl IR {
                     // TODO would be nice to ditch the wrappings
                     v.insert(0, stack.pop().unwrap());
                 }
-                stack.push(Rc::new(Value::Sequence(Vector::from(v))));
+                stack.push(Arc::new(Value::Sequence(Vector::from(v))));
                 *idx += 1;
             }
             IR::JumpTo(mark) => {
@@ -462,12 +466,12 @@ impl IR {
             IR::PatternMatch(pattern, has_where) => {
                 let value = stack.peek().unwrap();
                 if !pattern.matches(&value) {
-                    stack.push(Rc::new(Value::Boolean(false)));
+                    stack.push(Arc::new(Value::Boolean(false)));
                 } else {
                     // STOPSHIP: pass Some(value), (value)
                     // so we know not to double-add
                     match pattern.match_(&value) {
-                        None => stack.push(Rc::new(Value::Boolean(false))),
+                        None => stack.push(Arc::new(Value::Boolean(false))),
                         Some(mut bindings) => {
                             bindings.reverse();
                             if *has_where {
@@ -479,7 +483,7 @@ impl IR {
                                 stack.push(term);
                             }
                             // STOPSHIP support primitives
-                            stack.push(Rc::new(Value::Boolean(true)))
+                            stack.push(Arc::new(Value::Boolean(true)))
                         }
                     }
                 }

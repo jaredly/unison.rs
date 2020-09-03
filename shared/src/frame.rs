@@ -1,21 +1,22 @@
 use super::trace::Trace;
 use super::types::*;
-use std::rc::Rc;
+use serde_derive::{Deserialize, Serialize};
+use std::sync::Arc;
 
-#[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Hash)]
+#[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Hash, Serialize, Deserialize)]
 pub enum Source {
     Value(Hash),
     Fn(usize, Hash),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Frame {
     pub source: Source,
-    pub stack: Vec<Rc<Value>>,
+    pub stack: Vec<Arc<Value>>,
     pub marks: Vec<usize>,
     pub handler: Option<usize>,
     pub return_index: usize,
-    pub bindings: Vec<(Symbol, usize, Rc<Value>)>, // the number of usages to expect
+    pub bindings: Vec<(Symbol, usize, Arc<Value>)>, // the number of usages to expect
 }
 
 impl std::fmt::Display for Frame {
@@ -57,7 +58,6 @@ impl Frame {
             bindings: vec![],
         }
     }
-
     pub fn as_trace(&self, ph: &str, ts: std::time::Duration) -> Trace {
         Trace {
             cat: "frame".to_owned(),

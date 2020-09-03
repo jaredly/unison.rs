@@ -4,8 +4,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 
-use super::base32hex;
-use super::types::*;
+use shared::types::*;
 
 pub trait FromBuffer {
     fn get(buf: &mut Buffer) -> Self;
@@ -66,12 +65,16 @@ impl Buffer {
         T::get(self, env, fvs)
     }
 
-    pub fn get_branch(&mut self) -> Causal<RawBranch> {
+    pub fn get_branch(&mut self) -> crate::Causal<crate::RawBranch> {
         self.get()
     }
 
     pub fn get_type(&mut self) -> TypeDecl {
         // println!("Getting type");
+        self.get()
+    }
+
+    pub fn get_term_type(&mut self) -> ABT<Type> {
         self.get()
     }
 
@@ -192,25 +195,6 @@ impl FromBuffer for ConstructorType {
     }
 }
 
-impl Hash {
-    pub fn from_string(hash: &str) -> Self {
-        let data = base32hex::decode(hash);
-        Hash(data)
-    }
-    pub fn to_string(&self) -> String {
-        let mut m = base32hex::encode(&self.0);
-        m.pop();
-        m
-    }
-}
-
-impl std::fmt::Debug for Hash {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        f.write_str("#")?;
-        f.write_str(&base32hex::encode(&self.0)[0..10])
-    }
-}
-
 impl FromBuffer for Hash {
     fn get(buf: &mut Buffer) -> Self {
         let len: usize = buf.get();
@@ -223,15 +207,6 @@ impl FromBuffer for Hash {
 impl FromBuffer for Id {
     fn get(buf: &mut Buffer) -> Self {
         Id(buf.get(), buf.get(), buf.get())
-    }
-}
-
-impl std::fmt::Debug for Reference {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Reference::Builtin(name) => f.write_str(name),
-            Reference::DerivedId(id) => f.write_str(&format!("{:?}", id.0)),
-        }
     }
 }
 
@@ -311,19 +286,6 @@ impl FromBuffer for SeqOp {
             1 => SeqOp::Snoc,
             2 => SeqOp::Concat,
             _ => unreachable!("Kind tag {}", tag),
-        }
-    }
-}
-
-impl<Inner: std::fmt::Debug> std::fmt::Debug for ABT<Inner> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            ABT::Tm(i) => f.write_fmt(format_args!("{:?}", i)),
-            ABT::Var(i, u) => f.write_fmt(format_args!("〰️{} (#{})", i.text, u)),
-            ABT::Cycle(i) => f.write_fmt(format_args!("🚲({:?})", i)),
-            ABT::Abs(s, u, i) => {
-                f.write_fmt(format_args!("|{}/{} #{}|({:?})", s.text, s.unique, u, i))
-            }
         }
     }
 }
@@ -471,13 +433,14 @@ impl FromBuffer for ABT<Term> {
     }
 }
 
-impl<T: FromBuffer> FromBuffer for Causal<T> {
+impl<T: FromBuffer> FromBuffer for crate::Causal<T> {
     fn get(buf: &mut Buffer) -> Self {
+        use crate::Causal::*;
         let tag = buf.get();
         match tag {
-            0_u8 => Causal::One(buf.get()),
-            1 => Causal::Cons(buf.get(), buf.get()),
-            2 => Causal::Merge(buf.get(), buf.get()),
+            0_u8 => One(buf.get()),
+            1 => Cons(buf.get(), buf.get()),
+            2 => Merge(buf.get(), buf.get()),
             _ => unreachable!("Causal tag {}", tag),
         }
     }
@@ -502,9 +465,9 @@ impl<K: FromBuffer + std::hash::Hash + std::cmp::Eq + Clone, V: FromBuffer> From
     }
 }
 
-impl FromBuffer for RawBranch {
+impl FromBuffer for crate::RawBranch {
     fn get(buf: &mut Buffer) -> Self {
-        RawBranch {
+        crate::RawBranch {
             terms: buf.get(),
             types: buf.get(),
             children: buf.get(),

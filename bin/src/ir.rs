@@ -1,64 +1,7 @@
 use super::env;
-use super::types::*;
+use crate::env::Result;
+use shared::types::*;
 use std::collections::HashMap;
-
-// So I think we have a scope and a stack?
-#[derive(Debug, Clone, PartialEq)]
-pub enum IR {
-    Handle(usize), // indicate that there's a handler at `usize`
-    HandlePure,
-    // This means "grab the function identified by usize"
-    // but maybe this should be a Term?
-    // I mean I should make a different `Value` deal, but not
-    // just this moment
-    // The bool is whether this is a cycle vbl
-    Fn(
-        usize,
-        Vec<(
-            Symbol,
-            usize, // usage number at fn creation site
-            usize, // number of usages to expect within the FN. NOTE we can get rid of this if we switch to just "is this the last" calculation.
-            bool,
-        )>,
-    ),
-    // Builtin(String),
-    Cycle(Vec<(Symbol, usize)>),
-    // CycleFn(usize, Vec<(Symbol, usize)>),
-    // Push this value onto the stack
-    Value(Value),
-    // lookup the symbol, and push it onto the stack
-    PushSym(Symbol, usize),
-    // pop the top value off the stack and give it a name
-    PopAndName(Symbol, usize),
-    // pop the top two values off the stack, call the first with the second
-    Call,
-    // Swap the top two values
-    Swap,
-    // Pop the top N values from the stack, assemble into a seq
-    Seq(usize),
-    JumpTo(usize),
-    Mark(usize),
-    // pop the last value off the stack;
-    // if it's true, advance.
-    /// otherwise, jump to the given mark
-    If(usize),
-    // If2(usize, usize),
-    // hmm I might want to short-circut?
-    // And,
-    // Or,
-    // Dup, // duplicate the top item - might not need it
-    PopUpOne,
-    // Match the given pattern.
-    // If the "has_where" flag is true, bound variables
-    // will be pushed onto the stack twice
-    PatternMatch(Pattern, bool),
-    PatternMatchFail,
-    MarkStack,
-    ClearStackMark,
-    // if false, then pop up to the stack mark.
-    // if true, the following code will bind those vbls, its fine.
-    IfAndPopStack(usize),
-}
 
 fn filter_free_vbls(
     free: &Vec<(Symbol, usize, usize, bool)>,
@@ -77,11 +20,15 @@ fn filter_free_vbls(
         .collect()
 }
 
-impl ABT<Term> {
-    pub fn to_ir(&self, cmds: &mut IREnv, env: &mut GlobalEnv) {
+pub trait ToIR {
+    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) -> Result<()>;
+}
+
+impl ToIR for ABT<Term> {
+    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) -> Result<()> {
         match self {
             ABT::Var(symbol, usage) => cmds.push(IR::PushSym(symbol.clone(), *usage)),
-            ABT::Tm(term) => term.to_ir(cmds, env),
+            ABT::Tm(term) => term.to_ir(cmds, env)?,
             ABT::Cycle(inner) => {
                 let mut names = vec![];
                 let (mut values, body) = unroll_cycle(inner, &mut names);
@@ -104,17 +51,18 @@ impl ABT<Term> {
                             // println!("NOT A TM {:?}", x);
                         }
                     };
-                    values[i].to_ir(cmds, env);
+                    values[i].to_ir(cmds, env)?;
                 }
                 names.reverse();
                 cmds.push(IR::Cycle(names));
-                body.to_ir(cmds, env);
+                body.to_ir(cmds, env)?;
             }
             ABT::Abs(name, uses, body) => {
                 cmds.push(IR::PopAndName(name.clone(), *uses));
-                body.to_ir(cmds, env);
+                body.to_ir(cmds, env)?;
             }
-        }
+        };
+        Ok(())
     }
 }
 
@@ -134,16 +82,26 @@ fn unroll_cycle(
     }
 }
 
-pub struct GlobalEnv {
+pub struct TranslationEnv {
     pub env: env::Env,
-    pub terms: HashMap<Hash, Vec<IR>>,
-    pub types: HashMap<Hash, TypeDecl>,
+    pub terms: HashMap<Hash, (Vec<IR>, ABT<Type>)>,
+    types: HashMap<Hash, TypeDecl>,
     pub anon_fns: Vec<(Hash, Vec<IR>)>, // I think?
 }
 
-impl GlobalEnv {
+impl Into<RuntimeEnv> for TranslationEnv {
+    fn into(self) -> RuntimeEnv {
+        RuntimeEnv {
+            terms: self.terms,
+            types: self.types,
+            anon_fns: self.anon_fns,
+        }
+    }
+}
+
+impl TranslationEnv {
     pub fn new(env: env::Env) -> Self {
-        GlobalEnv {
+        TranslationEnv {
             env,
             terms: HashMap::new(),
             types: HashMap::new(),
@@ -162,47 +120,42 @@ impl GlobalEnv {
         }
     }
 
-    pub fn load(&mut self, hash: &Hash) {
+    pub fn load(&mut self, hash: &Hash) -> Result<()> {
         if self.terms.contains_key(hash) {
             // Already loaded
-            return;
+            return Ok(());
         }
         let mut cmds = IREnv::new(hash.clone());
-        self.terms.insert(hash.to_owned(), vec![]);
-        let term = self.env.load(&hash.to_string());
-        // println!("Loaded {}", hash);
-        // println!("{:?}", term);
-        term.to_ir(&mut cmds, self);
+        self.terms.insert(
+            hash.to_owned(),
+            (
+                vec![],
+                ABT::Tm(Type::Ref(Reference::Builtin("nvm".to_owned()))),
+            ),
+        );
+        let (term, typ) = self.env.load(&hash.to_string())?;
+        term.to_ir(&mut cmds, self)?;
 
         resolve_marks(&mut cmds.cmds);
 
-        // println!("[how]");
-        // for cmd in &cmds.cmds {
-        //     println!("{:?}", cmd);
-        // }
-        // println!("[---]");
-
-        self.terms.insert(hash.to_owned(), cmds.cmds);
+        self.terms.insert(hash.to_owned(), (cmds.cmds, typ));
+        Ok(())
     }
-    pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> usize {
+    pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> Result<usize> {
         let mut sub = IREnv::new(hash.clone());
-        contents.to_ir(&mut sub, self);
+        contents.to_ir(&mut sub, self)?;
 
         resolve_marks(&mut sub.cmds);
 
-        let idx = self.anon_fns.iter().position(|(_, cmds)| {
-            *cmds == sub.cmds
-            // cmds.len() == sub.cmds.len() && cmds.iter().enumerate().all(|(i, n)| n == sub.cmds[i])
-        });
-        match idx {
+        let idx = self.anon_fns.iter().position(|(_, cmds)| *cmds == sub.cmds);
+        Ok(match idx {
             None => {
                 let v = self.anon_fns.len();
                 self.anon_fns.push((hash, sub.cmds));
                 v
             }
             Some(idx) => idx,
-        }
-        // v
+        })
     }
 }
 
@@ -266,8 +219,8 @@ impl IREnv {
     }
 }
 
-impl Term {
-    pub fn to_ir(&self, cmds: &mut IREnv, env: &mut GlobalEnv) {
+impl ToIR for Term {
+    fn to_ir(&self, cmds: &mut IREnv, env: &mut TranslationEnv) -> Result<()> {
         match self {
             Term::Handle(handler, expr) => {
                 /*
@@ -289,10 +242,10 @@ impl Term {
 
                 let handle_mk = cmds.mark();
                 cmds.push(IR::Handle(handle_mk));
-                expr.to_ir(cmds, env);
+                expr.to_ir(cmds, env)?;
                 cmds.push(IR::HandlePure);
                 cmds.push(IR::Mark(handle_mk));
-                handler.to_ir(cmds, env);
+                handler.to_ir(cmds, env)?;
                 cmds.push(IR::Swap);
                 cmds.push(IR::Call);
 
@@ -301,39 +254,39 @@ impl Term {
             }
             Term::Ref(Reference::Builtin(_)) => cmds.push(IR::Value(self.clone().into())),
             Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                env.load(&hash);
+                env.load(&hash)?;
                 cmds.push(IR::Value(self.clone().into()))
             }
             Term::App(one, two) => {
-                one.to_ir(cmds, env);
-                two.to_ir(cmds, env);
+                one.to_ir(cmds, env)?;
+                two.to_ir(cmds, env)?;
                 cmds.push(IR::Call)
             }
-            Term::Ann(term, _) => term.to_ir(cmds, env),
+            Term::Ann(term, _) => term.to_ir(cmds, env)?,
             Term::Sequence(terms) => {
                 let ln = terms.len();
                 for inner in terms {
-                    inner.to_ir(cmds, env);
+                    inner.to_ir(cmds, env)?;
                 }
                 cmds.push(IR::Seq(ln))
             }
             Term::If(cond, yes, no) => {
                 let no_tok = cmds.mark();
                 let done_tok = cmds.mark();
-                cond.to_ir(cmds, env);
+                cond.to_ir(cmds, env)?;
                 cmds.push(IR::If(no_tok));
-                yes.to_ir(cmds, env);
+                yes.to_ir(cmds, env)?;
                 cmds.push(IR::JumpTo(done_tok));
                 cmds.push(IR::Mark(no_tok));
-                no.to_ir(cmds, env);
+                no.to_ir(cmds, env)?;
                 cmds.push(IR::Mark(done_tok));
             }
             Term::And(a, b) => {
                 let fail_tok = cmds.mark();
                 let done_tok = cmds.mark();
-                a.to_ir(cmds, env);
+                a.to_ir(cmds, env)?;
                 cmds.push(IR::If(fail_tok));
-                b.to_ir(cmds, env);
+                b.to_ir(cmds, env)?;
                 cmds.push(IR::If(fail_tok));
                 cmds.push(IR::Value(Value::Boolean(true)));
                 cmds.push(IR::JumpTo(done_tok));
@@ -346,11 +299,11 @@ impl Term {
                 let fail_tok = cmds.mark();
                 let b_tok = cmds.mark();
                 let done_tok = cmds.mark();
-                a.to_ir(cmds, env);
+                a.to_ir(cmds, env)?;
                 cmds.push(IR::If(b_tok));
                 cmds.push(IR::JumpTo(good_tok));
                 cmds.push(IR::Mark(b_tok));
-                b.to_ir(cmds, env);
+                b.to_ir(cmds, env)?;
                 cmds.push(IR::If(fail_tok));
 
                 cmds.push(IR::Mark(good_tok));
@@ -363,12 +316,12 @@ impl Term {
                 cmds.push(IR::Mark(done_tok));
             }
             Term::Let(_, v, body) => {
-                v.to_ir(cmds, env);
-                body.to_ir(cmds, env);
+                v.to_ir(cmds, env)?;
+                body.to_ir(cmds, env)?;
             }
             Term::Match(item, arms) => {
                 let done_tok = cmds.mark();
-                item.to_ir(cmds, env);
+                item.to_ir(cmds, env)?;
                 let mut next_tok = cmds.mark();
                 for MatchCase(pattern, cond, body) in arms {
                     match cond {
@@ -382,13 +335,13 @@ impl Term {
                             cmds.push(IR::MarkStack);
                             cmds.push(IR::PatternMatch(pattern.clone(), true));
                             cmds.push(IR::IfAndPopStack(next_tok));
-                            cond.to_ir(cmds, env);
+                            cond.to_ir(cmds, env)?;
                             cmds.push(IR::IfAndPopStack(next_tok));
                             cmds.push(IR::ClearStackMark);
                         }
                     }
 
-                    body.to_ir(cmds, env);
+                    body.to_ir(cmds, env)?;
                     cmds.push(IR::JumpTo(done_tok));
 
                     cmds.push(IR::Mark(next_tok));
@@ -399,7 +352,7 @@ impl Term {
                 cmds.push(IR::PopUpOne);
             }
             Term::Lam(contents, free_vbls) => {
-                let v = env.add_fn(cmds.term.clone(), &**contents);
+                let v = env.add_fn(cmds.term.clone(), &**contents)?;
                 cmds.push(IR::Fn(v, free_vbls.clone()));
             }
             Term::Request(Reference::Builtin(name), _) => {
@@ -410,12 +363,6 @@ impl Term {
                 match t {
                     TypeDecl::Effect(DataDecl { constructors, .. }) => {
                         let args = calc_args(&constructors[*number].1);
-                        // if args == 0 {
-                        //     cmds.push(IR::Value(Term::Request(
-                        //         Reference::DerivedId(id.clone()),
-                        //         *number,
-                        //     )))
-                        // } else {
                         cmds.push(IR::Value(Value::RequestWithArgs(
                             Reference::DerivedId(id.clone()),
                             *number,
@@ -423,14 +370,14 @@ impl Term {
                             // ok, this is useless allocation if there are no
                             vec![],
                         )))
-                        // }
                     }
                     _ => unimplemented!("ok"),
                 }
             }
 
             _ => cmds.push(IR::Value(self.clone().into())),
-        }
+        };
+        Ok(())
     }
 }
 

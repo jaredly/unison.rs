@@ -1,13 +1,35 @@
-use super::types::*;
+use shared::types::*;
 
 pub trait Visitor {
-    fn visit_abt(&mut self, abt: &mut ABT<Term>) -> bool;
+    fn visit_abt<Inner: Accept>(&mut self, abt: &mut ABT<Inner>) -> bool;
     fn visit_term(&mut self, term: &mut Term) -> bool;
-    fn post_abt(&mut self, abt: &mut ABT<Term>);
+    fn visit_type(&mut self, typ: &mut Type) -> bool;
+    fn post_abt<Inner: Accept>(&mut self, abt: &mut ABT<Inner>);
 }
 
-impl ABT<Term> {
-    pub fn accept<T: Visitor>(&mut self, visitor: &mut T) {
+pub trait Accept {
+    fn accept<T: Visitor>(&mut self, visitor: &mut T);
+}
+
+impl Accept for TypeDecl {
+    fn accept<T: Visitor>(&mut self, visitor: &mut T) {
+        match self {
+            TypeDecl::Data(decl) => {
+                for (_, v) in &mut decl.constructors {
+                    v.accept(visitor)
+                }
+            }
+            TypeDecl::Effect(decl) => {
+                for (_, v) in &mut decl.constructors {
+                    v.accept(visitor)
+                }
+            }
+        }
+    }
+}
+
+impl<Inner: Accept> Accept for ABT<Inner> {
+    fn accept<T: Visitor>(&mut self, visitor: &mut T) {
         if !visitor.visit_abt(self) {
             return;
         }
@@ -23,7 +45,42 @@ impl ABT<Term> {
     }
 }
 
-impl Term {
+impl Accept for Type {
+    fn accept<T: Visitor>(&mut self, visitor: &mut T) {
+        if !visitor.visit_type(self) {
+            return;
+        }
+        use Type::*;
+        match self {
+            Arrow(a, b) => {
+                a.accept(visitor);
+                b.accept(visitor)
+            }
+            Ann(inner, _) => inner.accept(visitor),
+            App(a, b) => {
+                a.accept(visitor);
+                b.accept(visitor)
+            }
+            Effect(a, b) => {
+                a.accept(visitor);
+                b.accept(visitor)
+            }
+            Effects(items) => {
+                for item in items {
+                    item.accept(visitor)
+                }
+            }
+            Forall(inner) => inner.accept(visitor),
+            //  binder like ∀, used to introduce variables that are
+            //  bound by outer type signatures, to support scoped type
+            //  variables
+            IntroOuter(inner) => inner.accept(visitor),
+            Ref(_) => (),
+        }
+    }
+}
+
+impl Accept for Term {
     fn accept<T: Visitor>(&mut self, visitor: &mut T) {
         if !visitor.visit_term(self) {
             return;

@@ -1,7 +1,7 @@
 use super::frame::{Frame, Source};
 use super::types::*;
 use log::info;
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Stack {
@@ -16,7 +16,7 @@ impl Stack {
         }
     }
 
-    pub fn get_vbl(&mut self, sym: &Symbol, usage: usize) -> Rc<Value> {
+    pub fn get_vbl(&mut self, sym: &Symbol, usage: usize) -> Arc<Value> {
         // if this is the final usage, then pluck it out.
         let idx = match self.frames[0]
             .bindings
@@ -65,7 +65,7 @@ impl Stack {
         //         return None;
         //     }
         // }
-        let idx = self.frames[0].handler.unwrap();
+        let idx = self.frames[0].handler.expect("Not a handler (back again)");
         self.frames[0].handler = None;
         Some((idx, new_idx))
     }
@@ -84,14 +84,14 @@ impl Stack {
         // PERF: we could check up the stack and only do this if
         // there's another handler somewhere.
         frames.extend(self.frames.clone());
-        let idx = self.frames[0].handler.unwrap();
+        let idx = self.frames[0].handler.expect("No handler");
         self.frames[0].handler = None;
         Some((idx, frames, current_idx))
     }
 
-    pub fn pop_frame(&mut self) -> (usize, Rc<Value>) {
+    pub fn pop_frame(&mut self) -> (usize, Arc<Value>) {
         let idx = self.frames[0].return_index;
-        let value = self.pop().unwrap();
+        let value = self.pop().expect("No return value to pop");
         self.frames.remove(0);
         info!(
             "{} | <---- Return to idx {} with value {:?} - {:?}",
@@ -103,17 +103,17 @@ impl Stack {
         (idx, value)
     }
     // TODO : fn replace_frame
-    pub fn push(&mut self, t: Rc<Value>) {
+    pub fn push(&mut self, t: Arc<Value>) {
         // info!("{} | Stack push: {:?}", self.frames.len(), t);
         self.frames[0].stack.push(t);
     }
-    pub fn pop(&mut self) -> Option<Rc<Value>> {
+    pub fn pop(&mut self) -> Option<Arc<Value>> {
         let t = self.frames[0].stack.pop();
         // info!("{} | Stack pop: {:?}", self.frames.len(), t);
         t
     }
     // TODO maybe return a & ref to the Rc?
-    pub fn peek(&mut self) -> Option<Rc<Value>> {
+    pub fn peek(&mut self) -> Option<Arc<Value>> {
         let l = self.frames[0].stack.len();
         if l > 0 {
             // info!("Stack peek: {:?}", self.frames[0].stack[l - 1]);
@@ -123,7 +123,7 @@ impl Stack {
         }
     }
     pub fn pop_to_mark(&mut self) {
-        let mark = self.frames[0].marks.pop().unwrap();
+        let mark = self.frames[0].marks.pop().expect("pop to mark");
         while self.frames[0].stack.len() > mark {
             self.frames[0].stack.pop();
         }

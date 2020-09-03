@@ -1,5 +1,5 @@
 use super::types::*;
-use std::rc::Rc;
+use std::sync::Arc;
 
 impl Pattern {
     pub fn matches(&self, term: &Value) -> bool {
@@ -71,7 +71,7 @@ impl Pattern {
                             false
                         }
                     }
-                    _ => unreachable!(),
+                    _ => unreachable!("Concat pattern not a sequence literal on either side"),
                 },
             },
             (Pattern::Constructor(reference, number, children), inner) => {
@@ -104,7 +104,7 @@ impl Pattern {
         }
     }
 
-    pub fn match_(&self, id: &Value) -> Option<Vec<Rc<Value>>> {
+    pub fn match_(&self, id: &Value) -> Option<Vec<Arc<Value>>> {
         match (self.clone(), (id).clone()) {
             (Pattern::EffectPure(_), Value::RequestWithContinuation(_, _, _, _, _, _)) => None,
             (Pattern::EffectPure(pattern), Value::RequestPure(inner)) => pattern.match_(&inner),
@@ -126,13 +126,13 @@ impl Pattern {
                 tkont[current_idx].handler = None;
                 match *kont {
                     Pattern::Unbound => (),
-                    Pattern::Var => all.push(Rc::new(Value::Continuation(tidx, tkont))),
+                    Pattern::Var => all.push(Arc::new(Value::Continuation(tidx, tkont))),
                     _ => unreachable!("Can't match on a continuation"),
                 }
                 Some(all)
             }
             (Pattern::Unbound, _) => Some(vec![]),
-            (Pattern::Var, t) => Some(vec![Rc::new(t)]),
+            (Pattern::Var, t) => Some(vec![Arc::new(t)]),
             (Pattern::Boolean(a), Value::Boolean(b)) if a == b => Some(vec![]),
             (Pattern::Int(a), Value::Int(b)) if a == b => Some(vec![]),
             (Pattern::Nat(a), Value::Nat(b)) if a == b => Some(vec![]),
@@ -142,7 +142,7 @@ impl Pattern {
             (Pattern::As(a), _term) => match a.match_(id) {
                 None => None,
                 Some(mut terms) => {
-                    terms.insert(0, Rc::new(id.clone()));
+                    terms.insert(0, Arc::new(id.clone()));
                     Some(terms)
                 }
             },
@@ -236,7 +236,7 @@ impl Pattern {
                             None
                         }
                     }
-                    _ => unreachable!(),
+                    _ => unreachable!("Concat pattern not a sequence literal on either side"),
                 },
             },
             (Pattern::Constructor(reference, number, children), inner) => {

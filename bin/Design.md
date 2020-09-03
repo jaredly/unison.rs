@@ -97,8 +97,8 @@ Unless unison could tell me the hashes of things or something, in what it output
 # WASM! What's it look like?
 
 My basic idea has been:
-- have a binary that you can call to "package" up a top-level unison term for running (this would create an IREnv probably? I'll need to trim down GlobalEnv so it doesn't depend on env::Env or TypeDecl probably)
-  - this is probably a `TrimmedDownGlobalEnv` that has been bincoded.
+- have a binary that you can call to "package" up a top-level unison term for running (this would create an IREnv probably? I'll need to trim down TranslationEnv so it doesn't depend on env::Env or TypeDecl probably)
+  - this is probably a `TrimmedDownTranslationEnv` that has been bincoded.
 - have a wasm "interpreter" that will take a package, `my-file.ubwasm`, parse it, and run it.
 
 Once I have that done, I can think about implementing IO? Probably.
@@ -118,7 +118,7 @@ Ok, but more straightforward:
 
 # JASM! What do would it look like to implement the runtime that I've got in javascript?
 
-I could encode the `TrimmedDownGlobalEnv` to JSON instead, and I think `ir_runtime` and `pattern.rs` are the only things I would need?
+I could encode the `TrimmedDownTranslationEnv` to JSON instead, and I think `ir_runtime` and `pattern.rs` are the only things I would need?
 
 # Unison.js
 
