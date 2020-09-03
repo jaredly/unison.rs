@@ -35,10 +35,135 @@ pub fn show_env(env: &RuntimeEnv) {
     }
 }
 
-pub fn extract_args(typ: &ABT<Type>) -> (Vec<ABT<Type>>, Vec<Hash>, ABT<Type>) {
+pub trait ConvertibleArg<T: Sized> {
+    fn as_f64(&self) -> Option<f64>;
+    fn as_string(&self) -> Option<String>;
+    fn as_list(&self) -> Option<Vec<T>>;
+    fn is_empty(&self) -> bool;
+}
+
+fn convert_arg<'a, T>(
+    arg: T,
+    typ: &'a ABT<Type>,
+    mut args: Vec<&'a ABT<Type>>,
+) -> Result<Value, String>
+where
+    T: std::fmt::Debug + Sized + ConvertibleArg<T>,
+{
+    use Type::*;
+    use ABT::*;
+    match typ {
+        Tm(inner) => match inner {
+            Arrow(_, _) => Err("Functions aren't yet supported".to_owned()),
+            Ann(inner, _) => convert_arg(arg, inner, args),
+            App(inner, targ) => {
+                args.insert(0, targ);
+                convert_arg(arg, inner, args)
+            }
+            Effect(_, _) => Err("Effect types not yet supported".to_owned()),
+            Effects(_) => Err("Effects not supported".to_owned()),
+            Forall(inner) => convert_arg(arg, inner, args),
+            IntroOuter(inner) => convert_arg(arg, inner, args),
+            Ref(Reference::Builtin(name)) => match name.as_str() {
+                "Nat" => match arg.as_f64() {
+                    None => Err(format!("Expected an unsigned int, got {:?}", arg)),
+                    Some(n) if n < 0.0 => {
+                        Err(format!("Expected an unsigned int, got a negative {}", n))
+                    }
+                    Some(n) if n.fract() > 1.0e-10 => {
+                        Err(format!("Expected an unsigned int, got a float {}", n))
+                    }
+                    Some(n) => Ok(Value::Nat(n as u64)),
+                },
+                "Int" => match arg.as_f64() {
+                    None => Err(format!("Expected an int, got {:?}", arg)),
+                    Some(n) if n.fract() > 1.0e-10 => {
+                        Err(format!("Expected an int, got a float {}", n))
+                    }
+                    Some(n) => Ok(Value::Int(n as i64)),
+                },
+                "Float" => match arg.as_f64() {
+                    None => Err(format!("Expected a float, got {:?}", arg)),
+                    Some(n) => Ok(Value::Float(n)),
+                },
+                "Text" => match arg.as_string() {
+                    None => Err(format!("Expected a string, got {:?}", arg)),
+                    Some(n) => Ok(Value::Text(n)),
+                },
+                _ => Err(format!("Unsupported builtin {}", name)),
+            },
+            Ref(Reference::DerivedId(Id(hash, _, _))) => {
+                let hash_raw = hash.to_string();
+                if hash_raw == OPTION_HASH {
+                    match args.as_slice() {
+                        [targ] => {
+                            if arg.is_empty() {
+                                Ok(Value::PartialConstructor(
+                                    Reference::DerivedId(Id(hash.clone(), 0, 0)),
+                                    0,
+                                    im::Vector::new(),
+                                ))
+                            } else {
+                                convert_arg(arg, targ, vec![])
+                            }
+                        }
+                        _ => Err(format!("Option type can only have one argument")),
+                    }
+                } else {
+                    Err(format!("Custom types not yet supported: {:?}", hash))
+                }
+            }
+        },
+        typ => Err(format!("Unexpected ABT {:?}", typ)),
+    }
+}
+
+pub fn convert_args<T>(args: Vec<T>, typs: &Vec<ABT<Type>>) -> Result<Vec<Value>, String>
+where
+    T: std::fmt::Debug + Sized + ConvertibleArg<T>,
+{
+    if args.len() > typs.len() {
+        return Err(format!(
+            "Too many arguments provided: {} vs {}",
+            args.len(),
+            typs.len()
+        ));
+    }
+    let mut res = vec![];
+    for (i, arg) in args.into_iter().enumerate() {
+        res.push(
+            convert_arg(arg, &typs[i], vec![])
+                .map_err(|v| format!("Unable to convert argument {}: {}", i, v))?,
+        );
+    }
+    Ok(res)
+}
+
+pub fn extract_args(typ: &ABT<Type>) -> (Vec<ABT<Type>>, Vec<ABT<Type>>, ABT<Type>) {
     use Type::*;
     match typ {
+        ABT::Abs(_, _, inner) => extract_args(inner),
         ABT::Tm(typ) => match typ {
+            Forall(inner) => extract_args(inner),
+            Effect(effects, inner) => {
+                let (a, mut b, c) = extract_args(inner);
+                let effects = match &**effects {
+                    ABT::Tm(t) => match t {
+                        Effects(effects) => {
+                            // TODO go through and find the DerivedId refs, and just add those
+                            // also dedup.
+                            effects.clone()
+                        }
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                };
+                b.extend(effects); // TODO do I care about ordering here?
+                                   // for e in effects {
+                                   //     b.push(e)
+                                   // }
+                (a, b, c)
+            }
             Arrow(one, two) => {
                 let (mut a, b, c) = extract_args(two);
                 // let one = match &**one {
@@ -63,7 +188,7 @@ pub fn eval(env: &RuntimeEnv, hash: &str, trace: &mut Traces) -> Arc<Value> {
 impl RuntimeEnv {
     pub fn add_eval(&mut self, hash: &str, args: Vec<Value>) -> Result<Hash, String> {
         let typ = self.terms.get(&Hash::from_string(hash)).unwrap().1.clone();
-        let mut cmds = vec![IR::Pop, IR::Value(Value::Ref(Reference::from_hash(hash)))];
+        let mut cmds = vec![IR::Value(Value::Ref(Reference::from_hash(hash)))];
         let (_arg_typs, _effects, typ) = extract_args(&typ);
         for (_, arg) in args.into_iter().enumerate() {
             // if typ_check(&arg, arg_typs[i]) {

@@ -583,7 +583,57 @@ fn run(file: &String) -> std::io::Result<()> {
     Ok(())
 }
 
+#[derive(Debug)]
+struct WrappedValue(String);
+
+impl shared::ir_runtime::ConvertibleArg<WrappedValue> for WrappedValue {
+    fn as_f64(&self) -> Option<f64> {
+        self.0.parse().ok()
+    }
+    fn as_string(&self) -> Option<String> {
+        self.0.parse().ok()
+    }
+    fn as_list(&self) -> Option<Vec<Self>> {
+        None
+    }
+    fn is_empty(&self) -> bool {
+        self.0.len() == 0
+    }
+}
+
 fn run_cli_term(file: &String, args: &[String]) -> std::io::Result<()> {
+    let path = std::path::PathBuf::from(file);
+
+    let terms_path = path.parent().unwrap();
+    let hash_raw = &path.file_name().unwrap().to_str().unwrap()[1..];
+
+    let env = env::Env::init(terms_path.parent().unwrap());
+    let mut ir_env = ir::TranslationEnv::new(env);
+    let hash = types::Hash::from_string(hash_raw);
+    ir_env.load(&hash).unwrap();
+
+    let mut runtime_env: shared::types::RuntimeEnv = ir_env.into();
+
+    let t = &runtime_env.terms.get(&hash).unwrap().1;
+    println!("Type: {:?}", t);
+    let (targs, effects, tres) = shared::ir_runtime::extract_args(t);
+    let args = shared::ir_runtime::convert_args(
+        args.into_iter().map(|x| WrappedValue(x.clone())).collect(),
+        &targs,
+    )
+    .unwrap();
+    println!("Got {:?} -- {:?} -- {:?}", targs, effects, tres);
+
+    let eval_hash = runtime_env.add_eval(hash_raw, args).unwrap();
+
+    let mut trace = shared::trace::Traces::new();
+
+    let mut state = shared::ir_runtime::State::new_value(&runtime_env, eval_hash);
+    let ret = state.run_to_end(&mut trace);
+    // let ret = shared::ir_runtime::eval(&runtime_env, eval_hash, &mut trace);
+
+    println!("-> {:?}", ret);
+
     Ok(())
 }
 
