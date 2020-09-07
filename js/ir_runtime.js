@@ -23,7 +23,10 @@ export class RuntimeEnv {
         if (source.type === 'term') {
             if (this.terms[source.hash]) return this.terms[source.hash][0];
         }
-        return this.anon_fns[source.fn][1];
+        if (!this.anon_fns[source.fnid]) {
+            throw new Error(`No function: ${JSON.stringify(source)}`);
+        }
+        return this.anon_fns[source.fnid][1];
     }
 }
 

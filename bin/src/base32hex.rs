@@ -67,11 +67,11 @@ pub fn encode(mut src: &[u8]) -> String {
     dst.join("")
 }
 
-fn get_hex_value(hexes: &str, value: &str) -> u8 {
+fn _get_hex_value(hexes: &str, value: &str) -> u8 {
     hexes.find(value).unwrap() as u8
 }
 
-pub fn decode(src: &str) -> Vec<u8> {
+pub fn _decode(src: &str) -> Vec<u8> {
     let mut src = src.to_lowercase();
     let hexes = default_str_map();
 
@@ -95,7 +95,7 @@ pub fn decode(src: &str) -> Vec<u8> {
                 src_len = i;
                 break;
             } else {
-                dbuf[i] = get_hex_value(hexes, char);
+                dbuf[i] = _get_hex_value(hexes, char);
             }
         }
 

@@ -8,7 +8,7 @@ const newFrame = (source, return_index) => ({
 });
 
 const symEq = (a, b) => {
-    throw new Error('not yet');
+    return a.unique === b.unique;
 };
 
 export class Stack {
@@ -85,7 +85,12 @@ export class Stack {
 
     push(t) {
         this.frames[0].stack.push(t);
-        console.log('push to stack', t);
+        console.log(
+            'push to stack',
+            t,
+            'stack size',
+            this.frames[0].stack.length,
+        );
     }
 
     pop() {

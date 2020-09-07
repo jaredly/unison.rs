@@ -12,7 +12,7 @@ mod visitor;
 use shared::types;
 mod base32hex;
 
-fn load_type(file: &std::path::Path) -> std::io::Result<()> {
+fn _load_type(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
         return Ok(());
     }
@@ -21,7 +21,7 @@ fn load_type(file: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn load_term(file: &std::path::Path) -> std::io::Result<()> {
+fn _load_term(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
         return Ok(());
     }
@@ -211,7 +211,7 @@ fn get_head(root: &std::path::Path) -> std::io::Result<String> {
     Ok(name)
 }
 
-fn load_branch(file: &std::path::Path) -> std::io::Result<()> {
+fn _load_branch(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
         return Ok(());
     }
@@ -320,7 +320,7 @@ fn env_names(
     (term_names, constr_names, type_names)
 }
 
-fn term_to_env(root: &std::path::Path, hash: &str, out: &str) -> std::io::Result<RuntimeEnv> {
+fn term_to_env(root: &std::path::Path, hash: &str, _out: &str) -> std::io::Result<RuntimeEnv> {
     let env = env::Env::init(&root);
     let mut ir_env = ir::TranslationEnv::new(env);
     ir_env.load(&types::Hash::from_string(hash)).unwrap();
@@ -364,6 +364,15 @@ impl JsonEnv {
 fn pack_term_json(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
     let root = terms_path.parent().unwrap();
     let runtime_env = term_to_env(root, hash, out)?;
+
+    let paths = path_with(&root, "paths");
+    let mut branch = Branch::load(&paths, get_head(&paths)?)?;
+    branch.load_children(&paths, true)?;
+
+    std::fs::write(
+        out.to_owned() + ".names.json",
+        serde_json::to_string(&env_names(&branch, &runtime_env)).unwrap(),
+    )?;
 
     std::fs::write(
         out,
@@ -549,7 +558,7 @@ fn pack(file: &String, outfile: &String) -> std::io::Result<()> {
     return Ok(());
 }
 
-fn run(file: &String) -> std::io::Result<()> {
+fn _run(file: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
 
     if path.ends_with("paths") {
@@ -593,7 +602,7 @@ fn run(file: &String) -> std::io::Result<()> {
         for mut entry in entries {
             println!("Checking folder: {:?}", entry);
             entry.push("compiled.ub");
-            load_type(entry.as_path())?;
+            _load_type(entry.as_path())?;
         }
         println!("Parsed them all");
         return Ok(());
@@ -609,16 +618,16 @@ fn run(file: &String) -> std::io::Result<()> {
     }
 
     if path.parent().unwrap().parent().unwrap().ends_with("types") {
-        return load_type(path.as_path());
+        return _load_type(path.as_path());
     }
     if file.ends_with("compiled.ub") {
-        return load_term(path.as_path());
+        return _load_term(path.as_path());
     }
     if path.parent().unwrap().ends_with("paths") {
-        return load_branch(path.as_path());
+        return _load_branch(path.as_path());
     }
     if file.ends_with(".ub") {
-        return load_term(path.as_path());
+        return _load_term(path.as_path());
     }
     let entries = std::fs::read_dir(path)?
         .map(|res| res.map(|e| e.path()))
@@ -627,7 +636,7 @@ fn run(file: &String) -> std::io::Result<()> {
     for mut entry in entries {
         println!("Checking folder: {:?}", entry);
         entry.push("compiled.ub");
-        load_term(entry.as_path())?
+        _load_term(entry.as_path())?
     }
     println!("Parsed them all");
     Ok(())

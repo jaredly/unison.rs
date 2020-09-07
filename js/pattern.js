@@ -2,7 +2,7 @@ const key = (o) => (typeof o === 'string' ? o : Object.keys(o)[0]);
 
 export const patternMatch = (pattern, term) => {
     const pt = key(pattern);
-    const vt = key(value);
+    const vt = key(term);
     if (pt === 'Unbound') {
         return [];
     }

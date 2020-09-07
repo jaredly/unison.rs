@@ -1,5 +1,7 @@
 // ir_exec
 
+import { patternMatch } from './pattern';
+
 // pub enum Ret {
 //     FnCall(usize, Vec<(Symbol, usize, Arc<Value>)>, Arc<Value>),
 //     Value(Hash),
@@ -65,9 +67,9 @@ const handlers = {
         state.idx += 1;
     },
     Fn: ([i, free_vbls], state) => {
-        const bound = free_vbls.map((i, [sym, external, internal, cycle]) => {
+        const bound = free_vbls.map(([sym, external, internal, cycle], i) => {
             return [
-                sym.with_unique(i),
+                { ...sym, unique: i },
                 internal,
                 cycle
                     ? { CycleBlank: sym.unique }
@@ -104,10 +106,9 @@ const handlers = {
         console.log('Call!');
         let arg = state.stack.pop();
         let f = state.stack.pop();
-        console.log(arg, f);
+        console.log(f, arg);
         const typ = key(f);
-        call[typ](f[typ], arg, state);
-        // state.idx += 1;
+        return call[typ](f[typ], arg, state);
     },
     Seq: (num, state) => {
         const v = [];
@@ -126,7 +127,7 @@ const handlers = {
         state.idx += 1;
     },
     If: (mark, state) => {
-        const v = stack.pop();
+        const v = state.stack.pop();
         if (v.Boolean === true) {
             state.idx += 1;
         } else if (v.Boolean === false) {
@@ -136,7 +137,7 @@ const handlers = {
         }
     },
     IfAndPopStack: (mark, state) => {
-        const v = stack.pop();
+        const v = state.stack.pop();
         if (v.Boolean === true) {
             state.idx += 1;
         } else if (v.Boolean === false) {
@@ -156,7 +157,7 @@ const handlers = {
     },
     PatternMatch: ([pattern, has_where], state) => {
         const value = state.stack.peek();
-        const bindings = patternMatches(pattern, state);
+        const bindings = patternMatch(pattern, state);
         if (!bindings) {
             state.stack.push({ Boolean: false });
         } else {
@@ -188,7 +189,8 @@ const handlers = {
                 ReRequest: [req, i, args, back_idx, frames, current_idx],
             };
         } else {
-            throw new Error();
+            console.log(value, state);
+            throw new Error(`Pattern match fail ${JSON.stringify(value)}`);
         }
     },
     PopUpOne: (_, state) => {
@@ -223,7 +225,7 @@ const call = {
         state.idx += 1;
     },
     PartialConstructor([r, u, c], arg, state) {
-        c.push_back(arg);
+        c.push(arg);
         state.stack.push({ PartialConstructor: [r, u, c] });
         state.idx += 1;
     },
