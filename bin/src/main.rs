@@ -225,9 +225,21 @@ impl<'a> visitor::Visitor for TypeWalker<'a> {
     fn visit_abt<Inner: visitor::Accept>(&mut self, _: &mut ABT<Inner>) -> bool {
         true
     }
-    fn visit_term(&mut self, _: &mut Term) -> bool {
+
+    fn visit_term(&mut self, term: &mut Term) -> bool {
+        match term {
+            Term::Constructor(Reference::DerivedId(Id(hash, _, _)), _) => {
+                let hash = hash.to_string();
+                if !self.0.has_type(&hash) {
+                    use visitor::Accept;
+                    self.0.load_type(&hash).accept(self);
+                }
+            }
+            _ => (),
+        };
         true
     }
+
     fn visit_type(&mut self, typ: &mut Type) -> bool {
         match typ {
             Type::Ref(Reference::DerivedId(Id(hash, _, _))) => {
@@ -282,6 +294,45 @@ fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+fn all_branch_names(
+    branch: &Branch,
+) -> (
+    HashMap<String, Vec<Vec<String>>>,
+    HashMap<String, HashMap<usize, Vec<Vec<String>>>>,
+    HashMap<String, Vec<Vec<String>>>,
+) {
+    let (all_names, all_constr_names, all_type_names) = branch_names(branch);
+    use std::iter::FromIterator;
+    let term_names = HashMap::from_iter(all_names.iter().map(|(k, v)| (k.to_string(), v.clone())));
+    let constr_names = HashMap::from_iter(
+        all_constr_names
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone())),
+    );
+    let type_names = HashMap::from_iter(
+        all_type_names
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone())),
+    );
+
+    (term_names, constr_names, type_names)
+}
+
+fn branch_names(
+    branch: &Branch,
+) -> (
+    HashMap<Hash, Vec<Vec<String>>>,
+    HashMap<Hash, HashMap<usize, Vec<Vec<String>>>>,
+    HashMap<Hash, Vec<Vec<String>>>,
+) {
+    let mut all_names = HashMap::new();
+    let mut all_constr_names = HashMap::new();
+    branch.collect_names(&vec![], &mut all_names, &mut all_constr_names);
+    let mut all_type_names = HashMap::new();
+    branch.type_names(&vec![], &mut all_type_names);
+    (all_names, all_constr_names, all_type_names)
+}
+
 fn env_names(
     branch: &Branch,
     runtime_env: &RuntimeEnv,
@@ -290,11 +341,13 @@ fn env_names(
     HashMap<String, HashMap<usize, Vec<Vec<String>>>>,
     HashMap<String, Vec<Vec<String>>>,
 ) {
-    let mut all_names = HashMap::new();
-    let mut all_constr_names = HashMap::new();
-    branch.collect_names(&vec![], &mut all_names, &mut all_constr_names);
-    let mut all_type_names = HashMap::new();
-    branch.type_names(&vec![], &mut all_type_names);
+    let (all_names, all_constr_names, all_type_names) = branch_names(branch);
+
+    // let mut all_names = HashMap::new();
+    // let mut all_constr_names = HashMap::new();
+    // branch.collect_names(&vec![], &mut all_names, &mut all_constr_names);
+    // let mut all_type_names = HashMap::new();
+    // branch.type_names(&vec![], &mut all_type_names);
 
     let mut term_names = HashMap::new();
     let mut constr_names = HashMap::new();
@@ -536,6 +589,76 @@ fn run_test(root: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+fn pack_all_json(file: &String, outfile: &String) -> std::io::Result<()> {
+    let terms_path = std::path::PathBuf::from(file);
+
+    println!("Packing all the terms I can find");
+    let root = terms_path.parent().unwrap();
+    let paths = path_with(&root, "paths");
+    let mut branch = Branch::load(&paths, get_head(&paths)?)?;
+    branch.load_children(&paths, true)?;
+
+    let mut all_terms = std::collections::HashMap::new();
+    branch.collect_terms(&vec![], &mut all_terms);
+
+    let env = env::Env::init(root);
+    let mut ir_env = ir::TranslationEnv::new(env);
+
+    for hash in all_terms.values() {
+        let _ = ir_env.load(hash);
+    }
+
+    {
+        let mut walker = TypeWalker(&mut ir_env.env);
+        let ks: Vec<String> = walker.0.type_cache.keys().cloned().collect();
+        for k in ks {
+            use visitor::Accept;
+            let mut m = walker.0.load_type(&k);
+            m.accept(&mut walker);
+        }
+    }
+
+    let runtime_env: shared::types::RuntimeEnv = ir_env.into();
+
+    std::fs::write(
+        outfile.to_owned() + ".names.json",
+        serde_json::to_string(&all_branch_names(&branch)).unwrap(),
+    )?;
+    std::fs::write(
+        outfile,
+        serde_json::to_string(&JsonEnv::from_runtime(runtime_env)).unwrap(),
+    )?;
+
+    Ok(())
+
+    // pack_all_terms_json(
+    //     path.parent().unwrap(),
+    //     &path.file_name().unwrap().to_str().unwrap()[1..],
+    //     outfile,
+    // )?;
+
+    // fn pack_term_json(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
+    // let root = terms_path.parent().unwrap();
+    // let runtime_env = term_to_env(root, hash, out)?;
+
+    // let paths = path_with(&root, "paths");
+    // let mut branch = Branch::load(&paths, get_head(&paths)?)?;
+    // branch.load_children(&paths, true)?;
+
+    // std::fs::write(
+    //     out.to_owned() + ".names.json",
+    //     serde_json::to_string(&env_names(&branch, &runtime_env)).unwrap(),
+    // )?;
+
+    // std::fs::write(
+    //     out,
+    //     serde_json::to_string(&JsonEnv::from_runtime(runtime_env)).unwrap(),
+    // )
+    // }
+
+    // return Ok(());
+}
+
 fn pack_json(file: &String, outfile: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
 
@@ -710,6 +833,7 @@ fn main() -> std::io::Result<()> {
             ("test", [path]) => run_test(path),
             ("pack", [path, output]) => pack(path, output),
             ("pack-json", [path, output]) => pack_json(path, output),
+            ("pack-all-json", [path, output]) => pack_all_json(path, output),
             ("pack-all", [path, output]) => pack_all(&std::path::PathBuf::from(path), output),
             // ("test-all", [path]) => run_all_tests(path),
             ("run", args) => run_cli_term(&args[0], &args[1..]),
