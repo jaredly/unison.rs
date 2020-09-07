@@ -2,6 +2,7 @@
 
 import { Stack } from './stack';
 import { eval_ir } from './ir_exec';
+import { pretty_print } from './pretty_print';
 
 export const eval_value = (env, hash) => {
     const state = new State(env, hash);
@@ -13,10 +14,12 @@ export class RuntimeEnv {
     // anon_fns: Array<[String, Array<IR>]>;
     // types: { [key: string]: TypeDecl };
 
-    constructor({ terms, anon_fns, types }) {
+    constructor({ terms, anon_fns, types }, names) {
         this.terms = terms;
         this.anon_fns = anon_fns;
         this.types = types;
+        console.log('names', names);
+        this.names = names;
     }
 
     cmds(source) {
@@ -36,6 +39,10 @@ export class State {
         this.idx = 0;
         this.env = env;
         this.stack = new Stack({ type: 'term', hash });
+    }
+
+    pretty_print(value) {
+        return pretty_print(this.env.names, value);
     }
 
     run_to_end() {

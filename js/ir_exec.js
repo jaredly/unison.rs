@@ -189,7 +189,7 @@ const handlers = {
                 ReRequest: [req, i, args, back_idx, frames, current_idx],
             };
         } else {
-            console.log(value, state);
+            console.log(state.pretty_print(value), state);
             throw new Error(`Pattern match fail ${JSON.stringify(value)}`);
         }
     },
