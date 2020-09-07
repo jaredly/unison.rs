@@ -1,3 +1,6 @@
+// ok
+
+import compare from './compare';
 const key = (o) => (typeof o === 'string' ? o : Object.keys(o)[0]);
 
 export const patternMatch = (pattern, term) => {
@@ -10,16 +13,21 @@ export const patternMatch = (pattern, term) => {
         return [term];
     }
     if (pt === 'As') {
-        const res = patternMatch(pattern[pt], value);
-        return res != null ? [value].concat(res) : null;
+        const res = patternMatch(pattern[pt], term);
+        return res != null ? [term].concat(res) : null;
+    }
+    if (pt === 'Constructor') {
+        return matchConstructor(pattern[pt], term);
     }
     // Boolean, Int, Nat, Float, Text, Char
     if (pt === vt) {
-        return pattern[pt] === value[vt];
+        // console.log('builtin', pattern[pt], term[vt], pt);
+        return pattern[pt] === term[vt] ? [] : null;
     }
     const bothKey = `${pt}:${vt}`;
+    // console.log('bk', bothKey);
     if (matchers[bothKey]) {
-        return matchers[bothKey](pattern[pt], value[vt]);
+        return matchers[bothKey](pattern[pt], term[vt]);
     }
     return null;
 };
@@ -29,6 +37,7 @@ const matchers = {
         [reference, number, args, kont],
         [tref, tnum, targs, tidx, tkont, current_idx],
     ) => {
+        console.log('');
         if (
             compare(reference, tref) === 0 &&
             number === tnum &&
@@ -151,15 +160,21 @@ const matchConstructor = ([reference, number, children], inner) => {
             const [r, n, pchildren] = inner[k];
             if (compare(r, reference) == 0 && number === n) {
                 if (pchildren.length !== children.length) {
+                    // console.log('children len diff');
                     return null;
                 }
                 for (let i = 0; i < children.length; i++) {
                     const res = patternMatch(children[i], pchildren[i]);
                     if (res != null) {
+                        // console.log('got it', res);
                         all.push(...res);
+                    } else {
+                        return null;
                     }
                 }
                 return all;
+            } else {
+                // console.log('partial not', r, reference, number, n);
             }
         }
     } else {

@@ -18,7 +18,7 @@ export class RuntimeEnv {
         this.terms = terms;
         this.anon_fns = anon_fns;
         this.types = types;
-        console.log('names', names);
+        // console.log('names', names);
         this.names = names;
     }
 
@@ -46,14 +46,14 @@ export class State {
     }
 
     run_to_end() {
-        console.log(this.cmds);
+        // console.log(this.cmds);
         this.run();
         return this.stack.pop();
     }
 
     run() {
         while (this.idx < this.cmds.length) {
-            console.log(`- (${this.idx})`, this.cmds[this.idx]);
+            // console.log(`- (${this.idx})`, this.cmds[this.idx]);
             const ret = eval_ir(this.cmds[this.idx], this);
             if (ret) {
                 this.handle_ret(ret);
@@ -121,13 +121,14 @@ export class State {
             this.cmds = this.env.cmds(this.stack.frames[0].source);
 
             this.stack.push({
-                type: 'RequestWithContinuation',
-                kind,
-                number,
-                args,
-                final_index,
-                frames,
-                frame_index,
+                RequestWithContinuation: [
+                    kind,
+                    number,
+                    args,
+                    final_index,
+                    frames,
+                    frame_index,
+                ],
             });
         },
         Request: ([kind, number, args]) => {
@@ -141,13 +142,14 @@ export class State {
             this.cmds = this.env.cmds(this.stack.frames[0].source);
 
             this.stack.push({
-                type: 'RequestWithContinuation',
-                kind,
-                number,
-                args,
-                final_index,
-                saved_frames,
-                frame_idx,
+                RequestWithContinuation: [
+                    kind,
+                    number,
+                    args,
+                    final_index,
+                    saved_frames,
+                    frame_idx,
+                ],
             });
         },
         FnCall: ([fnid, bindings, arg]) => {

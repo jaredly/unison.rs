@@ -30,12 +30,12 @@ export class Stack {
     }
 
     new_frame(return_index, source) {
-        console.log('->> New Frame', source, return_index);
+        // console.log('->> New Frame', source, return_index);
         this.frames.unshift(newFrame(source, return_index));
     }
 
     clone_frame(return_index) {
-        console.log('->> Clone Frame');
+        // console.log('->> Clone Frame');
         this.frames.unshift({ ...this.frames[0] });
         this.frames[0].return_index = return_index;
     }
@@ -75,7 +75,7 @@ export class Stack {
     pop_frame() {
         const idx = this.frames[0].return_index;
         const value = this.pop();
-        console.log('<<- pop frame', idx, value);
+        // console.log('<<- pop frame', idx, value);
         if (value == null) {
             throw new Error('no return value');
         }
@@ -85,17 +85,17 @@ export class Stack {
 
     push(t) {
         this.frames[0].stack.push(t);
-        console.log(
-            'push to stack',
-            t,
-            'stack size',
-            this.frames[0].stack.length,
-        );
+        // console.log(
+        //     'push to stack',
+        //     t,
+        //     'stack size',
+        //     this.frames[0].stack.length,
+        // );
     }
 
     pop() {
         const t = this.frames[0].stack.pop();
-        console.log('pop from stack', t);
+        // console.log('pop from stack', t);
         if (t == null) {
             throw new Error(`Popping from the stack, but nothing is there`);
         }

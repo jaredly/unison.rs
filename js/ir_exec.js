@@ -1,5 +1,6 @@
 // ir_exec
 
+import compare from './compare';
 import { patternMatch } from './pattern';
 
 // pub enum Ret {
@@ -103,10 +104,10 @@ const handlers = {
         state.idx += 1;
     },
     Call: (_, state) => {
-        console.log('Call!');
+        // console.log('Call!');
         let arg = state.stack.pop();
         let f = state.stack.pop();
-        console.log(f, arg);
+        // console.log(f, arg);
         const typ = key(f);
         return call[typ](f[typ], arg, state);
     },
@@ -157,7 +158,11 @@ const handlers = {
     },
     PatternMatch: ([pattern, has_where], state) => {
         const value = state.stack.peek();
-        const bindings = patternMatch(pattern, state);
+        // console.log(`MATCH`);
+        // console.log(pattern);
+        // console.log(value);
+        const bindings = patternMatch(pattern, value);
+        // console.log('RESULT', bindings);
         if (!bindings) {
             state.stack.push({ Boolean: false });
         } else {
@@ -189,7 +194,7 @@ const handlers = {
                 ReRequest: [req, i, args, back_idx, frames, current_idx],
             };
         } else {
-            console.log(state.pretty_print(value), state);
+            // console.log(state.pretty_print(value));
             throw new Error(`Pattern match fail ${JSON.stringify(value)}`);
         }
     },
@@ -215,7 +220,7 @@ const call = {
     RequestWithArgs([r, i, n, args], arg, state) {
         state.idx += 1;
         args.push(arg);
-        if (args.len() == n) {
+        if (args.length == n) {
             return { Request: [r, i, args] };
         }
         state.stack.push({ RequestWithArgs: [r, i, n, args] });
@@ -258,6 +263,13 @@ const call = {
     PartialNativeApp([name, args], arg, state) {
         return callMultiArgBuiltin(name, args, arg, state);
     },
+};
+
+const expectList = (v) => {
+    if ('Sequence' in v) {
+        return v.Sequence;
+    }
+    throw new Error('Not a list: ' + JSON.stringify(v));
 };
 
 const expectInt = (v) => {
