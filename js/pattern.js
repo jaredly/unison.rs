@@ -33,11 +33,11 @@ export const patternMatch = (pattern, term) => {
 };
 
 const matchers = {
+    'EffectPure:RequestPure': (pattern, value) => patternMatch(pattern, value),
     'EffectBind:RequestWithContinuation': (
         [reference, number, args, kont],
         [tref, tnum, targs, tidx, tkont, current_idx],
     ) => {
-        console.log('');
         if (
             compare(reference, tref) === 0 &&
             number === tnum &&

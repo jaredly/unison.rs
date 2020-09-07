@@ -11,6 +11,18 @@ const symEq = (a, b) => {
     return a.unique === b.unique;
 };
 
+const showSource = (source) => {
+    if (source.type === 'Fn') {
+        return `${source.hash.slice(0, 7)} : Fn(${source.fnid})`;
+    }
+    if (source.type === 'term') {
+        return `${source.hash.slice(0, 7)} : Value`;
+    }
+    return source;
+};
+
+const DEBUG = true;
+
 export class Stack {
     constructor(source) {
         this.frames = [newFrame(source, 0)];
@@ -30,12 +42,20 @@ export class Stack {
     }
 
     new_frame(return_index, source) {
-        // console.log('->> New Frame', source, return_index);
+        if (DEBUG) {
+            console.log(
+                `->> ${this.frames.length} New Frame : `,
+                showSource(source),
+                return_index,
+            );
+        }
         this.frames.unshift(newFrame(source, return_index));
     }
 
     clone_frame(return_index) {
-        // console.log('->> Clone Frame');
+        if (DEBUG) {
+            console.log('->> Clone Frame');
+        }
         this.frames.unshift({ ...this.frames[0] });
         this.frames[0].return_index = return_index;
     }
@@ -75,7 +95,9 @@ export class Stack {
     pop_frame() {
         const idx = this.frames[0].return_index;
         const value = this.pop();
-        // console.log('<<- pop frame', idx, value);
+        if (DEBUG) {
+            console.log(`<<- ${this.frames.length} Pop Frame : ${idx}`, value);
+        }
         if (value == null) {
             throw new Error('no return value');
         }
@@ -85,18 +107,23 @@ export class Stack {
 
     push(t) {
         this.frames[0].stack.push(t);
-        // console.log(
-        //     'push to stack',
-        //     t,
-        //     'stack size',
-        //     this.frames[0].stack.length,
-        // );
+        if (DEBUG) {
+            console.log(
+                'push to stack',
+                t,
+                'stack size',
+                this.frames[0].stack.length,
+            );
+        }
     }
 
     pop() {
         const t = this.frames[0].stack.pop();
-        // console.log('pop from stack', t);
+        if (DEBUG) {
+            console.log('pop from stack', t);
+        }
         if (t == null) {
+            console.log(this.frames);
             throw new Error(`Popping from the stack, but nothing is there`);
         }
         return t;

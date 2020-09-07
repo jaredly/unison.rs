@@ -35,6 +35,17 @@ export class RuntimeEnv {
 
 export class State {
     constructor(env, hash) {
+        if (!env.terms[hash]) {
+            for (let k of Object.keys(env.terms)) {
+                if (k.startsWith(hash)) {
+                    hash = k;
+                    break;
+                }
+            }
+            if (!env.terms[hash]) {
+                throw new Error(`Hash not found ${hash}`);
+            }
+        }
         this.cmds = env.terms[hash][0];
         this.idx = 0;
         this.env = env;
@@ -165,7 +176,7 @@ export class State {
         },
         Value: (hash) => {
             this.cmds = this.env.terms[hash][0];
-            this.stack.new_frame(this.idx, { type: 'value', hash });
+            this.stack.new_frame(this.idx, { type: 'term', hash });
             this.idx = 0;
         },
         HandlePure: () => {

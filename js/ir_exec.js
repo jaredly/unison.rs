@@ -3,6 +3,10 @@
 import compare from './compare';
 import { patternMatch } from './pattern';
 
+const option_hash =
+    '5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8';
+const option_ref = { DerivedId: [option_hash, 0, 1] };
+
 // pub enum Ret {
 //     FnCall(usize, Vec<(Symbol, usize, Arc<Value>)>, Arc<Value>),
 //     Value(Hash),
@@ -194,7 +198,7 @@ const handlers = {
                 ReRequest: [req, i, args, back_idx, frames, current_idx],
             };
         } else {
-            // console.log(state.pretty_print(value));
+            console.log(state.pretty_print(value));
             throw new Error(`Pattern match fail ${JSON.stringify(value)}`);
         }
     },
@@ -236,6 +240,7 @@ const call = {
     },
     CycleFnBody([fnint, bindings, mutuals], arg, state) {
         state.idx += 1;
+        bindings = bindings.map((b) => [...b]);
         for (let binding of bindings) {
             if (binding[2].CycleBlank) {
                 const u = binding[2].CycleBlank;
