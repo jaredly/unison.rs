@@ -83,23 +83,21 @@ export class State {
             const cmd = this.cmds[this.idx];
             const tid = this.stack.currentFrame().traceId;
             this.stack.trace[tid].events.push({
-                type: 'ir',
-                idx,
-                cmd,
-                start,
+                IR: [idx, cmd],
+                // type: 'ir',
+                // idx,
+                // cmd,
+                // start,
                 // ret,
                 // end: Date.now(),
             });
             const eidx = this.stack.trace[tid].events.length - 1;
             const ret = eval_ir(cmd, this);
-            this.stack.trace[tid].events[eidx].end = Date.now();
+            // this.stack.trace[tid].events[eidx].end = Date.now();
             if (ret) {
-                this.stack.trace[this.stack.currentFrame().traceId].events.push(
-                    {
-                        type: 'ret',
-                        ret,
-                    },
-                );
+                this.stack.trace[
+                    this.stack.currentFrame().traceId
+                ].events.push({ Ret: ret });
                 this.handle_ret(ret);
             }
             this.handle_tail();

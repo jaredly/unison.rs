@@ -99,48 +99,48 @@ const IR = ({ ir, names }) => {
 };
 
 const Event = ({ event, names, onOpen }) => {
-    if (event.type === 'push') {
+    const k = key(event);
+    if (k === 'Push') {
         return (
             <div>
                 ➡️ push(
-                <Value names={names} value={event.value} />
+                <Value names={names} value={event[k]} />
                 {/* <span style={styles.value}>{JSON.stringify(event.value)}</span> */}
                 )
             </div>
         );
     }
-    if (event.type === 'pop') {
+    if (k === 'Pop') {
         return (
             <div>
                 ⬅️ pop(
-                <Value names={names} value={event.value} />
+                <Value names={names} value={event[k]} />
                 {/* <span style={styles.value}>{JSON.stringify(event.value)}</span> */}
                 )
             </div>
         );
     }
-    if (event.type === 'ir') {
+    if (k === 'IR') {
+        const [idx, cmd] = event[k];
         return (
             <div>
-                🏃‍♀️[{event.idx}] <IR names={names} ir={event.cmd} />
+                🏃‍♀️[{idx}] <IR names={names} ir={cmd} />
                 <span style={{ fontSize: '80%' }}>
                     {' ' + (event.end - event.start)}ms
                 </span>
             </div>
         );
     }
-    if (event.type === 'ret') {
+    if (k === 'Ret') {
         return (
             <div>
-                🏁 <Ret ret={event.ret} names={names} />
+                🏁 <Ret ret={event[k]} names={names} />
             </div>
         );
     }
-    if (event.type === 'new_frame') {
+    if (k === 'NewFrame') {
         return (
-            <button onClick={() => onOpen(event.traceId)}>
-                ⭐ : {event.traceId}
-            </button>
+            <button onClick={() => onOpen(event[k])}>⭐ : {event[k]}</button>
         );
     }
     return <div>{JSON.stringify(event)}</div>;

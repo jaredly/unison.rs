@@ -38,9 +38,8 @@ const DEBUG = true;
 
 export class Stack {
     constructor(source) {
-        this.traceCounter = 0;
         this._frames = [];
-        this.trace = {};
+        this.trace = [];
         this.new_frame(0, source);
     }
 
@@ -66,7 +65,8 @@ export class Stack {
         frames[last].return_index = returnIdx;
         frames.forEach((f) => {
             const prev = f.traceId;
-            f.traceId = this.traceCounter++;
+            const tid = this.trace.length;
+            f.traceId = tid;
             this.trace[f.traceId] = {
                 source: { type: 'clone', tid: prev },
                 frame: f.source,
@@ -100,9 +100,8 @@ export class Stack {
             );
         }
         const prevId = this._frames.length ? this._frames[0].traceId : null;
-        this._frames.unshift(
-            newFrame(source, return_index, this.traceCounter++),
-        );
+        const tid = this.trace.length;
+        this._frames.unshift(newFrame(source, return_index, tid));
         this.trace[this._frames[0].traceId] = {
             start: Date.now(),
             frame: source,
@@ -111,8 +110,7 @@ export class Stack {
         };
         if (this._frames.length > 1) {
             this.trace[this._frames[1].traceId].events.push({
-                type: 'new_frame',
-                traceId: this._frames[0].traceId,
+                NewFrame: this._frames[0].traceId,
             });
         }
     }
@@ -123,7 +121,7 @@ export class Stack {
         }
         this._frames.unshift({ ...this._frames[0] });
         this._frames[0].return_index = return_index;
-        this._frames[0].traceId = this.traceCounter++;
+        this._frames[0].traceId = this.trace.length;
         this.trace[this._frames[0].traceId] = {
             start: Date.now(),
             frame: this._frames[0].source,
@@ -188,8 +186,7 @@ export class Stack {
     push(t) {
         this._frames[0].stack.push(t);
         this.trace[this._frames[0].traceId].events.push({
-            type: 'push',
-            value: t,
+            Push: t,
         });
         if (DEBUG) {
             console.log(
@@ -205,8 +202,7 @@ export class Stack {
         const t = this._frames[0].stack.pop();
         // TODO do I need the value here? not really
         this.trace[this._frames[0].traceId].events.push({
-            type: 'pop',
-            value: t,
+            Pop: t,
         });
         if (DEBUG) {
             console.log('pop from stack', t);
@@ -229,8 +225,7 @@ export class Stack {
     pop_to_mark() {
         const mark = this._frames[0].marks.pop();
         this.trace[this._frames[0].traceId].events.push({
-            type: 'pop_to_mark',
-            mark,
+            PopToMark: mark,
         });
         if (mark == null) {
             throw new Error('pop to mark');
@@ -252,6 +247,6 @@ export class Stack {
     pop_up() {
         const ln = this._frames[0].stack.length;
         this._frames[0].stack.splice(ln - 2, 1);
-        this.trace[this._frames[0].traceId].events.push({ type: 'pop_up' });
+        this.trace[this._frames[0].traceId].events.push('PopUp');
     }
 }
