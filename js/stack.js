@@ -1,11 +1,13 @@
-const newFrame = (source, return_index, traceId) => ({
+import clone from 'clone-deep';
+
+const newFrame = (source, return_index, trace_id) => ({
     source: source,
     stack: [],
     marks: [],
     handler: null,
     return_index: return_index,
     bindings: [],
-    traceId,
+    trace_id,
 });
 
 const symEq = (a, b) => {
@@ -13,11 +15,12 @@ const symEq = (a, b) => {
 };
 
 const showSource = (source) => {
-    if (source.type === 'Fn') {
-        return `${source.hash.slice(0, 10)} : Fn(${source.fnid})`;
+    if (source.Fn) {
+        const [fnid, hash] = source.Fn;
+        return `${hash.slice(0, 10)} : Fn(${fnid})`;
     }
-    if (source.type === 'term') {
-        return `${source.hash.slice(0, 10)} : Value`;
+    if (source.Value) {
+        return `${source.Value.slice(0, 10)} : Value`;
     }
     return source;
 };
@@ -31,8 +34,8 @@ const DEBUG = true;
 // - maybe:
 //   - [ts: frame start, source]
 //   - [push/pop]
-//   - [new_frame (traceId)]
-//   - [clone_frame (traceId)]
+//   - [new_frame (trace_id)]
+//   - [clone_frame (trace_id)]
 //   - IR (idx)
 // - OK I think I'm in good shape?
 
@@ -60,14 +63,14 @@ export class Stack {
     }
 
     resumeContinuation(frames, returnIdx) {
-        frames = JSON.parse(JSON.stringify(frames));
+        frames = clone(frames);
         const last = frames.length - 1;
         frames[last].return_index = returnIdx;
         frames.forEach((f) => {
-            const prev = f.traceId;
+            const prev = f.trace_id;
             const tid = this.trace.length;
-            f.traceId = tid;
-            this.trace[f.traceId] = {
+            f.trace_id = tid;
+            this.trace[f.trace_id] = {
                 source: { type: 'clone', tid: prev },
                 frame: f.source,
                 start: Date.now(),
@@ -99,18 +102,18 @@ export class Stack {
                 return_index,
             );
         }
-        const prevId = this._frames.length ? this._frames[0].traceId : null;
+        const prevId = this._frames.length ? this._frames[0].trace_id : null;
         const tid = this.trace.length;
         this._frames.unshift(newFrame(source, return_index, tid));
-        this.trace[this._frames[0].traceId] = {
+        this.trace[this._frames[0].trace_id] = {
             start: Date.now(),
             frame: source,
             source: { tid: prevId },
             events: [],
         };
         if (this._frames.length > 1) {
-            this.trace[this._frames[1].traceId].events.push({
-                NewFrame: this._frames[0].traceId,
+            this.trace[this._frames[1].trace_id].events.push({
+                NewFrame: this._frames[0].trace_id,
             });
         }
     }
@@ -119,13 +122,13 @@ export class Stack {
         if (DEBUG) {
             console.log('->> Clone Frame');
         }
-        this._frames.unshift({ ...this._frames[0] });
+        this._frames.unshift(clone(this._frames[0]));
         this._frames[0].return_index = return_index;
-        this._frames[0].traceId = this.trace.length;
-        this.trace[this._frames[0].traceId] = {
+        this._frames[0].trace_id = this.trace.length;
+        this.trace[this._frames[0].trace_id] = {
             start: Date.now(),
             frame: this._frames[0].source,
-            source: { type: 'clone', tid: this._frames[1].traceId },
+            source: { type: 'clone', tid: this._frames[1].trace_id },
             events: [],
         };
     }
@@ -137,7 +140,7 @@ export class Stack {
         }
         // TODO how to account for this "going back"?
         // Add an event to all the frames being like "resuming"?
-        this._frames = frames.slice(new_idx);
+        this._frames = clone(frames.slice(new_idx));
         let idx = this._frames[0].handler;
         if (idx == null) {
             throw new Error('no handler');
@@ -155,7 +158,7 @@ export class Stack {
             }
         }
         const current_idx = frames.length - 1;
-        frames.push(...this._frames.map((f) => JSON.parse(JSON.stringify(f))));
+        frames.push(...clone(this._frames));
         const idx = this._frames[0].handler;
         if (idx == null) {
             throw new Error('no handler');
@@ -178,14 +181,14 @@ export class Stack {
         if (value == null) {
             throw new Error('no return value');
         }
-        this.trace[this._frames[0].traceId].end = Date.now();
+        this.trace[this._frames[0].trace_id].end = Date.now();
         this._frames.shift();
         return [idx, value];
     }
 
     push(t) {
         this._frames[0].stack.push(t);
-        this.trace[this._frames[0].traceId].events.push({
+        this.trace[this._frames[0].trace_id].events.push({
             Push: t,
         });
         if (DEBUG) {
@@ -201,7 +204,7 @@ export class Stack {
     pop() {
         const t = this._frames[0].stack.pop();
         // TODO do I need the value here? not really
-        this.trace[this._frames[0].traceId].events.push({
+        this.trace[this._frames[0].trace_id].events.push({
             Pop: t,
         });
         if (DEBUG) {
@@ -224,7 +227,7 @@ export class Stack {
 
     pop_to_mark() {
         const mark = this._frames[0].marks.pop();
-        this.trace[this._frames[0].traceId].events.push({
+        this.trace[this._frames[0].trace_id].events.push({
             PopToMark: mark,
         });
         if (mark == null) {
@@ -247,6 +250,6 @@ export class Stack {
     pop_up() {
         const ln = this._frames[0].stack.length;
         this._frames[0].stack.splice(ln - 2, 1);
-        this.trace[this._frames[0].traceId].events.push('PopUp');
+        this.trace[this._frames[0].trace_id].events.push('PopUp');
     }
 }

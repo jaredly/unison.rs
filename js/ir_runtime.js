@@ -1,5 +1,6 @@
 // Ok folks
 
+import clone from 'clone-deep';
 import { Stack } from './stack';
 import { eval_ir } from './ir_exec';
 import { pretty_print } from './pretty_print';
@@ -26,13 +27,13 @@ export class RuntimeEnv {
     }
 
     cmds(source) {
-        if (source.type === 'term') {
-            if (this.terms[source.hash]) return this.terms[source.hash][0];
+        if (source.Value) {
+            if (this.terms[source.Value]) return this.terms[source.Value][0];
         }
-        if (!this.anon_fns[source.fnid]) {
+        if (!this.anon_fns[source.Fn[0]]) {
             throw new Error(`No function: ${JSON.stringify(source)}`);
         }
-        return this.anon_fns[source.fnid][1];
+        return this.anon_fns[source.Fn[0]][1];
     }
 }
 
@@ -53,7 +54,7 @@ export class State {
         this.cmds = env.terms[hash][0];
         this.idx = 0;
         this.env = env;
-        this.stack = new Stack({ type: 'term', hash });
+        this.stack = new Stack({ Value: hash });
     }
 
     pretty_print(value) {
@@ -81,7 +82,7 @@ export class State {
             const start = Date.now();
             const idx = this.idx;
             const cmd = this.cmds[this.idx];
-            const tid = this.stack.currentFrame().traceId;
+            const tid = this.stack.currentFrame().trace_id;
             this.stack.trace[tid].events.push({
                 IR: [idx, cmd],
                 // type: 'ir',
@@ -96,7 +97,7 @@ export class State {
             // this.stack.trace[tid].events[eidx].end = Date.now();
             if (ret) {
                 this.stack.trace[
-                    this.stack.currentFrame().traceId
+                    this.stack.currentFrame().trace_id
                 ].events.push({ Ret: ret });
                 this.handle_ret(ret);
             }
@@ -195,17 +196,15 @@ export class State {
         FnCall: ([fnid, bindings, arg]) => {
             this.cmds = this.env.anon_fns[fnid][1];
             this.stack.new_frame(this.idx, {
-                type: 'Fn',
-                fnid,
-                hash: this.env.anon_fns[fnid][0],
+                Fn: [fnid, this.env.anon_fns[fnid][0]],
             });
-            this.stack.currentFrame().bindings = bindings.slice();
+            this.stack.currentFrame().bindings = clone(bindings);
             this.stack.currentFrame().stack.push(arg);
             this.idx = 0;
         },
         Value: (hash) => {
             this.cmds = this.env.terms[hash][0];
-            this.stack.new_frame(this.idx, { type: 'term', hash });
+            this.stack.new_frame(this.idx, { Value: hash });
             this.idx = 0;
         },
         HandlePure: () => {

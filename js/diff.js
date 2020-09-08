@@ -9,6 +9,7 @@ export const diff = (a, b) => {
                     console.log(`Found it! ${i} - ${j}`);
                     console.log(a[i].events[j]);
                     console.log(b[i].events[j]);
+                    window.off = [a[i].events[j], b[i].events[j]];
                     return;
                 }
             }

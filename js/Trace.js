@@ -199,21 +199,21 @@ const Hash = ({ hash, names }) => {
 
 const Source = ({ source, names }) => {
     // js style
-    if (source.type === 'term') {
-        return (
-            <span>
-                Term(
-                <Hash hash={source.hash} names={names} />)
-            </span>
-        );
-    }
-    if (source.type === 'Fn') {
-        return (
-            <span>
-                Fn({source.fnid} - <Hash hash={source.hash} names={names} />)
-            </span>
-        );
-    }
+    // if (source.type === 'term') {
+    //     return (
+    //         <span>
+    //             Term(
+    //             <Hash hash={source.hash} names={names} />)
+    //         </span>
+    //     );
+    // }
+    // if (source.type === 'Fn') {
+    //     return (
+    //         <span>
+    //             Fn({source.fnid} - <Hash hash={source.hash} names={names} />)
+    //         </span>
+    //     );
+    // }
     // rust style
     if (source.Value) {
         return (
