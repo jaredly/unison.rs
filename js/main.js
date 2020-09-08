@@ -2,6 +2,12 @@ const data = import('./data/all.json');
 const names = import('./data/all.json.names.json');
 
 import { RuntimeEnv, State, eval_value } from './ir_runtime';
+import * as React from 'react';
+import { render } from 'react-dom';
+import Trace from './Trace';
+
+const root = document.createElement('div');
+document.body.appendChild(root);
 
 Promise.all([data, names]).then(([data, names]) => {
     const env = new RuntimeEnv(data, names);
@@ -13,9 +19,14 @@ Promise.all([data, names]).then(([data, names]) => {
             console.log(names[0][hash]);
             console.log(main.join('.'));
             const start = Date.now();
-            const res = eval_value(env, hash);
-            console.log(`${Date.now() - start}ms`);
-            console.log('Result:', JSON.stringify(res));
+            try {
+                const res = eval_value(env, hash);
+                console.log(`${Date.now() - start}ms`);
+                console.log('Result:', JSON.stringify(res));
+            } catch (err) {
+                render(<Trace trace={window.trace} names={names} />, root);
+                throw err;
+            }
         }
     });
 

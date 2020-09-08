@@ -79,15 +79,17 @@ export class State {
             //     );
             // }
             const start = Date.now();
+            const idx = this.idx;
             const cmd = this.cmds[this.idx];
-            const ret = eval_ir(cmd, this);
             this.stack.trace[this.stack.currentFrame().traceId].events.push({
                 type: 'ir',
+                idx,
                 cmd,
                 start,
                 ret,
-                end: Date.now(),
+                // end: Date.now(),
             });
+            const ret = eval_ir(cmd, this);
             if (ret) {
                 this.handle_ret(ret);
             }
