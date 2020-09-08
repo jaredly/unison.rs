@@ -4,8 +4,10 @@ use super::types::IR;
 use super::types::*;
 use im::Vector;
 use log::info;
+use serde_derive::{Deserialize, Serialize};
 use std::sync::Arc;
 
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Ret {
     FnCall(usize, Vec<(Symbol, usize, Arc<Value>)>, Arc<Value>),
     Value(Hash),

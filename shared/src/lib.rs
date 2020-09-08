@@ -1,3 +1,4 @@
+pub mod chrome_trace;
 pub mod frame;
 pub mod ir_exec;
 pub mod ir_runtime;

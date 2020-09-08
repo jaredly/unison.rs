@@ -3,10 +3,10 @@ use super::types::{RuntimeEnv, IR};
 use log::info;
 use std::sync::Arc;
 
+use super::chrome_trace::{Trace, Traces};
 use super::frame::Source;
 use super::ir_exec::Ret;
 use super::stack::Stack;
-use super::trace::{Trace, Traces};
 
 pub static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 
@@ -180,8 +180,8 @@ pub fn extract_args(typ: &ABT<Type>) -> (Vec<ABT<Type>>, Vec<ABT<Type>>, ABT<Typ
     }
 }
 
-pub fn eval(env: &RuntimeEnv, hash: &str, trace: &mut Traces) -> Arc<Value> {
-    let mut state = State::new_value(&env, Hash::from_string(hash));
+pub fn eval(env: &RuntimeEnv, hash: &str, trace: &mut Traces, do_trace: bool) -> Arc<Value> {
+    let mut state = State::new_value(&env, Hash::from_string(hash), do_trace);
     state.run_to_end(trace)
 }
 
@@ -205,11 +205,11 @@ impl RuntimeEnv {
 }
 
 impl<'a> State<'a> {
-    pub fn new_value(env: &'a RuntimeEnv, hash: Hash) -> Self {
+    pub fn new_value(env: &'a RuntimeEnv, hash: Hash, trace: bool) -> Self {
         let source = Source::Value(hash);
         State {
             cmds: env.cmds(&source),
-            stack: Stack::new(source),
+            stack: Stack::new(source, trace),
             idx: 0,
             env: &env,
         }

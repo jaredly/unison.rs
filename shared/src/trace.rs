@@ -1,54 +1,68 @@
-use super::frame::Source;
+use crate::frame::Source;
+use crate::ir_exec::Ret;
+use crate::types::{Value, IR};
+use serde_derive::{Deserialize, Serialize};
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Trace {
-    pub cat: String,
-    pub ph: String, // B(eginning) E(nd) or I (info)
-    // pid: 1
-    pub ts: std::time::Duration,
-    pub name: (Source, Option<usize>),
-    pub tid: usize,   // thread ID I think?
-    pub file: String, // [file]
+    #[cfg(not(target_arch = "wasm32"))]
+    start: std::time::Duration,
+    #[cfg(not(target_arch = "wasm32"))]
+    end: std::time::Duration,
+    // tid, and was it a clone
+    source: Option<(usize, bool)>,
+    frame: Source,
+    events: Vec<Event>,
 }
 
-pub struct Traces {
-    #[cfg(not(target_arch = "wasm32"))]
-    pub start: std::time::Instant,
-    pub traces: Vec<Trace>,
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Event {
+    Push(Value),
+    Pop(Value),
+    PopToMark(usize),
+    PopUp,
+    NewFrame(usize),
+    IR(usize, IR),
+    Ret(Ret),
 }
+
+#[derive(Debug)]
+pub struct Traces(
+    pub Vec<Trace>,
+    #[cfg(not(target_arch = "wasm32"))] std::time::Instant,
+);
 
 impl Traces {
     pub fn new() -> Self {
-        Traces {
+        Traces(
+            vec![],
             #[cfg(not(target_arch = "wasm32"))]
-            start: std::time::Instant::now(),
-            traces: vec![],
-        }
+            std::time::Instant::now(),
+        )
     }
 
-    pub fn push(&mut self, frame: &crate::frame::Frame, which: &str) {
-        #[cfg(not(target_arch = "wasm32"))]
-        self.traces
-            .push(frame.as_trace(which, self.start.elapsed()))
+    pub fn add(&mut self, source: Option<(usize, bool)>, frame: Source) -> usize {
+        let n = self.0.len();
+        self.0.push(Trace {
+            #[cfg(not(target_arch = "wasm32"))]
+            start: std::time::Instant::now() - self.1,
+            #[cfg(not(target_arch = "wasm32"))]
+            end: std::time::Instant::now() - self.1,
+            source,
+            frame,
+            events: vec![],
+        });
+        n
     }
 
-    pub fn to_file<T: std::io::Write>(&self, file: &mut T) -> std::io::Result<()> {
-        file.write_all(b"[")?;
-        let mut lines = vec![];
-        for trace in &self.traces {
-            lines.push(format!(
-            r#"
-            {{"cat": {:?}, "pid": 1, "ph": {:?}, "ts": {}, "name": {:?}, "tid": {}, "args": {{"[file]": {:?} }} }}
-            "#,
-            trace.cat,
-            trace.ph,
-            trace.ts.as_micros(),
-            format!("{:?}", trace.name),
-            trace.tid,
-            trace.file
-        ));
-        }
-        file.write_all(lines.join(",\n").as_bytes())?;
-        file.write_all(b"]")?;
-        Ok(())
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn finish(&mut self, tid: usize) {
+        self.0[tid].end = std::time::Instant::now() - self.1;
+    }
+    #[cfg(target_arch = "wasm32")]
+    pub fn finish(&mut self, tid: usize) {}
+
+    pub fn evt(&mut self, tid: usize, evt: Event) {
+        self.0[tid].events.push(evt)
     }
 }

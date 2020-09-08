@@ -66,8 +66,8 @@ pub fn eval_fn(hash_raw: &str, values: Vec<JsValue>) -> Result<JsValue, JsValue>
 
     let eval_hash = env.add_eval(hash_raw, args)?;
 
-    let mut state = shared::ir_runtime::State::new_value(&l.as_ref().unwrap(), eval_hash);
-    let mut trace = shared::trace::Traces::new();
+    let mut state = shared::ir_runtime::State::new_value(&l.as_ref().unwrap(), eval_hash, false);
+    let mut trace = shared::chrome_trace::Traces::new();
     let val = state.run_to_end(&mut trace);
     Ok(JsValue::from_serde(&val).unwrap())
 }
@@ -76,8 +76,8 @@ pub fn eval_fn(hash_raw: &str, values: Vec<JsValue>) -> Result<JsValue, JsValue>
 pub fn evalit(hash: &str) -> JsValue {
     console_error_panic_hook::set_once();
 
-    let mut trace = shared::trace::Traces::new();
+    let mut trace = shared::chrome_trace::Traces::new();
     let l = ENV.lock().unwrap();
-    let val = shared::ir_runtime::eval(&l.as_ref().unwrap(), &hash, &mut trace);
+    let val = shared::ir_runtime::eval(&l.as_ref().unwrap(), &hash, &mut trace, false);
     JsValue::from_serde(&val).unwrap()
 }

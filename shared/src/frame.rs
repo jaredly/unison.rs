@@ -1,4 +1,4 @@
-use super::trace::Trace;
+use super::chrome_trace::Trace;
 use super::types::*;
 use serde_derive::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -11,6 +11,7 @@ pub enum Source {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Frame {
+    pub trace_id: usize,
     pub source: Source,
     pub stack: Vec<Arc<Value>>,
     pub marks: Vec<usize>,
@@ -47,10 +48,11 @@ impl std::cmp::PartialOrd for Frame {
 }
 
 impl Frame {
-    pub fn new(source: Source, return_index: usize) -> Self {
+    pub fn new(source: Source, return_index: usize, trace_id: usize) -> Self {
         // let span = span!(Level::TRACE, format!("{:?}", source));
         Frame {
             source,
+            trace_id,
             stack: vec![],
             marks: vec![],
             handler: None,

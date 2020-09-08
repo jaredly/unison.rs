@@ -494,8 +494,8 @@ fn run_term(
 
     let runtime_env: shared::types::RuntimeEnv = ir_env.into();
 
-    let mut trace = shared::trace::Traces::new();
-    let ret = shared::ir_runtime::eval(&runtime_env, hash, &mut trace);
+    let mut trace = shared::chrome_trace::Traces::new();
+    let ret = shared::ir_runtime::eval(&runtime_env, hash, &mut trace, true);
     println!(
         "Time: {}ms ({}ns)",
         last.elapsed().as_millis(),
@@ -808,13 +808,18 @@ fn run_cli_term(file: &String, args: &[String]) -> std::io::Result<()> {
 
     let eval_hash = runtime_env.add_eval(hash_raw, args).unwrap();
 
-    let mut trace = shared::trace::Traces::new();
+    let mut trace = shared::chrome_trace::Traces::new();
 
-    let mut state = shared::ir_runtime::State::new_value(&runtime_env, eval_hash);
+    let mut state = shared::ir_runtime::State::new_value(&runtime_env, eval_hash, true);
     let ret = state.run_to_end(&mut trace);
+    println!("-> {:?}", ret);
     // let ret = shared::ir_runtime::eval(&runtime_env, eval_hash, &mut trace);
 
-    println!("-> {:?}", ret);
+    // std::fs::File::create("trace.json");
+    std::fs::write(
+        "trace.json",
+        serde_json::to_string(&state.stack.traces.0[0..200]).unwrap(),
+    )?;
 
     Ok(())
 }
