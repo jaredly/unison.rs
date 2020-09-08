@@ -33,6 +33,7 @@ Promise.all([data, names, trace]).then(([data, names, trace]) => {
     const env = new RuntimeEnv(data, names);
 
     const hash = 'dfaaimsoor';
+    console.log('ok');
     // const hash = 'm3sai7lcac';
 
     try {
@@ -41,14 +42,14 @@ Promise.all([data, names, trace]).then(([data, names, trace]) => {
         console.log(`${Date.now() - start}ms`);
         console.log('Result:', JSON.stringify(res));
     } catch (err) {
-        render(
-            <div style={{ display: 'flex' }}>
-                <Trace trace={window.trace} names={names} />
-                <Trace trace={trace} names={names} />
-                {/* <textarea value={JSON.stringify(window.trace)} /> */}
-            </div>,
-            root,
-        );
+        // render(
+        //     <div style={{ display: 'flex' }}>
+        //         <Trace trace={window.trace} names={names} />
+        //         <Trace trace={trace} names={names} />
+        //         {/* <textarea value={JSON.stringify(window.trace)} /> */}
+        //     </div>,
+        //     root,
+        // );
         throw err;
     }
 

@@ -42,7 +42,7 @@ const DEBUG = false;
 export class Stack {
     constructor(source) {
         this._frames = [];
-        this.trace = [];
+        // this.trace = [];
         this.new_frame(0, source);
     }
 
@@ -63,20 +63,22 @@ export class Stack {
     }
 
     resumeContinuation(frames, returnIdx) {
-        frames = clone(frames);
+        frames = frames.map((f) => ({ ...f }));
         const last = frames.length - 1;
         frames[last].return_index = returnIdx;
-        frames.forEach((f) => {
-            const prev = f.trace_id;
-            const tid = this.trace.length;
-            f.trace_id = tid;
-            this.trace[f.trace_id] = {
-                source: { type: 'clone', tid: prev },
-                frame: f.source,
-                start: Date.now(),
-                events: [],
-            };
-        });
+        if (this.trace) {
+            frames.forEach((f) => {
+                const prev = f.trace_id;
+                const tid = this.trace.length;
+                f.trace_id = tid;
+                this.trace[f.trace_id] = {
+                    source: { type: 'clone', tid: prev },
+                    frame: f.source,
+                    start: Date.now(),
+                    events: [],
+                };
+            });
+        }
         frames.push(...this._frames);
         this._frames = frames;
     }
@@ -103,18 +105,21 @@ export class Stack {
             );
         }
         const prevId = this._frames.length ? this._frames[0].trace_id : null;
-        const tid = this.trace.length;
+        const tid = this.trace ? this.trace.length : null;
         this._frames.unshift(newFrame(source, return_index, tid));
-        this.trace[this._frames[0].trace_id] = {
-            start: Date.now(),
-            frame: source,
-            source: { tid: prevId },
-            events: [],
-        };
-        if (this._frames.length > 1) {
-            this.trace[this._frames[1].trace_id].events.push({
-                NewFrame: this._frames[0].trace_id,
-            });
+        if (this.trace) {
+            this.trace[this._frames[0].trace_id] = {
+                start: Date.now(),
+                frame: source,
+                source: { tid: prevId },
+                events: [],
+            };
+
+            if (this._frames.length > 1) {
+                this.trace[this._frames[1].trace_id].events.push({
+                    NewFrame: this._frames[0].trace_id,
+                });
+            }
         }
     }
 
@@ -125,16 +130,18 @@ export class Stack {
         const old_tid = this._frames[0].trace_id;
         this._frames.unshift(clone(this._frames[0]));
         this._frames[0].return_index = return_index;
-        this._frames[0].trace_id = this.trace.length;
-        this.trace[this._frames[0].trace_id] = {
-            start: Date.now(),
-            frame: this._frames[0].source,
-            source: { type: 'clone', tid: this._frames[1].trace_id },
-            events: [],
-        };
-        this.trace[old_tid].events.push({
-            CloneFrame: this._frames[0].trace_id,
-        });
+        if (this.trace) {
+            this._frames[0].trace_id = this.trace.length;
+            this.trace[this._frames[0].trace_id] = {
+                start: Date.now(),
+                frame: this._frames[0].source,
+                source: { type: 'clone', tid: this._frames[1].trace_id },
+                events: [],
+            };
+            this.trace[old_tid].events.push({
+                CloneFrame: this._frames[0].trace_id,
+            });
+        }
     }
 
     back_again_to_handler(frames, current_idx) {
@@ -151,8 +158,12 @@ export class Stack {
             throw new Error('no handler');
         }
         this._frames[0].handler = null;
-        this.trace[this._frames[0].trace_id].events.push('HandleAgain');
-        this.trace[old_tid].events.push({ JumpBack: this._frames[0].trace_id });
+        if (this.trace) {
+            this.trace[this._frames[0].trace_id].events.push('HandleAgain');
+            this.trace[old_tid].events.push({
+                JumpBack: this._frames[0].trace_id,
+            });
+        }
         return [idx, new_idx];
     }
 
@@ -160,7 +171,9 @@ export class Stack {
         const old_tid = this._frames[0].trace_id;
         const frames = [];
         while (this._frames[0].handler == null) {
-            this.trace[this._frames[0].trace_id].events.push('Pause');
+            if (this.trace) {
+                this.trace[this._frames[0].trace_id].events.push('Pause');
+            }
             frames.push(this._frames.shift());
             if (this._frames.length === 0) {
                 return null;
@@ -173,8 +186,12 @@ export class Stack {
             throw new Error('no handler');
         }
         this._frames[0].handler = null;
-        this.trace[this._frames[0].trace_id].events.push('Handle');
-        this.trace[old_tid].events.push({ JumpBack: this._frames[0].trace_id });
+        if (this.trace) {
+            this.trace[this._frames[0].trace_id].events.push('Handle');
+            this.trace[old_tid].events.push({
+                JumpBack: this._frames[0].trace_id,
+            });
+        }
         return [idx, frames, current_idx];
     }
 
@@ -192,16 +209,20 @@ export class Stack {
         if (value == null) {
             throw new Error('no return value');
         }
-        this.trace[this._frames[0].trace_id].end = Date.now();
+        if (this.trace) {
+            this.trace[this._frames[0].trace_id].end = Date.now();
+        }
         this._frames.shift();
         return [idx, value];
     }
 
     push(t) {
         this._frames[0].stack.push(t);
-        this.trace[this._frames[0].trace_id].events.push({
-            Push: clone(t),
-        });
+        if (this.trace) {
+            this.trace[this._frames[0].trace_id].events.push({
+                Push: clone(t),
+            });
+        }
         if (DEBUG) {
             console.log(
                 'push to stack',
@@ -215,9 +236,11 @@ export class Stack {
     pop() {
         const t = this._frames[0].stack.pop();
         // TODO do I need the value here? not really
-        this.trace[this._frames[0].trace_id].events.push({
-            Pop: clone(t),
-        });
+        if (this.trace) {
+            this.trace[this._frames[0].trace_id].events.push({
+                Pop: clone(t),
+            });
+        }
         if (DEBUG) {
             console.log('pop from stack', t);
         }
@@ -238,9 +261,11 @@ export class Stack {
 
     pop_to_mark() {
         const mark = this._frames[0].marks.pop();
-        this.trace[this._frames[0].trace_id].events.push({
-            PopToMark: mark,
-        });
+        if (this.trace) {
+            this.trace[this._frames[0].trace_id].events.push({
+                PopToMark: mark,
+            });
+        }
         if (mark == null) {
             throw new Error('pop to mark');
         }
@@ -261,6 +286,8 @@ export class Stack {
     pop_up() {
         const ln = this._frames[0].stack.length;
         this._frames[0].stack.splice(ln - 2, 1);
-        this.trace[this._frames[0].trace_id].events.push('PopUp');
+        if (this.trace) {
+            this.trace[this._frames[0].trace_id].events.push('PopUp');
+        }
     }
 }

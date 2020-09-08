@@ -94,8 +94,8 @@ const handlers = {
             let v = state.stack.pop();
             if (v.PartialFnBody) {
                 const [fnint, bindings] = v.PartialFnBody;
-                mutuals.push([name, uses, fnint, clone(bindings)]); // TODO maybe can just slice?
-                items.push([name, uses, fnint, clone(bindings)]);
+                mutuals.push([name, uses, fnint, bindings]); // TODO maybe can just slice?
+                items.push([name, uses, fnint, bindings]);
             } else {
                 state.stack.bindLast([name, uses, v]);
             }
@@ -201,14 +201,7 @@ const handlers = {
             ] = value.RequestWithContinuation;
             return {
                 // TODO might not need to clone here
-                ReRequest: [
-                    req,
-                    i,
-                    clone(args),
-                    back_idx,
-                    clone(frames),
-                    current_idx,
-                ],
+                ReRequest: [req, i, args, back_idx, frames, current_idx],
             };
         } else {
             console.log(state.pretty_print(value));
@@ -232,11 +225,11 @@ export const eval_ir = (cmd, state) => {
 const call = {
     Continuation([kidx, frames], arg, state) {
         state.idx += 1;
-        return { Continue: [kidx, clone(frames), arg] };
+        return { Continue: [kidx, frames, arg] };
     },
     RequestWithArgs([r, i, n, args], arg, state) {
         state.idx += 1;
-        args = clone(args);
+        args = args.slice();
         args.push(arg);
         if (args.length == n) {
             return { Request: [r, i, args] };
@@ -248,14 +241,14 @@ const call = {
         state.idx += 1;
     },
     PartialConstructor([r, u, c], arg, state) {
-        c = clone(c); // TODO maybe can just slice
+        c = c.slice();
         c.push(arg);
         state.stack.push({ PartialConstructor: [r, u, c] });
         state.idx += 1;
     },
     CycleFnBody([fnint, bindings, mutuals], arg, state) {
         state.idx += 1;
-        bindings = clone(bindings);
+        bindings = bindings.map((b) => [...b]);
         for (let binding of bindings) {
             // TODO maybe make this non-mutating? then can just "slice"
             if (binding[2].CycleBlank) {
@@ -272,7 +265,7 @@ const call = {
     },
     PartialFnBody([fnint, bindings], arg, state) {
         state.idx += 1;
-        return { FnCall: [fnint, clone(bindings), arg] };
+        return { FnCall: [fnint, bindings, arg] };
     },
     Ref(inner, arg, state) {
         if (inner.Builtin) {

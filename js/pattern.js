@@ -55,7 +55,7 @@ const matchers = {
             }
             const kk = key(kont);
             if (kk === 'Var') {
-                tkont = clone(tkont.slice(0, current_idx + 1));
+                tkont = tkont.slice(0, current_idx + 1).map((t) => ({ ...t }));
                 tkont[current_idx].handler = null;
                 all.push({ Continuation: [tidx, tkont] });
             } else if (kk !== 'Unbound') {

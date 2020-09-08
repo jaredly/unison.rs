@@ -84,22 +84,27 @@ export class State {
             const idx = this.idx;
             const cmd = this.cmds[this.idx];
             const tid = this.stack.currentFrame().trace_id;
-            this.stack.trace[tid].events.push({
-                IR: [idx, cmd],
-                // type: 'ir',
-                // idx,
-                // cmd,
-                // start,
-                // ret,
-                // end: Date.now(),
-            });
-            const eidx = this.stack.trace[tid].events.length - 1;
+            let eidx = null;
+            if (this.stack.trace) {
+                this.stack.trace[tid].events.push({
+                    IR: [idx, cmd],
+                    // type: 'ir',
+                    // idx,
+                    // cmd,
+                    // start,
+                    // ret,
+                    // end: Date.now(),
+                });
+                eidx = this.stack.trace[tid].events.length - 1;
+            }
             const ret = eval_ir(cmd, this);
             // this.stack.trace[tid].events[eidx].end = Date.now();
             if (ret) {
-                this.stack.trace[
-                    this.stack.currentFrame().trace_id
-                ].events.push({ Ret: clone(ret) });
+                if (this.stack.trace) {
+                    this.stack.trace[
+                        this.stack.currentFrame().trace_id
+                    ].events.push({ Ret: ret });
+                }
                 this.handle_ret(ret);
             }
             this.handle_tail();
@@ -199,7 +204,7 @@ export class State {
             this.stack.new_frame(this.idx, {
                 Fn: [fnid, this.env.anon_fns[fnid][0]],
             });
-            this.stack.currentFrame().bindings = clone(bindings);
+            this.stack.currentFrame().bindings = bindings;
             this.stack.currentFrame().stack.push(arg);
             this.idx = 0;
         },
