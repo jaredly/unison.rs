@@ -9,6 +9,8 @@ export const eval_value = (env, hash) => {
     return state.run_to_end();
 };
 
+const DEBUG = true;
+
 export class RuntimeEnv {
     // terms: { [key: string]: [Array<IR>, ABTType] };
     // anon_fns: Array<[String, Array<IR>]>;
@@ -46,6 +48,7 @@ export class State {
                 throw new Error(`Hash not found ${hash}`);
             }
         }
+        this.trace = {};
         this.cmds = env.terms[hash][0];
         this.idx = 0;
         this.env = env;
@@ -64,7 +67,16 @@ export class State {
 
     run() {
         while (this.idx < this.cmds.length) {
-            // console.log(`- (${this.idx})`, this.cmds[this.idx]);
+            // if (DEBUG) {
+            //     console.log(
+            //         `- ${this.stack.frames.length
+            //             .toString()
+            //             .padStart(3, '0')} : (${this.idx
+            //             .toString()
+            //             .padStart(3, '0')})`,
+            //         this.cmds[this.idx],
+            //     );
+            // }
             const ret = eval_ir(this.cmds[this.idx], this);
             if (ret) {
                 this.handle_ret(ret);
@@ -75,11 +87,11 @@ export class State {
 
     handle_tail() {
         while (this.idx >= this.cmds.length) {
-            if (this.stack.frames.length > 1) {
+            if (!this.stack.isLastFrame()) {
                 const [idx1, value] = this.stack.pop_frame();
                 this.idx = idx1;
                 this.stack.push(value);
-                this.cmds = this.env.cmds(this.stack.frames[0].source);
+                this.cmds = this.env.cmds(this.stack.currentFrame().source);
             } else {
                 return;
             }
@@ -99,22 +111,20 @@ export class State {
     rets = {
         Handle: (mark_idx) => {
             this.idx += 1;
-            if (this.stack.frames[0].handler) {
+            if (this.stack.currentFrame().handler) {
                 throw new Error('Stack frame already has a handler');
             }
-            this.stack.frames[0].handler = mark_idx;
-            const ln = this.stack.frames.length;
+            this.stack.currentFrame().handler = mark_idx;
+            // const ln = this.stack.frames.length;
             this.stack.clone_frame(mark_idx);
-            this.stack.frames[0].handler = null;
+            this.stack.currentFrame().handler = null;
         },
         Continue: ([kidx, frames, arg]) => {
-            const last = frames.length - 1;
-            frames[last].return_index = this.idx;
-            frames.push(...this.stack.frames);
-            this.stack.frames = frames;
+            // TODO faster please
+            this.stack.resumeContinuation(frames, this.idx);
             this.idx = kidx;
             this.stack.push(arg);
-            this.cmds = this.env.cmds(this.stack.frames[0].source);
+            this.cmds = this.env.cmds(this.stack.currentFrame().source);
         },
         ReRequest: ([
             kind,
@@ -129,7 +139,7 @@ export class State {
                 current_frame_idx,
             );
             this.idx = nidx;
-            this.cmds = this.env.cmds(this.stack.frames[0].source);
+            this.cmds = this.env.cmds(this.stack.currentFrame().source);
 
             this.stack.push({
                 RequestWithContinuation: [
@@ -150,7 +160,7 @@ export class State {
                 frame_idx,
             ] = this.stack.back_to_handler();
             this.idx = nidx;
-            this.cmds = this.env.cmds(this.stack.frames[0].source);
+            this.cmds = this.env.cmds(this.stack.currentFrame().source);
 
             this.stack.push({
                 RequestWithContinuation: [
@@ -170,8 +180,8 @@ export class State {
                 fnid,
                 hash: this.env.anon_fns[fnid][0],
             });
-            this.stack.frames[0].bindings = bindings;
-            this.stack.frames[0].stack.push(arg);
+            this.stack.currentFrame().bindings = bindings;
+            this.stack.currentFrame().stack.push(arg);
             this.idx = 0;
         },
         Value: (hash) => {
@@ -183,7 +193,7 @@ export class State {
             const [idx1, value] = this.stack.pop_frame();
             this.idx = idx1;
             this.stack.push(value);
-            this.cmds = this.env.cmds(this.stack.frames[0].source);
+            this.cmds = this.env.cmds(this.stack.currentFrame().source);
         },
     };
 }

@@ -7,8 +7,10 @@ Promise.all([data, names]).then(([data, names]) => {
     const env = new RuntimeEnv(data, names);
 
     Object.keys(names[0]).forEach((hash) => {
+        names[0][hash].sort((a, b) => a.length - b.length);
         const main = names[0][hash][0];
-        if (main.slice(-1)[0] === 'test') {
+        if (main.slice(-1)[0] === 'test' && !main.some((x) => x[0] === '_')) {
+            console.log(names[0][hash]);
             console.log(main.join('.'));
             const start = Date.now();
             const res = eval_value(env, hash);

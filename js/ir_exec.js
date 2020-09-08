@@ -68,7 +68,7 @@ const handlers = {
     },
     PopAndName: ([symbol, uses], state) => {
         const v = state.stack.pop();
-        state.stack.frames[0].bindings.unshift([symbol, uses, v]);
+        state.stack.bind([symbol, uses, v]);
         state.idx += 1;
     },
     Fn: ([i, free_vbls], state) => {
@@ -95,11 +95,11 @@ const handlers = {
                 mutuals.push([name, uses, fnint, bindings]);
                 items.push([name, uses, fnint, bindings]);
             } else {
-                state.stack.frames[0].bindings.push([name, uses, v]);
+                state.stack.bindLast([name, uses, v]);
             }
         }
         for (let [name, uses, fnint, bindings] of items) {
-            state.stack.frames[0].bindings.push([
+            state.stack.bindLast([
                 name,
                 uses,
                 { CycleFnBody: [fnint, bindings, mutuals] },
@@ -113,6 +113,9 @@ const handlers = {
         let f = state.stack.pop();
         // console.log(f, arg);
         const typ = key(f);
+        if (!call[typ]) {
+            console.log('Bad call', typ, f, arg);
+        }
         return call[typ](f[typ], arg, state);
     },
     Seq: (num, state) => {
