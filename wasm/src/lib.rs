@@ -1,4 +1,5 @@
 extern crate im;
+extern crate js_sys;
 extern crate shared;
 extern crate wasm_bindgen;
 extern crate wasm_logger;
@@ -6,27 +7,60 @@ use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 #[macro_use]
 extern crate lazy_static;
+use std::collections::HashMap;
+
+#[derive(Default)]
+struct Envs {
+    count: usize,
+    map: HashMap<usize, shared::types::RuntimeEnv>,
+}
+
+impl Envs {
+    fn add(&mut self, env: shared::types::RuntimeEnv) -> usize {
+        self.count += 1;
+        self.map.insert(self.count, env);
+        self.count
+    }
+}
 
 lazy_static! {
-    static ref ENV: Mutex<Option<shared::types::RuntimeEnv>> = Mutex::new(None);
+    static ref ENV: Mutex<Envs> = Mutex::new(Default::default());
 }
 
-#[wasm_bindgen]
-extern "C" {
-    pub fn alert(s: &str);
-}
+// #[derive(Serialize, Deserialize)]
+// struct Handlers(Vec<(String, bool, usize)>);
+
+// Handlers looks like Vec<(String - hash, usize - fnid for calling back)>
 
 #[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
+pub fn run_sync(
+    env_id: usize,
+    term: JsValue,
+    args: Vec<JsValue>,
+    raw_handlers: Vec<JsValue>,
+) -> JsValue {
+    let mut handlers = HashMap::new();
+    for decl in raw_handlers {
+        let decl: js_sys::Array = decl.into();
+        let ability_hash: String = decl.get(0).as_string().unwrap();
+        let ability_index: usize = decl.get(1).as_f64().unwrap() as usize;
+        let handler_function: js_sys::Function = decl.get(2).into();
+        handlers.insert((ability_hash, ability_index), handler_function);
+    }
+    JsValue::from("")
 }
 
+// #[wasm_bindgen]
+// extern "C" {
+//     #[wasm_bindgen(js_namespace = console)]
+//     fn log(s: &str);
+// }
+
 #[wasm_bindgen]
-pub fn load(data: &str) {
+pub fn load(data: &str) -> usize {
     console_error_panic_hook::set_once();
     let env = shared::unpack(data);
-    *ENV.lock().unwrap() = Some(env);
+    ENV.lock().unwrap().add(env)
 }
 
 #[derive(Debug)]
@@ -49,11 +83,11 @@ impl shared::ir_runtime::ConvertibleArg<WrappedValue> for WrappedValue {
 }
 
 #[wasm_bindgen]
-pub fn eval_fn(hash_raw: &str, values: Vec<JsValue>) -> Result<JsValue, JsValue> {
+pub fn eval_fn(env_id: usize, hash_raw: &str, values: Vec<JsValue>) -> Result<JsValue, JsValue> {
     console_error_panic_hook::set_once();
 
     let mut l = ENV.lock().unwrap();
-    let env: &mut shared::types::RuntimeEnv = l.as_mut().unwrap();
+    let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
     let hash = shared::types::Hash::from_string(hash_raw);
     let t = &env.terms.get(&hash).unwrap().1;
@@ -66,18 +100,19 @@ pub fn eval_fn(hash_raw: &str, values: Vec<JsValue>) -> Result<JsValue, JsValue>
 
     let eval_hash = env.add_eval(hash_raw, args)?;
 
-    let mut state = shared::ir_runtime::State::new_value(&l.as_ref().unwrap(), eval_hash, false);
+    let mut state =
+        shared::ir_runtime::State::new_value(&l.map.get(&env_id).unwrap(), eval_hash, false);
     let mut trace = shared::chrome_trace::Traces::new();
     let val = state.run_to_end(&mut trace);
     Ok(JsValue::from_serde(&val).unwrap())
 }
 
 #[wasm_bindgen]
-pub fn evalit(hash: &str) -> JsValue {
+pub fn evalit(env_id: usize, hash: &str) -> JsValue {
     console_error_panic_hook::set_once();
 
     let mut trace = shared::chrome_trace::Traces::new();
     let l = ENV.lock().unwrap();
-    let val = shared::ir_runtime::eval(&l.as_ref().unwrap(), &hash, &mut trace, false);
+    let val = shared::ir_runtime::eval(&l.map.get(&env_id).unwrap(), &hash, &mut trace, false);
     JsValue::from_serde(&val).unwrap()
 }

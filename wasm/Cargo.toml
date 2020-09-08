@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 wasm-bindgen = {version = "0.2", features = ["serde-serialize"]}
+js-sys = ""
 base64 = ""
 serde_json = ""
 shared = { path = "../shared" }

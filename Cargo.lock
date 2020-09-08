@@ -362,6 +362,7 @@ dependencies = [
  "base64",
  "console_error_panic_hook",
  "im",
+ "js-sys",
  "lazy_static",
  "serde_json",
  "shared",

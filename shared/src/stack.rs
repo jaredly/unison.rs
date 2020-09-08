@@ -73,8 +73,11 @@ impl Stack {
         // self.frames.remove(0); // ignore the current one, it was a clone anyway
         let old_tid = self.frames[0].trace_id;
         let mut new_idx = current_idx + 1;
-        while frames[new_idx].handler == None {
+        while new_idx < frames.len() && frames[new_idx].handler == None {
             new_idx += 1;
+        }
+        if new_idx >= frames.len() {
+            return None;
         }
         self.frames = frames[new_idx..].to_vec();
         // while self.frames[0].handler == None {

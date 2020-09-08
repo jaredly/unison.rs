@@ -180,10 +180,42 @@ pub fn extract_args(typ: &ABT<Type>) -> (Vec<ABT<Type>>, Vec<ABT<Type>>, ABT<Typ
     }
 }
 
-pub fn eval(env: &RuntimeEnv, hash: &str, trace: &mut Traces, do_trace: bool) -> Arc<Value> {
+pub fn eval(
+    env: &RuntimeEnv,
+    hash: &str,
+    trace: &mut Traces,
+    do_trace: bool,
+) -> Result<Arc<Value>, FullRequest> {
     let mut state = State::new_value(&env, Hash::from_string(hash), do_trace);
     state.run_to_end(trace)
 }
+
+// stack.back_to_handler -> `Handle(nidx, frames, etc.) | `TopLevel --- if we've bottomed out,
+// how do we deal
+
+pub trait FFI {
+    // this kindof bottoms out?
+    // Or I guess ...
+    // hmm is there a way to do "if you can handle this inline, that would be cool"?
+    // maybe like a handle_request_sync(kind, number, args), and if that gets a nope, we
+    // go to handle_request_async ... that then needs to jump out of the main flow of
+    // computation, waiting for a resume. Yeah that makes sense.
+
+    // If this returns `None`, that means that the request couldn't be handled synchronously,
+    // e.g. we need to just bail straight out.
+    fn handle_request_sync(
+        &mut self,
+        kind: &Reference,
+        number: usize,
+        args: &Vec<Arc<Value>>,
+    ) -> Option<Value>;
+
+    // This is used at the top level, once we've bailed.
+    fn handle_request(&mut self, request: FullRequest);
+}
+
+#[derive(Debug)]
+pub struct FullRequest(Reference, usize, Vec<Arc<Value>>, Vec<crate::frame::Frame>);
 
 impl RuntimeEnv {
     pub fn add_eval(&mut self, hash: &str, args: Vec<Value>) -> Result<Hash, String> {
@@ -215,7 +247,7 @@ impl<'a> State<'a> {
         }
     }
 
-    fn run(&mut self, trace: &mut Traces, option_ref: &Reference) {
+    fn run(&mut self, trace: &mut Traces, option_ref: &Reference) -> Result<(), FullRequest> {
         #[cfg(not(target_arch = "wasm32"))]
         let mut n = 0;
         while self.idx < self.cmds.len() {
@@ -223,7 +255,7 @@ impl<'a> State<'a> {
             if n % 100 == 0 {
                 if trace.start.elapsed().as_secs() > 90 {
                     println!("Ran out of time after {} ticks", n);
-                    return;
+                    return Ok(());
                     // let message = Arc::new(Value::Text(format!("Ran out of time after {} ticks", n)));
                     // return message;
                 }
@@ -275,18 +307,19 @@ impl<'a> State<'a> {
                 };
             };
 
-            self.handle_ret(ret, trace);
+            self.handle_ret(ffi, ret, trace)?;
             self.handle_tail(trace);
         }
+        Ok(())
     }
 
-    pub fn run_to_end(&mut self, trace: &mut Traces) -> Arc<Value> {
+    pub fn run_to_end(&mut self, trace: &mut Traces) -> Result<Arc<Value>, FullRequest> {
         let option_ref = Reference::from_hash(OPTION_HASH);
 
-        self.run(trace, &option_ref);
+        self.run(trace, &option_ref)?;
 
         info!("Final stack: {:?}", self.stack);
-        self.stack.pop().unwrap()
+        Ok(self.stack.pop().unwrap())
     }
 
     fn handle_tail(&mut self, trace: &mut Traces) {
@@ -305,7 +338,15 @@ impl<'a> State<'a> {
         }
     }
 
-    fn handle_ret(&mut self, ret: Ret, trace: &mut Traces) {
+    fn handle_ret<T>(
+        &mut self,
+        ffi: &mut T,
+        ret: Ret,
+        trace: &mut Traces,
+    ) -> Result<(), FullRequest>
+    where
+        T: FFI,
+    {
         match ret {
             Ret::Nothing => (),
             Ret::Handle(mark_idx) => {
@@ -354,7 +395,13 @@ impl<'a> State<'a> {
             Ret::ReRequest(kind, number, args, final_index, frames, current_frame_idx) => {
                 let (nidx, frame_index) =
                     match self.stack.back_again_to_handler(&frames, current_frame_idx) {
-                        None => unreachable!("Unhandled ReRequest: {:?} / {}", kind, number),
+                        None => match ffi.handle_request_sync(&kind, number, &args) {
+                            None => return Err(FullRequest(kind, number, args, frames)),
+                            Some(value) => {
+                                resume(frames, final_index, value);
+                                return Ok(());
+                            }
+                        },
                         Some((a, b)) => (a, b),
                     };
                 self.idx = nidx;
@@ -381,7 +428,14 @@ impl<'a> State<'a> {
                 );
                 let final_index = self.idx;
                 let (nidx, saved_frames, frame_idx) = match self.stack.back_to_handler() {
-                    None => unreachable!("Unhandled Request: {:?} / {}", kind, number),
+                    None => match ffi.handle_request_sync(&kind, number, &args) {
+                        None => return Err(FullRequest(kind, number, args, self.stack.frames)),
+                        Some(value) => {
+                            self.stack.push(Arc::new(value));
+                            // resume(frames, final_index, value);
+                            return Ok(());
+                        }
+                    },
                     Some((a, b, c)) => (a, b, c),
                 };
                 self.idx = nidx;
@@ -429,7 +483,8 @@ impl<'a> State<'a> {
                 self.stack.push(value);
                 self.cmds = self.env.cmds(&self.stack.frames[0].source);
             }
-        }
+        };
+        Ok(())
     }
 }
 
