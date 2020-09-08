@@ -123,6 +123,9 @@ const Event = ({ event, names, onOpen }) => {
         return (
             <div>
                 🏃‍♀️[{event.idx}] <IR names={names} ir={event.cmd} />
+                <span style={{ fontSize: '80%' }}>
+                    {' ' + (event.end - event.start)}ms
+                </span>
             </div>
         );
     }

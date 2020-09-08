@@ -24,7 +24,13 @@ Promise.all([data, names]).then(([data, names]) => {
                 console.log(`${Date.now() - start}ms`);
                 console.log('Result:', JSON.stringify(res));
             } catch (err) {
-                render(<Trace trace={window.trace} names={names} />, root);
+                render(
+                    <div>
+                        <Trace trace={window.trace} names={names} />
+                        {/* <textarea value={JSON.stringify(window.trace)} /> */}
+                    </div>,
+                    root,
+                );
                 throw err;
             }
         }
