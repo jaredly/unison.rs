@@ -98,7 +98,9 @@ impl Branch {
     }
 
     fn load_children(&mut self, root: &std::path::PathBuf, deep: bool) -> std::io::Result<()> {
-        for (k, v) in self.raw.children.iter() {
+        let mut children: Vec<(&NameSegment, &Hash)> = self.raw.children.iter().collect();
+        children.sort();
+        for (k, v) in children {
             let mut child = Branch::load(root, v.to_string())?;
             if deep {
                 child.load_children(root, deep)?;
@@ -113,7 +115,9 @@ impl Branch {
         path: &Vec<String>,
         names: &mut std::collections::HashMap<types::Hash, Vec<Vec<String>>>,
     ) {
-        for (k, v) in self.raw.types.d1.iter() {
+        let mut children: Vec<(&Reference, &NameSegment)> = self.raw.types.d1.iter().collect();
+        children.sort();
+        for (k, v) in children {
             match k {
                 types::Reference::DerivedId(types::Id(hash, _, _)) => {
                     let mut full = path.clone();
@@ -182,7 +186,9 @@ impl Branch {
         path: &Vec<String>,
         dest: &mut std::collections::HashMap<Vec<String>, types::Hash>,
     ) {
-        for (k, v) in self.raw.terms.d1.iter() {
+        let mut children: Vec<(&Referent, &NameSegment)> = self.raw.terms.d1.iter().collect();
+        children.sort();
+        for (k, v) in children {
             match k {
                 types::Referent::Ref(types::Reference::DerivedId(types::Id(hash, _, _))) => {
                     let mut full = path.clone();
@@ -192,7 +198,9 @@ impl Branch {
                 _ => (),
             }
         }
-        for (k, v) in &self.children {
+        let mut children: Vec<(&NameSegment, &Branch)> = self.children.iter().collect();
+        children.sort_by(|(a, _), (b, _)| NameSegment::cmp(a, b));
+        for (k, v) in children {
             let mut full = path.clone();
             full.push(k.text.clone());
             v.collect_terms(&full, dest);
@@ -269,7 +277,9 @@ fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> {
     let env = env::Env::init(root);
     let mut ir_env = ir::TranslationEnv::new(env);
 
-    for hash in all_terms.values() {
+    let mut hashes: Vec<&Hash> = all_terms.values().collect();
+    hashes.sort();
+    for hash in hashes {
         let _ = ir_env.load(hash);
     }
 
@@ -604,7 +614,9 @@ fn pack_all_json(file: &String, outfile: &String) -> std::io::Result<()> {
     let env = env::Env::init(root);
     let mut ir_env = ir::TranslationEnv::new(env);
 
-    for hash in all_terms.values() {
+    let mut hashes: Vec<&Hash> = all_terms.values().collect();
+    hashes.sort();
+    for hash in hashes {
         let _ = ir_env.load(hash);
     }
 
@@ -791,6 +803,33 @@ fn run_cli_term(file: &String, args: &[String]) -> std::io::Result<()> {
 
     let env = env::Env::init(terms_path.parent().unwrap());
     let mut ir_env = ir::TranslationEnv::new(env);
+
+    {
+        let root = terms_path.parent().unwrap();
+        let paths = path_with(&root, "paths");
+        let mut branch = Branch::load(&paths, get_head(&paths)?)?;
+        branch.load_children(&paths, true)?;
+
+        let mut all_terms = std::collections::HashMap::new();
+        branch.collect_terms(&vec![], &mut all_terms);
+
+        let mut hashes: Vec<&Hash> = all_terms.values().collect();
+        hashes.sort();
+        for hash in hashes {
+            let _ = ir_env.load(hash);
+        }
+
+        {
+            let mut walker = TypeWalker(&mut ir_env.env);
+            let ks: Vec<String> = walker.0.type_cache.keys().cloned().collect();
+            for k in ks {
+                use visitor::Accept;
+                let mut m = walker.0.load_type(&k);
+                m.accept(&mut walker);
+            }
+        }
+    };
+
     let hash = types::Hash::from_string(hash_raw);
     ir_env.load(&hash).unwrap();
 
@@ -806,11 +845,15 @@ fn run_cli_term(file: &String, args: &[String]) -> std::io::Result<()> {
     .unwrap();
     println!("Got {:?} -- {:?} -- {:?}", targs, effects, tres);
 
-    let eval_hash = runtime_env.add_eval(hash_raw, args).unwrap();
+    let run_hash = if args.len() > 0 {
+        runtime_env.add_eval(hash_raw, args).unwrap()
+    } else {
+        hash
+    };
 
     let mut trace = shared::chrome_trace::Traces::new();
 
-    let mut state = shared::ir_runtime::State::new_value(&runtime_env, eval_hash, true);
+    let mut state = shared::ir_runtime::State::new_value(&runtime_env, run_hash, true);
     let ret = state.run_to_end(&mut trace);
     println!("-> {:?}", ret);
     // let ret = shared::ir_runtime::eval(&runtime_env, eval_hash, &mut trace);

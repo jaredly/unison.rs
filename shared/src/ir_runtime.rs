@@ -236,7 +236,21 @@ impl<'a> State<'a> {
             };
             let cidx = self.idx;
 
+            let tid = self.stack.frames[0].trace_id;
+            self.stack
+                .traces
+                .evt(tid, crate::trace::Event::IR(cidx, self.cmds[cidx].clone()));
+
             let ret = self.cmds[self.idx].eval(&option_ref, &mut self.stack, &mut self.idx);
+
+            match &ret {
+                Ret::Nothing => (),
+                ret => {
+                    self.stack
+                        .traces
+                        .evt(tid, crate::trace::Event::Ret(ret.clone()));
+                }
+            };
 
             #[cfg(not(target_arch = "wasm32"))]
             {

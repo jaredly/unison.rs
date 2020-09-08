@@ -1,4 +1,4 @@
-const data = import('./data/all.json');
+// const data = import('./data/all.json');
 const names = import('./data/all.json.names.json');
 
 import { RuntimeEnv, State, eval_value } from './ir_runtime';
@@ -9,32 +9,65 @@ import Trace from './Trace';
 const root = document.createElement('div');
 document.body.appendChild(root);
 
-Promise.all([data, names]).then(([data, names]) => {
+const data = fetch('./all.json').then((r) => r.json());
+const trace = fetch('./trace_rust.json').then((r) => r.json());
+
+Promise.all([data, names, trace]).then(([data, names, trace]) => {
+    window.names = names;
+    window.data = data;
+    // if (true) {
+    //     render(
+    //         <div>
+    //             <Trace trace={window.trace} names={names} />
+    //         </div>,
+    //         root,
+    //     );
+    // }
+
     const env = new RuntimeEnv(data, names);
 
-    Object.keys(names[0]).forEach((hash) => {
-        names[0][hash].sort((a, b) => a.length - b.length);
-        const main = names[0][hash][0];
-        if (main.slice(-1)[0] === 'test' && !main.some((x) => x[0] === '_')) {
-            console.log(names[0][hash]);
-            console.log(main.join('.'));
-            const start = Date.now();
-            try {
-                const res = eval_value(env, hash);
-                console.log(`${Date.now() - start}ms`);
-                console.log('Result:', JSON.stringify(res));
-            } catch (err) {
-                render(
-                    <div>
-                        <Trace trace={window.trace} names={names} />
-                        {/* <textarea value={JSON.stringify(window.trace)} /> */}
-                    </div>,
-                    root,
-                );
-                throw err;
-            }
-        }
-    });
+    const hash = 'dfaaimsoor';
+
+    try {
+        const res = eval_value(env, hash);
+        console.log(`${Date.now() - start}ms`);
+        console.log('Result:', JSON.stringify(res));
+    } catch (err) {
+        render(
+            <div style={{ display: 'flex' }}>
+                <Trace trace={window.trace} names={names} />
+                <Trace trace={trace} names={names} />
+                {/* <textarea value={JSON.stringify(window.trace)} /> */}
+            </div>,
+            root,
+        );
+        throw err;
+    }
+
+    // Object.keys(names[0]).forEach((hash) => {
+    //     names[0][hash].sort((a, b) => a.length - b.length);
+    //     const main = names[0][hash][0];
+    //     if (main.slice(-1)[0] === 'test' && !main.some((x) => x[0] === '_')) {
+    //         console.log(names[0][hash]);
+    //         console.log(main.join('.'));
+    //         const start = Date.now();
+    //         try {
+    //             const res = eval_value(env, hash);
+    //             console.log(`${Date.now() - start}ms`);
+    //             console.log('Result:', JSON.stringify(res));
+    //         } catch (err) {
+    //             render(
+    //                 <div style={{ display: 'flex' }}>
+    //                     <Trace trace={window.trace} names={names} />
+    //                     <Trace trace={trace} names={names} />
+    //                     {/* <textarea value={JSON.stringify(window.trace)} /> */}
+    //                 </div>,
+    //                 root,
+    //             );
+    //             throw err;
+    //         }
+    //     }
+    // });
 
     // const res = eval_value(env, '5rjk153mh1');
     // // 'n674nqesdnte3k2gv52ss50ubkbg6b25ijbivqton6iopqfvdh39e59umlje0c288nje65bipl3k1n5bvp3nbuvb11qu7t0bl0hdn00',

@@ -7,7 +7,7 @@ use log::info;
 use serde_derive::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Ret {
     FnCall(usize, Vec<(Symbol, usize, Arc<Value>)>, Arc<Value>),
     Value(Hash),

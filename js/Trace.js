@@ -76,10 +76,18 @@ const key = (o) => (typeof o === 'string' ? o : Object.keys(o)[0]);
 const IR = ({ ir, names }) => {
     const k = key(ir);
     if (k === 'Value') {
-        return <Value names={names} value={ir.Value} />;
+        return (
+            <span>
+                Value: <Value names={names} value={ir.Value} />
+            </span>
+        );
     }
     if (k === 'Fn') {
-        return <span style={styles.value}>Fn declaration ({ir[k][0]})</span>;
+        return (
+            <span style={styles.value}>
+                Fn declaration ({ir[k][0]}) - {JSON.stringify(ir[k][1])}
+            </span>
+        );
     }
     if (k === 'PopAndName') {
         return (
@@ -190,6 +198,7 @@ const Hash = ({ hash, names }) => {
 };
 
 const Source = ({ source, names }) => {
+    // js style
     if (source.type === 'term') {
         return (
             <span>
@@ -198,9 +207,26 @@ const Source = ({ source, names }) => {
             </span>
         );
     }
+    if (source.type === 'Fn') {
+        return (
+            <span>
+                Fn({source.fnid} - <Hash hash={source.hash} names={names} />)
+            </span>
+        );
+    }
+    // rust style
+    if (source.Value) {
+        return (
+            <span>
+                Term(
+                <Hash hash={source.Value} names={names} />)
+            </span>
+        );
+    }
+    const [fnid, hash] = source.Fn;
     return (
         <span>
-            Fn({source.fnid} - <Hash hash={source.hash} names={names} />)
+            Fn({fnid} - <Hash hash={hash} names={names} />)
         </span>
     );
 };

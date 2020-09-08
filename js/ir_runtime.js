@@ -199,7 +199,7 @@ export class State {
                 fnid,
                 hash: this.env.anon_fns[fnid][0],
             });
-            this.stack.currentFrame().bindings = bindings;
+            this.stack.currentFrame().bindings = bindings.slice();
             this.stack.currentFrame().stack.push(arg);
             this.idx = 0;
         },

@@ -81,6 +81,7 @@ const handlers = {
                     : state.stack.get_vbl(sym, external),
             ];
         });
+        console.log('binding', i, free_vbls);
         state.stack.push({ PartialFnBody: [i, bound] });
         state.idx += 1;
     },
@@ -92,8 +93,8 @@ const handlers = {
             let v = state.stack.pop();
             if (v.PartialFnBody) {
                 const [fnint, bindings] = v.PartialFnBody;
-                mutuals.push([name, uses, fnint, bindings]);
-                items.push([name, uses, fnint, bindings]);
+                mutuals.push([name, uses, fnint, bindings.slice()]);
+                items.push([name, uses, fnint, bindings.slice()]);
             } else {
                 state.stack.bindLast([name, uses, v]);
             }
@@ -102,7 +103,7 @@ const handlers = {
             state.stack.bindLast([
                 name,
                 uses,
-                { CycleFnBody: [fnint, bindings, mutuals] },
+                { CycleFnBody: [fnint, bindings, mutuals.slice()] },
             ]);
         }
         state.idx += 1;

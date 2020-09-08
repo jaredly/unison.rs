@@ -46,6 +46,7 @@ impl Stack {
         info!("{} | ----> New frame {:?}", self.frames.len(), source);
         let source_id = self.frames[0].trace_id;
         let tid = self.traces.add(Some((source_id, false)), source.clone());
+        self.traces.evt(source_id, Event::NewFrame(tid));
         self.frames.insert(0, Frame::new(source, return_index, tid))
     }
 

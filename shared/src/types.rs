@@ -49,6 +49,7 @@ impl std::fmt::Debug for Symbol {
     std::cmp::PartialEq,
     std::hash::Hash,
     PartialOrd,
+    Ord,
 )]
 pub enum ConstructorType {
     Data,
@@ -56,7 +57,14 @@ pub enum ConstructorType {
 }
 
 #[derive(
-    Serialize, Deserialize, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd,
+    Serialize,
+    Deserialize,
+    Clone,
+    std::cmp::Eq,
+    std::cmp::PartialEq,
+    std::hash::Hash,
+    PartialOrd,
+    Ord,
 )]
 pub enum Reference {
     Builtin(String),
@@ -104,7 +112,14 @@ impl Reference {
 }
 
 #[derive(
-    Serialize, Deserialize, Clone, std::cmp::Eq, std::cmp::PartialEq, std::hash::Hash, PartialOrd,
+    Serialize,
+    Deserialize,
+    Clone,
+    std::cmp::Eq,
+    std::cmp::PartialEq,
+    std::hash::Hash,
+    PartialOrd,
+    Ord,
 )]
 pub struct Hash(pub String);
 
@@ -137,6 +152,7 @@ impl Hash {
     std::cmp::PartialEq,
     std::hash::Hash,
     PartialOrd,
+    Ord,
 )]
 pub struct Id(pub Hash, pub usize, pub usize);
 
@@ -149,6 +165,7 @@ pub struct Id(pub Hash, pub usize, pub usize);
     std::cmp::PartialEq,
     std::hash::Hash,
     PartialOrd,
+    Ord,
 )]
 pub enum Referent {
     Ref(Reference),
@@ -372,7 +389,15 @@ impl<Inner: std::fmt::Debug> std::fmt::Debug for ABT<Inner> {
 }
 
 #[derive(
-    Serialize, Deserialize, Debug, Clone, std::cmp::Eq, std::hash::Hash, std::cmp::PartialEq,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    std::cmp::Eq,
+    std::hash::Hash,
+    std::cmp::PartialEq,
+    std::cmp::PartialOrd,
+    Ord,
 )]
 pub struct NameSegment {
     pub text: String,
