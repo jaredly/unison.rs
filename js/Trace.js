@@ -123,15 +123,13 @@ const Event = ({ event, names, onOpen }) => {
         return (
             <div>
                 🏃‍♀️[{event.idx}] <IR names={names} ir={event.cmd} />
-                {/* <span style={styles.value}>{JSON.stringify(event.cmd)}</span>{' '} */}
-                {event.ret != null ? (
-                    <div>
-                        🏁 <Ret ret={event.ret} names={names} />
-                    </div>
-                ) : // <div style={{ ...styles.value, backgroundColor: '#fcc' }}>
-                //     {JSON.stringify(event.ret)}
-                // </div>
-                null}
+            </div>
+        );
+    }
+    if (event.type === 'ret') {
+        return (
+            <div>
+                🏁 <Ret ret={event.ret} names={names} />
             </div>
         );
     }

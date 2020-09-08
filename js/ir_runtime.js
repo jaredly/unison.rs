@@ -86,11 +86,17 @@ export class State {
                 idx,
                 cmd,
                 start,
-                ret,
+                // ret,
                 // end: Date.now(),
             });
             const ret = eval_ir(cmd, this);
             if (ret) {
+                this.stack.trace[this.stack.currentFrame().traceId].events.push(
+                    {
+                        type: 'ret',
+                        ret,
+                    },
+                );
                 this.handle_ret(ret);
             }
             this.handle_tail();
