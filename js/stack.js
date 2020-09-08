@@ -25,7 +25,7 @@ const showSource = (source) => {
     return source;
 };
 
-const DEBUG = true;
+const DEBUG = false;
 
 // What are we tracing?
 // - stack adds & pops probably
@@ -122,6 +122,7 @@ export class Stack {
         if (DEBUG) {
             console.log('->> Clone Frame');
         }
+        const old_tid = this._frames[0].trace_id;
         this._frames.unshift(clone(this._frames[0]));
         this._frames[0].return_index = return_index;
         this._frames[0].trace_id = this.trace.length;
@@ -131,11 +132,15 @@ export class Stack {
             source: { type: 'clone', tid: this._frames[1].trace_id },
             events: [],
         };
+        this.trace[old_tid].events.push({
+            CloneFrame: this._frames[0].trace_id,
+        });
     }
 
     back_again_to_handler(frames, current_idx) {
+        const old_tid = this._frames[0].trace_id;
         let new_idx = current_idx + 1;
-        while (frames[new_idx].handler === null) {
+        while (frames[new_idx].handler == null) {
             new_idx += 1;
         }
         // TODO how to account for this "going back"?
@@ -146,12 +151,16 @@ export class Stack {
             throw new Error('no handler');
         }
         this._frames[0].handler = null;
+        this.trace[this._frames[0].trace_id].events.push('HandleAgain');
+        this.trace[old_tid].events.push({ JumpBack: this._frames[0].trace_id });
         return [idx, new_idx];
     }
 
     back_to_handler() {
+        const old_tid = this._frames[0].trace_id;
         const frames = [];
-        while (this._frames[0].handler === null) {
+        while (this._frames[0].handler == null) {
+            this.trace[this._frames[0].trace_id].events.push('Pause');
             frames.push(this._frames.shift());
             if (this._frames.length === 0) {
                 return null;
@@ -164,6 +173,8 @@ export class Stack {
             throw new Error('no handler');
         }
         this._frames[0].handler = null;
+        this.trace[this._frames[0].trace_id].events.push('Handle');
+        this.trace[old_tid].events.push({ JumpBack: this._frames[0].trace_id });
         return [idx, frames, current_idx];
     }
 
@@ -189,7 +200,7 @@ export class Stack {
     push(t) {
         this._frames[0].stack.push(t);
         this.trace[this._frames[0].trace_id].events.push({
-            Push: t,
+            Push: clone(t),
         });
         if (DEBUG) {
             console.log(
@@ -205,7 +216,7 @@ export class Stack {
         const t = this._frames[0].stack.pop();
         // TODO do I need the value here? not really
         this.trace[this._frames[0].trace_id].events.push({
-            Pop: t,
+            Pop: clone(t),
         });
         if (DEBUG) {
             console.log('pop from stack', t);

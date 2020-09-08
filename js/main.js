@@ -33,8 +33,10 @@ Promise.all([data, names, trace]).then(([data, names, trace]) => {
     const env = new RuntimeEnv(data, names);
 
     const hash = 'dfaaimsoor';
+    // const hash = 'm3sai7lcac';
 
     try {
+        const start = Date.now();
         const res = eval_value(env, hash);
         console.log(`${Date.now() - start}ms`);
         console.log('Result:', JSON.stringify(res));
@@ -49,6 +51,15 @@ Promise.all([data, names, trace]).then(([data, names, trace]) => {
         );
         throw err;
     }
+
+    // render(
+    //     <div style={{ display: 'flex' }}>
+    //         <Trace trace={window.trace} names={names} />
+    //         <Trace trace={trace} names={names} />
+    //         {/* <textarea value={JSON.stringify(window.trace)} /> */}
+    //     </div>,
+    //     root,
+    // );
 
     // Object.keys(names[0]).forEach((hash) => {
     //     names[0][hash].sort((a, b) => a.length - b.length);

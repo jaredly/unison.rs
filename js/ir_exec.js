@@ -2,6 +2,7 @@
 
 import compare from './compare';
 import { patternMatch } from './pattern';
+import clone from 'clone-deep';
 
 const option_hash =
     '5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8';
@@ -27,7 +28,7 @@ const handlers = {
         state.stack.push(two);
         state.idx += 1;
     },
-    Handle: (mark_idx, state) => ({ Handle: mark_idx }),
+    Handle: (mark, state) => ({ Handle: mark }),
     HandlePure: (_, state) => {
         let v = state.stack.pop();
         if (!v.RequestPure) {
@@ -40,13 +41,13 @@ const handlers = {
         if (term.Request) {
             const [a, b] = term.Request;
             state.idx += 1;
-            return { Request: [a, b, []] };
+            return { Request: [a, b, []] }; // TODO clone?
         }
         if (term.RequestWithArgs) {
             const [a, b, n, args] = term.RequestWithArgs;
             if (n === args.length) {
                 state.idx += 1;
-                return { Request: [a, b, args] };
+                return { Request: [a, b, args] }; // TODO clone?
             }
         }
         if (term.Ref && term.Ref.DerivedId) {
@@ -81,7 +82,7 @@ const handlers = {
                     : state.stack.get_vbl(sym, external),
             ];
         });
-        console.log('binding', i, free_vbls);
+        // console.log('binding', i, free_vbls);
         state.stack.push({ PartialFnBody: [i, bound] });
         state.idx += 1;
     },
@@ -93,8 +94,8 @@ const handlers = {
             let v = state.stack.pop();
             if (v.PartialFnBody) {
                 const [fnint, bindings] = v.PartialFnBody;
-                mutuals.push([name, uses, fnint, bindings.slice()]);
-                items.push([name, uses, fnint, bindings.slice()]);
+                mutuals.push([name, uses, fnint, clone(bindings)]); // TODO maybe can just slice?
+                items.push([name, uses, fnint, clone(bindings)]);
             } else {
                 state.stack.bindLast([name, uses, v]);
             }
@@ -199,7 +200,15 @@ const handlers = {
                 current_idx,
             ] = value.RequestWithContinuation;
             return {
-                ReRequest: [req, i, args, back_idx, frames, current_idx],
+                // TODO might not need to clone here
+                ReRequest: [
+                    req,
+                    i,
+                    clone(args),
+                    back_idx,
+                    clone(frames),
+                    current_idx,
+                ],
             };
         } else {
             console.log(state.pretty_print(value));
@@ -223,10 +232,11 @@ export const eval_ir = (cmd, state) => {
 const call = {
     Continuation([kidx, frames], arg, state) {
         state.idx += 1;
-        return { Continue: [kidx, frames, arg] };
+        return { Continue: [kidx, clone(frames), arg] };
     },
     RequestWithArgs([r, i, n, args], arg, state) {
         state.idx += 1;
+        args = clone(args);
         args.push(arg);
         if (args.length == n) {
             return { Request: [r, i, args] };
@@ -238,14 +248,16 @@ const call = {
         state.idx += 1;
     },
     PartialConstructor([r, u, c], arg, state) {
+        c = clone(c); // TODO maybe can just slice
         c.push(arg);
         state.stack.push({ PartialConstructor: [r, u, c] });
         state.idx += 1;
     },
     CycleFnBody([fnint, bindings, mutuals], arg, state) {
         state.idx += 1;
-        bindings = bindings.map((b) => [...b]);
+        bindings = clone(bindings);
         for (let binding of bindings) {
+            // TODO maybe make this non-mutating? then can just "slice"
             if (binding[2].CycleBlank) {
                 const u = binding[2].CycleBlank;
                 const [k, uses, fnid, sub_bindings] = mutuals.find(
@@ -260,7 +272,7 @@ const call = {
     },
     PartialFnBody([fnint, bindings], arg, state) {
         state.idx += 1;
-        return { FnCall: [fnint, bindings, arg] };
+        return { FnCall: [fnint, clone(bindings), arg] };
     },
     Ref(inner, arg, state) {
         if (inner.Builtin) {
@@ -344,6 +356,21 @@ const callMultiArgBuiltin = (builtin, args, arg, state) => {
     } else {
         throw new Error(`Unexpected builtin ${builtin}`);
     }
+};
+
+const wrapping_sub = (a, b) => {
+    const c = a - Number.MIN_SAFE_INTEGER;
+    if (c < b) {
+        return Number.MAX_SAFE_INTEGER - (b - c);
+    }
+    return a - b;
+};
+const wrapping_add = (a, b) => {
+    let d = Number.MAX_SAFE_INTEGER - a;
+    if (d < b) {
+        return Number.MIN_SAFE_INTEGER + (b - d);
+    }
+    return a + b;
 };
 
 const multiArgBuiltins = {

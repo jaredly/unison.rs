@@ -861,7 +861,8 @@ fn run_cli_term(file: &String, args: &[String]) -> std::io::Result<()> {
     // std::fs::File::create("trace.json");
     std::fs::write(
         "trace.json",
-        serde_json::to_string(&state.stack.traces.0[0..200]).unwrap(),
+        serde_json::to_string(&state.stack.traces.0[0..200.min(state.stack.traces.0.len())])
+            .unwrap(),
     )?;
 
     Ok(())

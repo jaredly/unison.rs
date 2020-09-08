@@ -22,6 +22,11 @@ pub enum Event {
     PopToMark(usize),
     PopUp,
     NewFrame(usize),
+    CloneFrame(usize),
+    JumpBack(usize),
+    Pause,
+    Handle,
+    HandleAgain,
     IR(usize, IR),
     Ret(Ret),
 }

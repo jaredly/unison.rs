@@ -39,6 +39,7 @@ export class RuntimeEnv {
 
 export class State {
     constructor(env, hash) {
+        // find by prefix
         if (!env.terms[hash]) {
             for (let k of Object.keys(env.terms)) {
                 if (k.startsWith(hash)) {
@@ -98,7 +99,7 @@ export class State {
             if (ret) {
                 this.stack.trace[
                     this.stack.currentFrame().trace_id
-                ].events.push({ Ret: ret });
+                ].events.push({ Ret: clone(ret) });
                 this.handle_ret(ret);
             }
             this.handle_tail();

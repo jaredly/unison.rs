@@ -1,5 +1,6 @@
 // ok
 
+import clone from 'clone-deep';
 import compare from './compare';
 const key = (o) => (typeof o === 'string' ? o : Object.keys(o)[0]);
 
@@ -54,7 +55,7 @@ const matchers = {
             }
             const kk = key(kont);
             if (kk === 'Var') {
-                tkont = tkont.slice(0, current_idx + 1);
+                tkont = clone(tkont.slice(0, current_idx + 1));
                 tkont[current_idx].handler = null;
                 all.push({ Continuation: [tidx, tkont] });
             } else if (kk !== 'Unbound') {

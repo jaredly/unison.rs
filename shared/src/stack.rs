@@ -52,12 +52,14 @@ impl Stack {
 
     pub fn clone_frame(&mut self, return_index: usize) {
         info!("{} | ----> Clone frame", self.frames.len());
+        let old_tid = self.frames[0].trace_id;
         self.frames.insert(0, self.frames[0].clone());
         self.frames[0].return_index = return_index;
         let tid = self.traces.add(
             Some((self.frames[0].trace_id, true)),
             self.frames[0].source.clone(),
         );
+        self.traces.evt(old_tid, Event::CloneFrame(tid));
         self.frames[0].trace_id = tid
     }
 
@@ -69,6 +71,7 @@ impl Stack {
     ) -> Option<(usize, usize)> {
         // let mut frames = vec![];
         // self.frames.remove(0); // ignore the current one, it was a clone anyway
+        let old_tid = self.frames[0].trace_id;
         let mut new_idx = current_idx + 1;
         while frames[new_idx].handler == None {
             new_idx += 1;
@@ -82,13 +85,18 @@ impl Stack {
         // }
         let idx = self.frames[0].handler.expect("Not a handler (back again)");
         self.frames[0].handler = None;
+        self.traces.evt(self.frames[0].trace_id, Event::HandleAgain);
+        self.traces
+            .evt(old_tid, Event::JumpBack(self.frames[0].trace_id));
         Some((idx, new_idx))
     }
 
     // TODO there should be a way to ... get back .. to the thing ... that we wanted ...
     pub fn back_to_handler(&mut self) -> Option<(usize, Vec<Frame>, usize)> {
+        let old_tid = self.frames[0].trace_id;
         let mut frames = vec![];
         while self.frames[0].handler == None {
+            self.traces.evt(self.frames[0].trace_id, Event::Pause);
             frames.push(self.frames.remove(0));
             if self.frames.len() == 0 {
                 return None;
@@ -101,6 +109,9 @@ impl Stack {
         frames.extend(self.frames.clone());
         let idx = self.frames[0].handler.expect("No handler");
         self.frames[0].handler = None;
+        self.traces.evt(self.frames[0].trace_id, Event::Handle);
+        self.traces
+            .evt(old_tid, Event::JumpBack(self.frames[0].trace_id));
         Some((idx, frames, current_idx))
     }
 

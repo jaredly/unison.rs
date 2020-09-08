@@ -4,9 +4,19 @@ import * as React from 'react';
 
 const Trace = ({ trace, names }) => {
     const [open, setOpen] = React.useState({ 0: true });
+    const [text, setText] = React.useState('');
 
     return (
         <div>
+            <input
+                value={text}
+                onChange={(evt) => setText(evt.target.value)}
+                onKeyDown={(evt) => {
+                    if (evt.key === 'Enter') {
+                        setOpen((open) => ({ ...open, [text]: true }));
+                    }
+                }}
+            />
             {Object.keys(trace)
                 .sort((a, b) => +a - +b)
                 .map((k) =>
@@ -48,10 +58,33 @@ const Value = ({ value, names }) => {
             </span>
         );
     }
-    if (k === 'Ref') {
+    if (k === 'Ref' && value[k].DerivedId) {
         return (
             <span style={styles.value}>
                 Ref <Hash hash={value[k].DerivedId[0]} names={names} />
+            </span>
+        );
+    }
+    if (k === 'RequestWithContinuation') {
+        const [ref, _, args, __, frames, ___] = value[k];
+        return (
+            <span style={styles.value} onClick={() => setOpen(!isOpen)}>
+                RequestWithContinuation:{' '}
+                <Hash hash={ref.DerivedId[0]} names={names} />
+                {isOpen ? (
+                    <div>
+                        <div>
+                            {args.map((arg, i) => (
+                                <Value key={i} value={arg} names={name} />
+                            ))}
+                        </div>
+                        <div>
+                            {frames.map((frame, i) => (
+                                <Frame frame={frame} names={names} key={i} />
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
             </span>
         );
     }
@@ -146,12 +179,48 @@ const Event = ({ event, names, onOpen }) => {
             </div>
         );
     }
+    if (k === 'JumpBack') {
+        return (
+            <button onClick={() => onOpen(event[k])}>⭐↩️ : {event[k]}</button>
+        );
+    }
+    if (k === 'CloneFrame') {
+        return (
+            <button onClick={() => onOpen(event[k])}>⭐⏯ : {event[k]}</button>
+        );
+    }
     if (k === 'NewFrame') {
         return (
             <button onClick={() => onOpen(event[k])}>⭐ : {event[k]}</button>
         );
     }
     return <div>{JSON.stringify(event)}</div>;
+};
+
+const Frame = ({ frame, names }) => {
+    return (
+        <div style={styles.value}>
+            [{frame.trace_id}] - <Source names={names} source={frame.source} />{' '}
+            Handler: {frame.handler} Return Idx: {frame.return_index}
+            <Reveal
+                short={` Stack: ${frame.stack.length}`}
+                full={JSON.stringify(frame.stack)}
+            />
+            <Reveal
+                short={` Bindings: ${frame.bindings.length}`}
+                full={JSON.stringify(frame.bindings)}
+            />
+        </div>
+    );
+};
+
+const Reveal = ({ short, full }) => {
+    const [open, setOpen] = React.useState(false);
+    return (
+        <span onClick={() => setOpen(!open)}>
+            {short} {open ? full : null}
+        </span>
+    );
 };
 
 const Ret = ({ ret, names }) => {
@@ -167,6 +236,18 @@ const Ret = ({ ret, names }) => {
         return (
             <span>
                 Request: <Value value={ret[k][0]} names={names} />
+            </span>
+        );
+    }
+    if (k === 'ReRequest') {
+        return (
+            <span>
+                ReRequest: <Value value={ret[k][0]} names={names} />
+                <div>
+                    {ret[k][4].map((frame, i) => (
+                        <Frame names={names} frame={frame} key={i} />
+                    ))}
+                </div>
             </span>
         );
     }
@@ -261,12 +342,15 @@ const Item = ({
             </div>
             <div>
                 {events.map((event, i) => (
-                    <Event
-                        onOpen={onOpen}
-                        key={i}
-                        names={names}
-                        event={event}
-                    />
+                    <div style={{ display: 'flex' }}>
+                        [{i}]
+                        <Event
+                            onOpen={onOpen}
+                            key={i}
+                            names={names}
+                            event={event}
+                        />
+                    </div>
                     // <div key={i}>{JSON.stringify(event)}</div>
                 ))}
             </div>

@@ -9,3 +9,10 @@ It would be nice to:
   - and then showing what the values were when it was executed.
   - not totally sure how to keep track of it, but it's super cool.
   - would also be nice to have a format where the rust runtime could also do the jig.
+
+
+AUDIT
+- ir_exec -- ok, added a bunch of clones that might be extraneous
+
+
+Once it's working, trying changing some `clone`s back to `slice`s
