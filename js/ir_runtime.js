@@ -6,6 +6,7 @@ import { pretty_print } from './pretty_print';
 
 export const eval_value = (env, hash) => {
     const state = new State(env, hash);
+    window.trace = state.stack.trace;
     return state.run_to_end();
 };
 
@@ -77,7 +78,16 @@ export class State {
             //         this.cmds[this.idx],
             //     );
             // }
-            const ret = eval_ir(this.cmds[this.idx], this);
+            const start = Date.now();
+            const cmd = this.cmds[this.idx];
+            const ret = eval_ir(cmd, this);
+            this.stack.trace[this.stack.currentFrame().traceId].events.push({
+                type: 'ir',
+                cmd,
+                start,
+                ret,
+                end: Date.now(),
+            });
             if (ret) {
                 this.handle_ret(ret);
             }
