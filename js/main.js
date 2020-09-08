@@ -9,12 +9,18 @@ import Trace from './Trace';
 const root = document.createElement('div');
 document.body.appendChild(root);
 
+import jsonEqual from '@birchill/json-equalish';
+window.jsonEqual = jsonEqual;
+import { diff } from './diff';
+window.diff = diff;
+
 const data = fetch('./all.json').then((r) => r.json());
 const trace = fetch('./trace_rust.json').then((r) => r.json());
 
 Promise.all([data, names, trace]).then(([data, names, trace]) => {
     window.names = names;
     window.data = data;
+    window.alt_trace = trace;
     // if (true) {
     //     render(
     //         <div>

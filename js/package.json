@@ -1,8 +1,9 @@
 {
-"scripts": {
-"start": "parcel index.html"
-},
+  "scripts": {
+    "start": "parcel index.html"
+  },
   "dependencies": {
+    "@birchill/json-equalish": "^1.1.0",
     "parcel": "^1.12.4",
     "react": "^16.13.1",
     "react-dom": "^16.13.1"
