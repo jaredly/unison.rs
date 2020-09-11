@@ -795,6 +795,23 @@ impl shared::ir_runtime::ConvertibleArg<WrappedValue> for WrappedValue {
     }
 }
 
+struct RustFFI;
+impl shared::ir_runtime::FFI for RustFFI {
+    fn handle_request_sync(
+        &mut self,
+        kind: &Reference,
+        number: usize,
+        args: &Vec<std::sync::Arc<Value>>,
+    ) -> Option<Value> {
+        None
+    }
+
+    // This is used at the top level, once we've bailed.
+    fn handle_request(&mut self, request: shared::ir_runtime::FullRequest) {
+        // ok
+    }
+}
+
 fn run_cli_term(file: &String, args: &[String]) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
 

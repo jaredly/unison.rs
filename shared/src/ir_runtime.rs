@@ -4,7 +4,7 @@ use log::info;
 use std::sync::Arc;
 
 use super::chrome_trace::{Trace, Traces};
-use super::frame::Source;
+use super::frame::{Frame, Source};
 use super::ir_exec::Ret;
 use super::stack::Stack;
 
@@ -180,14 +180,15 @@ pub fn extract_args(typ: &ABT<Type>) -> (Vec<ABT<Type>>, Vec<ABT<Type>>, ABT<Typ
     }
 }
 
-pub fn eval(
+pub fn eval<T: FFI>(
     env: &RuntimeEnv,
+    ffi: &mut T,
     hash: &str,
     trace: &mut Traces,
     do_trace: bool,
-) -> Result<Arc<Value>, FullRequest> {
+) -> Option<Arc<Value>> {
     let mut state = State::new_value(&env, Hash::from_string(hash), do_trace);
-    state.run_to_end(trace)
+    state.run_to_end(ffi, trace)
 }
 
 // stack.back_to_handler -> `Handle(nidx, frames, etc.) | `TopLevel --- if we've bottomed out,
@@ -215,7 +216,7 @@ pub trait FFI {
 }
 
 #[derive(Debug)]
-pub struct FullRequest(Reference, usize, Vec<Arc<Value>>, Vec<crate::frame::Frame>);
+pub struct FullRequest(Reference, usize, Vec<Arc<Value>>, Vec<Frame>);
 
 impl RuntimeEnv {
     pub fn add_eval(&mut self, hash: &str, args: Vec<Value>) -> Result<Hash, String> {
@@ -247,7 +248,30 @@ impl<'a> State<'a> {
         }
     }
 
-    fn run(&mut self, trace: &mut Traces, option_ref: &Reference) -> Result<(), FullRequest> {
+    fn resume(&mut self, mut frames: Vec<Frame>, kidx: usize, arg: Arc<Value>) {
+        let last = frames.len() - 1;
+        frames[last].return_index = self.idx;
+        frames.extend(self.stack.frames.drain(..).collect::<Vec<Frame>>());
+        self.stack.frames = frames;
+        info!("New Top Frame: {}", self.stack.frames[0]);
+        info!("Handlers:");
+        let ln = self.stack.frames.len();
+        for (i, frame) in self.stack.frames.iter().enumerate() {
+            if frame.handler != None {
+                info!("{} | {}", ln - i, frame);
+            }
+        }
+        self.idx = kidx;
+        self.stack.push(arg);
+        self.cmds = self.env.cmds(&self.stack.frames[0].source);
+    }
+
+    fn run<T: FFI>(
+        &mut self,
+        ffi: &mut T,
+        trace: &mut Traces,
+        option_ref: &Reference,
+    ) -> Result<(), FullRequest> {
         #[cfg(not(target_arch = "wasm32"))]
         let mut n = 0;
         while self.idx < self.cmds.len() {
@@ -313,13 +337,21 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    pub fn run_to_end(&mut self, trace: &mut Traces) -> Result<Arc<Value>, FullRequest> {
+    // If it was able to complete synchronously, you get the final value
+    // Otherwise, you get None
+    pub fn run_to_end<T: FFI>(&mut self, ffi: &mut T, trace: &mut Traces) -> Option<Arc<Value>> {
         let option_ref = Reference::from_hash(OPTION_HASH);
 
-        self.run(trace, &option_ref)?;
+        match self.run(ffi, trace, &option_ref) {
+            Ok(()) => (),
+            Err(request) => {
+                ffi.handle_request(request);
+                return None;
+            }
+        }
 
         info!("Final stack: {:?}", self.stack);
-        Ok(self.stack.pop().unwrap())
+        Some(self.stack.pop().unwrap())
     }
 
     fn handle_tail(&mut self, trace: &mut Traces) {
@@ -371,26 +403,22 @@ impl<'a> State<'a> {
             }
             Ret::Continue(kidx, mut frames, arg) => {
                 info!("** CONTINUE ** ({}) {} with {:?}", kidx, frames.len(), arg,);
-                let last = frames.len() - 1;
-                frames[last].return_index = self.idx;
-                frames.extend(
-                    self.stack
-                        .frames
-                        .drain(..)
-                        .collect::<Vec<crate::frame::Frame>>(),
-                );
-                self.stack.frames = frames;
-                info!("New Top Frame: {}", self.stack.frames[0]);
-                info!("Handlers:");
-                let ln = self.stack.frames.len();
-                for (i, frame) in self.stack.frames.iter().enumerate() {
-                    if frame.handler != None {
-                        info!("{} | {}", ln - i, frame);
-                    }
-                }
-                self.idx = kidx;
-                self.stack.push(arg);
-                self.cmds = self.env.cmds(&self.stack.frames[0].source);
+                self.resume(frames, kidx, arg);
+                // let last = frames.len() - 1;
+                // frames[last].return_index = self.idx;
+                // frames.extend(self.stack.frames.drain(..).collect::<Vec<Frame>>());
+                // self.stack.frames = frames;
+                // info!("New Top Frame: {}", self.stack.frames[0]);
+                // info!("Handlers:");
+                // let ln = self.stack.frames.len();
+                // for (i, frame) in self.stack.frames.iter().enumerate() {
+                //     if frame.handler != None {
+                //         info!("{} | {}", ln - i, frame);
+                //     }
+                // }
+                // self.idx = kidx;
+                // self.stack.push(arg);
+                // self.cmds = self.env.cmds(&self.stack.frames[0].source);
             }
             Ret::ReRequest(kind, number, args, final_index, frames, current_frame_idx) => {
                 let (nidx, frame_index) =
@@ -398,7 +426,7 @@ impl<'a> State<'a> {
                         None => match ffi.handle_request_sync(&kind, number, &args) {
                             None => return Err(FullRequest(kind, number, args, frames)),
                             Some(value) => {
-                                resume(frames, final_index, value);
+                                self.resume(frames, final_index, Arc::new(value));
                                 return Ok(());
                             }
                         },
@@ -429,7 +457,14 @@ impl<'a> State<'a> {
                 let final_index = self.idx;
                 let (nidx, saved_frames, frame_idx) = match self.stack.back_to_handler() {
                     None => match ffi.handle_request_sync(&kind, number, &args) {
-                        None => return Err(FullRequest(kind, number, args, self.stack.frames)),
+                        None => {
+                            return Err(FullRequest(
+                                kind,
+                                number,
+                                args,
+                                self.stack.frames.drain(..).collect(),
+                            ))
+                        }
                         Some(value) => {
                             self.stack.push(Arc::new(value));
                             // resume(frames, final_index, value);
