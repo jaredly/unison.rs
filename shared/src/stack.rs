@@ -23,6 +23,18 @@ impl Stack {
         }
     }
 
+    pub fn from_frames(mut frames: Vec<Frame>) -> Self {
+        let mut traces = Traces::new();
+        for frame in frames.iter_mut() {
+            frame.trace_id = traces.add(None, frame.source.clone())
+        }
+        Stack {
+            traces,
+            frames,
+            trace: false,
+        }
+    }
+
     pub fn get_vbl(&mut self, sym: &Symbol, usage: usize) -> Arc<Value> {
         // if this is the final usage, then pluck it out.
         let idx = match self.frames[0]
@@ -97,13 +109,20 @@ impl Stack {
     // TODO there should be a way to ... get back .. to the thing ... that we wanted ...
     pub fn back_to_handler(&mut self) -> Option<(usize, Vec<Frame>, usize)> {
         let old_tid = self.frames[0].trace_id;
+
+        // Early bail of no handlers
+        for i in 0..self.frames.len() {
+            if self.frames[i].handler != None {
+                break;
+            } else if i == self.frames.len() - 1 {
+                return None;
+            }
+        }
+
         let mut frames = vec![];
         while self.frames[0].handler == None {
             self.traces.evt(self.frames[0].trace_id, Event::Pause);
             frames.push(self.frames.remove(0));
-            if self.frames.len() == 0 {
-                return None;
-            }
         }
         let current_idx = frames.len() - 1;
         // We need the full stack, in case this gets rethrown.

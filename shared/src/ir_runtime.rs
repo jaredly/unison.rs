@@ -53,6 +53,7 @@ where
     use Type::*;
     use ABT::*;
     match typ {
+        Var(_, _) => Ok(Value::Int(10000)),
         Tm(inner) => match inner {
             Arrow(_, _) => Err("Functions aren't yet supported".to_owned()),
             Ann(inner, _) => convert_arg(arg, inner, args),
@@ -166,6 +167,7 @@ pub fn extract_args(typ: &ABT<Type>) -> (Vec<ABT<Type>>, Vec<ABT<Type>>, ABT<Typ
             }
             Arrow(one, two) => {
                 let (mut a, b, c) = extract_args(two);
+                println!("ARROW {:?} => {:?}", one, two);
                 // let one = match &**one {
                 //     ABT::Tm(t) => t.clone(),
                 //     _ => unreachable!("Not a tm {:?}", one),
@@ -213,10 +215,29 @@ pub trait FFI {
 
     // This is used at the top level, once we've bailed.
     fn handle_request(&mut self, request: FullRequest);
+
+    fn handles(&self, kind: &Reference) -> bool;
+}
+
+impl dyn FFI {
+    pub fn ensure_handles(&self, kinds: &[&Reference]) -> bool {
+        for kind in kinds {
+            if !self.handles(kind) {
+                return false;
+            }
+        }
+        return true;
+    }
 }
 
 #[derive(Debug)]
-pub struct FullRequest(Reference, usize, Vec<Arc<Value>>, Vec<Frame>);
+pub struct FullRequest(
+    pub Reference,
+    pub usize,
+    pub Vec<Arc<Value>>,
+    pub Vec<Frame>,
+    pub usize,
+);
 
 impl RuntimeEnv {
     pub fn add_eval(&mut self, hash: &str, args: Vec<Value>) -> Result<Hash, String> {
@@ -245,6 +266,22 @@ impl<'a> State<'a> {
             stack: Stack::new(source, trace),
             idx: 0,
             env: &env,
+        }
+    }
+
+    pub fn full_resume(
+        env: &'a RuntimeEnv,
+        frames: Vec<Frame>,
+        kidx: usize,
+        arg: Arc<Value>,
+    ) -> Self {
+        let mut stack = Stack::from_frames(frames);
+        stack.push(arg);
+        State {
+            env,
+            cmds: env.cmds(&stack.frames[0].source),
+            stack,
+            idx: kidx,
         }
     }
 
@@ -401,7 +438,7 @@ impl<'a> State<'a> {
                 self.stack.clone_frame(mark_idx);
                 self.stack.frames[0].handler = None;
             }
-            Ret::Continue(kidx, mut frames, arg) => {
+            Ret::Continue(kidx, frames, arg) => {
                 info!("** CONTINUE ** ({}) {} with {:?}", kidx, frames.len(), arg,);
                 self.resume(frames, kidx, arg);
                 // let last = frames.len() - 1;
@@ -421,17 +458,19 @@ impl<'a> State<'a> {
                 // self.cmds = self.env.cmds(&self.stack.frames[0].source);
             }
             Ret::ReRequest(kind, number, args, final_index, frames, current_frame_idx) => {
-                let (nidx, frame_index) =
-                    match self.stack.back_again_to_handler(&frames, current_frame_idx) {
-                        None => match ffi.handle_request_sync(&kind, number, &args) {
-                            None => return Err(FullRequest(kind, number, args, frames)),
-                            Some(value) => {
-                                self.resume(frames, final_index, Arc::new(value));
-                                return Ok(());
-                            }
-                        },
-                        Some((a, b)) => (a, b),
-                    };
+                let (nidx, frame_index) = match self
+                    .stack
+                    .back_again_to_handler(&frames, current_frame_idx)
+                {
+                    None => match ffi.handle_request_sync(&kind, number, &args) {
+                        None => return Err(FullRequest(kind, number, args, frames, final_index)),
+                        Some(value) => {
+                            self.resume(frames, final_index, Arc::new(value));
+                            return Ok(());
+                        }
+                    },
+                    Some((a, b)) => (a, b),
+                };
                 self.idx = nidx;
                 info!(
                     "Handling a bubbled request : {} - {}",
@@ -463,6 +502,7 @@ impl<'a> State<'a> {
                                 number,
                                 args,
                                 self.stack.frames.drain(..).collect(),
+                                final_index,
                             ))
                         }
                         Some(value) => {

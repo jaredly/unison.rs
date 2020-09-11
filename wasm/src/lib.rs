@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables)]
+
 extern crate im;
 extern crate js_sys;
 extern crate shared;
@@ -44,6 +46,10 @@ impl shared::ir_runtime::FFI for FFI {
         args: &Vec<Arc<Value>>,
     ) -> Option<Value> {
         None
+    }
+
+    fn handles(&self, kind: &Reference) -> bool {
+        false
     }
 
     // This is used at the top level, once we've bailed.

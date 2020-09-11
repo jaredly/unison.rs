@@ -268,9 +268,9 @@ impl IR {
                                 Value::Int(a >> *b as u64)
                             }
 
-                            ("Nat.+", [Value::Nat(a)], Value::Nat(b)) => {
-                                info!("Nat + {} {}", a, b);
-                                Value::Nat(a + b)
+                            ("Nat.+", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a + b),
+                            ("Nat.sub", [Value::Nat(a)], Value::Nat(b)) => {
+                                Value::Nat(a.wrapping_sub(*b))
                             }
                             ("Nat.*", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a * b),
                             ("Nat./", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a / b),

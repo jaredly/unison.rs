@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 extern crate env_logger;
 extern crate serde_derive;
 extern crate serde_json;
@@ -11,6 +13,7 @@ mod unique;
 mod visitor;
 use shared::types;
 mod base32hex;
+mod ffi;
 
 fn _load_type(file: &std::path::Path) -> std::io::Result<()> {
     if !file.is_file() {
@@ -97,6 +100,23 @@ impl Branch {
         })
     }
 
+    fn load_child(&mut self, root: &std::path::PathBuf, child: &str) -> std::io::Result<()> {
+        let seg = NameSegment {
+            text: child.to_owned(),
+        };
+        if self.children.contains_key(&seg) {
+            return Ok(());
+        }
+        let hash = self
+            .raw
+            .children
+            .get(&seg)
+            .ok_or(std::io::Error::from(std::io::ErrorKind::NotFound))?;
+        self.children
+            .insert(seg, Branch::load(root, hash.to_string())?);
+        Ok(())
+    }
+
     fn load_children(&mut self, root: &std::path::PathBuf, deep: bool) -> std::io::Result<()> {
         let mut children: Vec<(&NameSegment, &Hash)> = self.raw.children.iter().collect();
         children.sort();
@@ -135,6 +155,58 @@ impl Branch {
             let mut full = path.clone();
             full.push(k.text.clone());
             v.type_names(&full, names);
+        }
+    }
+
+    fn get_names(&self, path: &Vec<String>, dest: &mut crate::printer::Names) {
+        for (k, v) in self.raw.terms.d1.iter() {
+            match k {
+                types::Referent::Con(types::Reference::DerivedId(types::Id(hash, _, _)), n, _) => {
+                    let mut full = path.clone();
+                    full.push(v.text.clone());
+                    let k = (hash.to_string(), *n);
+                    match dest.constructors.get(&k) {
+                        Some(v) if v.len() < full.len() => (),
+                        _ => {
+                            dest.constructors.insert(k, full);
+                        }
+                    };
+                }
+                types::Referent::Ref(types::Reference::DerivedId(types::Id(hash, _, _))) => {
+                    let mut full = path.clone();
+                    full.push(v.text.clone());
+                    let k = hash.to_string();
+                    match dest.terms.get(&k) {
+                        Some(v) if v.len() < full.len() => (),
+                        _ => {
+                            dest.terms.insert(k, full);
+                        }
+                    };
+                }
+                _ => (),
+            }
+        }
+        for (k, v) in self.raw.types.d1.iter() {
+            match k {
+                types::Reference::DerivedId(types::Id(hash, _, _)) => {
+                    let mut full = path.clone();
+                    full.push(v.text.clone());
+
+                    let k = hash.to_string();
+                    match dest.types.get(&k) {
+                        Some(v) if v.len() < full.len() => (),
+                        _ => {
+                            dest.terms.insert(k, full);
+                        }
+                    };
+                }
+                _ => (),
+            }
+        }
+        for (k, v) in &self.children {
+            let mut full = path.clone();
+            full.push(k.text.clone());
+            v.get_names(&full, dest);
         }
     }
 
@@ -178,6 +250,34 @@ impl Branch {
             let mut full = path.clone();
             full.push(k.text.clone());
             v.collect_names(&full, dest, constructors);
+        }
+    }
+
+    fn find_term(&mut self, root: &std::path::PathBuf, path: &[&str]) -> std::io::Result<Hash> {
+        // let mut parts: Vec<&str> = path.split(".").collect();
+        // if parts[0] == "." {
+        //     parts.remove(0);
+        // }
+        let seg = NameSegment {
+            text: path[0].to_owned(),
+        };
+        if path.len() == 1 {
+            for (k, v) in self.raw.terms.d1.iter() {
+                if v.text == path[0] {
+                    return Ok(match k.reference() {
+                        Reference::Builtin(_) => unreachable!(),
+                        Reference::DerivedId(Id(hash, _, _)) => hash.clone(),
+                    });
+                }
+            }
+            return Err(std::io::ErrorKind::NotFound.into());
+        } else {
+            self.load_child(root, path[0])?;
+            let child = self
+                .children
+                .get_mut(&seg)
+                .ok_or(std::io::Error::from(std::io::ErrorKind::NotFound))?;
+            return child.find_term(root, &path[1..]);
         }
     }
 
@@ -505,7 +605,10 @@ fn run_term(
     let runtime_env: shared::types::RuntimeEnv = ir_env.into();
 
     let mut trace = shared::chrome_trace::Traces::new();
-    let ret = shared::ir_runtime::eval(&runtime_env, hash, &mut trace, true);
+    let names = Default::default();
+    // branch.get_names(&vec![], &mut names);
+    let mut ffi = ffi::RustFFI(names, vec![]);
+    let ret = shared::ir_runtime::eval(&runtime_env, &mut ffi, hash, &mut trace, true).unwrap();
     println!(
         "Time: {}ms ({}ns)",
         last.elapsed().as_millis(),
@@ -795,60 +898,63 @@ impl shared::ir_runtime::ConvertibleArg<WrappedValue> for WrappedValue {
     }
 }
 
-struct RustFFI;
-impl shared::ir_runtime::FFI for RustFFI {
-    fn handle_request_sync(
-        &mut self,
-        kind: &Reference,
-        number: usize,
-        args: &Vec<std::sync::Arc<Value>>,
-    ) -> Option<Value> {
-        None
-    }
+fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
+    let mut project: std::path::PathBuf = std::env::var("HOME").unwrap().into();
+    project.push(".unison");
+    project.push("v1");
 
-    // This is used at the top level, once we've bailed.
-    fn handle_request(&mut self, request: shared::ir_runtime::FullRequest) {
-        // ok
-    }
-}
-
-fn run_cli_term(file: &String, args: &[String]) -> std::io::Result<()> {
-    let path = std::path::PathBuf::from(file);
-
-    let terms_path = path.parent().unwrap();
-    let hash_raw = &path.file_name().unwrap().to_str().unwrap()[1..];
+    let terms_path = {
+        let mut path = project.clone();
+        path.push("terms");
+        path
+    };
+    // let hash_raw = &path.file_name().unwrap().to_str().unwrap()[1..];
 
     let env = env::Env::init(terms_path.parent().unwrap());
     let mut ir_env = ir::TranslationEnv::new(env);
 
-    {
-        let root = terms_path.parent().unwrap();
-        let paths = path_with(&root, "paths");
-        let mut branch = Branch::load(&paths, get_head(&paths)?)?;
-        branch.load_children(&paths, true)?;
+    let root = terms_path.parent().unwrap();
+    let paths = path_with(&root, "paths");
+    let mut branch = Branch::load(&paths, get_head(&paths)?)?;
+    // branch.load_children(&paths, true)?;
+    // {
+    //     let mut all_terms = std::collections::HashMap::new();
+    //     branch.collect_terms(&vec![], &mut all_terms);
 
-        let mut all_terms = std::collections::HashMap::new();
-        branch.collect_terms(&vec![], &mut all_terms);
+    //     let mut hashes: Vec<&Hash> = all_terms.values().collect();
+    //     hashes.sort();
+    //     for hash in hashes {
+    //         let _ = ir_env.load(hash);
+    //     }
 
-        let mut hashes: Vec<&Hash> = all_terms.values().collect();
-        hashes.sort();
-        for hash in hashes {
-            let _ = ir_env.load(hash);
-        }
+    //     {
+    //         let mut walker = TypeWalker(&mut ir_env.env);
+    //         let ks: Vec<String> = walker.0.type_cache.keys().cloned().collect();
+    //         for k in ks {
+    //             use visitor::Accept;
+    //             let mut m = walker.0.load_type(&k);
+    //             m.accept(&mut walker);
+    //         }
+    //     }
+    // };
 
-        {
-            let mut walker = TypeWalker(&mut ir_env.env);
-            let ks: Vec<String> = walker.0.type_cache.keys().cloned().collect();
-            for k in ks {
-                use visitor::Accept;
-                let mut m = walker.0.load_type(&k);
-                m.accept(&mut walker);
-            }
-        }
+    let hash = if &term[0..1] == "." {
+        let hash = branch
+            .find_term(
+                &paths,
+                &term[1..].split(".").collect::<Vec<&str>>().as_slice(),
+            )
+            .unwrap();
+        ir_env.load(&hash).unwrap();
+        hash
+    } else {
+        let hash = types::Hash::from_string(term);
+        ir_env.load(&hash).unwrap();
+        hash
     };
 
-    let hash = types::Hash::from_string(hash_raw);
-    ir_env.load(&hash).unwrap();
+    // let hash = types::Hash::from_string(hash_raw);
+    // ir_env.load(&hash).unwrap();
 
     let mut runtime_env: shared::types::RuntimeEnv = ir_env.into();
 
@@ -863,24 +969,37 @@ fn run_cli_term(file: &String, args: &[String]) -> std::io::Result<()> {
     println!("Got {:?} -- {:?} -- {:?}", targs, effects, tres);
 
     let run_hash = if args.len() > 0 {
-        runtime_env.add_eval(hash_raw, args).unwrap()
+        runtime_env.add_eval(&hash.to_string(), args).unwrap()
     } else {
         hash
     };
 
     let mut trace = shared::chrome_trace::Traces::new();
 
-    let mut state = shared::ir_runtime::State::new_value(&runtime_env, run_hash, true);
-    let ret = state.run_to_end(&mut trace);
-    println!("-> {:?}", ret);
+    let mut names = Default::default();
+    branch.get_names(&vec![], &mut names);
+    let mut ffi = ffi::RustFFI(names, vec![]);
+
+    let mut state = shared::ir_runtime::State::new_value(&runtime_env, run_hash, false);
+    println!("[---running---]");
+    let ret = state.run_to_end(&mut ffi, &mut trace);
+    match ret {
+        None => (),
+        Some(ret) => println!("-> {}", crate::printer::value_to_pretty(&ret, &ffi.0, 100)),
+    };
+
+    while ffi.has_next_request() {
+        println!("> Async handler");
+        ffi.process_next_request(&runtime_env, &mut trace);
+    }
     // let ret = shared::ir_runtime::eval(&runtime_env, eval_hash, &mut trace);
 
     // std::fs::File::create("trace.json");
-    std::fs::write(
-        "trace.json",
-        serde_json::to_string(&state.stack.traces.0[0..200.min(state.stack.traces.0.len())])
-            .unwrap(),
-    )?;
+    // std::fs::write(
+    //     "trace.json",
+    //     serde_json::to_string(&state.stack.traces.0[0..200.min(state.stack.traces.0.len())])
+    //         .unwrap(),
+    // )?;
 
     Ok(())
 }

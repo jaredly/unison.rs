@@ -100,8 +100,12 @@ impl From<&String> for Hash {
 
 impl std::fmt::Debug for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        f.write_str("#")?;
-        f.write_str(&self.to_string()[0..10])
+        if self.0 == "<eval>" {
+            f.write_str(&self.0)
+        } else {
+            f.write_str("#")?;
+            f.write_str(&self.to_string()[0..10])
+        }
     }
 }
 
@@ -172,14 +176,14 @@ pub enum Referent {
     Con(Reference, usize, ConstructorType),
 }
 
-// impl Referent {
-//     fn reference(&self) -> &Reference {
-//         match self {
-//             Referent::Ref(r) => r,
-//             Referent::Con(r, _, _) => r,
-//         }
-//     }
-// }
+impl Referent {
+    pub fn reference(&self) -> &Reference {
+        match self {
+            Referent::Ref(r) => r,
+            Referent::Con(r, _, _) => r,
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
 pub struct MatchCase(pub Pattern, pub Option<Box<ABT<Term>>>, pub Box<ABT<Term>>);
