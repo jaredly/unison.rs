@@ -112,26 +112,17 @@ pub fn resume(
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    // let hash = shared::types::Hash::from_string(term);
-    // let t = &env.terms.get(&hash).unwrap().1;
-    // // TODO effects!
-    // let (targs, _effects, _tres) = shared::ir_runtime::extract_args(t);
-    // let args = shared::ir_runtime::convert_args(
-    //     args.into_iter().map(|x| WrappedValue(x)).collect(),
-    //     &targs,
-    // )?;
-    // let eval_hash = env.add_eval(term, args)?;
+    // let the_arg_type = env.types.get()
 
-    let the_arg_type = env.types.get()
+    let (kind, constructor_no, frames, kidx): (String, usize, Vec<shared::frame::Frame>, usize) =
+        arg.into_serde().unwrap();
 
-    let (frames, kidx): (Vec<shared::frame::Frame>, usize) = arg.into_serde().unwrap();
-
-    let mut state = shared::ir_runtime::State::full_resume(
-        &env,
-        frames,
-        kidx,
-        shared::ir_runtime::convert_arg(WrappedValue(arg)),
-    );
+    // let mut state = shared::ir_runtime::State::full_resume(
+    //     &env,
+    //     frames,
+    //     kidx,
+    //     Arc::new(shared::ir_runtime::convert_arg(WrappedValue(arg)).unwrap()),
+    // );
     let mut trace = shared::chrome_trace::Traces::new();
     let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
     Ok(JsValue::from_serde(&val).unwrap())

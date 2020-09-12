@@ -197,13 +197,10 @@ pub fn eval<T: FFI>(
 // how do we deal
 
 pub trait FFI {
-    // this kindof bottoms out?
-    // Or I guess ...
-    // hmm is there a way to do "if you can handle this inline, that would be cool"?
-    // maybe like a handle_request_sync(kind, number, args), and if that gets a nope, we
-    // go to handle_request_async ... that then needs to jump out of the main flow of
-    // computation, waiting for a resume. Yeah that makes sense.
-
+    // NOTE: This function is responsible for doing any type validation on the returned value.
+    // If it returns something with an incorrect type, undefined behavior will result.
+    // TODO maybe the State should have knowledge of the types of all `abilities` that it
+    // might come across?
     // If this returns `None`, that means that the request couldn't be handled synchronously,
     // e.g. we need to just bail straight out.
     fn handle_request_sync(
@@ -271,10 +268,15 @@ impl<'a> State<'a> {
 
     pub fn full_resume(
         env: &'a RuntimeEnv,
+        kind: Reference,
+        constructor_index: usize,
         frames: Vec<Frame>,
         kidx: usize,
         arg: Arc<Value>,
     ) -> Self {
+        if !env.validate_ability_type(kind, constructor_index, *arg) {
+            return Err(BadNewsBears(kind, number, value));
+        }
         let mut stack = Stack::from_frames(frames);
         stack.push(arg);
         State {
@@ -465,6 +467,14 @@ impl<'a> State<'a> {
                     None => match ffi.handle_request_sync(&kind, number, &args) {
                         None => return Err(FullRequest(kind, number, args, frames, final_index)),
                         Some(value) => {
+                            // OH TODO ok folks lets just bail here if the type from javascript is wrong
+                            // we have the power, folks.
+                            // If you're doing an FFI, we have the right to take it to pieces.
+                            // I guess that means I need to be able to return a different kind of
+                            // ship-stopping error
+                            if !self.env.validate_ability_type(kind, number, value) {
+                                return Err(BadNewsBears(kind, number, value));
+                            }
                             self.resume(frames, final_index, Arc::new(value));
                             return Ok(());
                         }
