@@ -40,15 +40,15 @@ unison(packed_env).then((runtime) => {
             },
         },
         MVarAbility: {
-            create: (v, k) => {
+            create: (v) => {
                 mvars.push(v);
                 return mvars.length;
             },
-            get: (m, k) => {
+            get: (m) => {
                 const idx = m.FFI;
                 return mvars[idx];
             },
-            set: (m, v, k) => {
+            set: (m, v) => {
                 const idx = m.FFI;
                 mvars[idx] = v;
                 return null;

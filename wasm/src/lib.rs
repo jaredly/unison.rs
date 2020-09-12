@@ -32,10 +32,11 @@ lazy_static! {
 // #[derive(Serialize, Deserialize)]
 // struct Handlers(Vec<(String, bool, usize)>);
 
-// Handlers looks like Vec<(String - hash, usize - fnid for calling back)>
+// Handlers looks like Vec<(String - hash, usize - fnid for calling back, bool - is it sync)>
 
-struct FFI(HashMap<(String, usize), js_sys::Function>);
+struct FFI(HashMap<(String, usize, bool), js_sys::Function>);
 
+use shared::ir_runtime::{FullRequest, State};
 use shared::types::*;
 use std::sync::Arc;
 impl shared::ir_runtime::FFI for FFI {
@@ -45,16 +46,42 @@ impl shared::ir_runtime::FFI for FFI {
         number: usize,
         args: &Vec<Arc<Value>>,
     ) -> Option<Value> {
-        None
+        match kind {
+            Reference::DerivedId(Id(hash, _, _)) => {
+                let js_args = js_sys::Array::new();
+                for arg in args {
+                    js_args.push(&JsValue::UNDEFINED);
+                }
+                self.0.get(&(hash.to_string(), number, true)).map(|f| {
+                    f.apply(&JsValue::UNDEFINED, &js_args)
+                        .unwrap()
+                        .into_serde()
+                        .unwrap()
+                })
+            }
+            _ => None,
+        }
     }
 
     fn handles(&self, kind: &Reference) -> bool {
-        false
+        true
     }
 
     // This is used at the top level, once we've bailed.
     fn handle_request(&mut self, request: shared::ir_runtime::FullRequest) {
-        // ok
+        let FullRequest(kind, number, args, frames, final_index) = request;
+        match kind {
+            Reference::DerivedId(Id(hash, _, _)) => {
+                let js_args = js_sys::Array::new();
+                for arg in args {
+                    js_args.push(&JsValue::UNDEFINED);
+                }
+                js_args.push(&JsValue::from_serde(&(frames, final_index)).unwrap());
+                let f = self.0.get(&(hash.to_string(), number, true)).unwrap();
+                f.apply(&JsValue::UNDEFINED, &js_args).unwrap();
+            }
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -65,11 +92,49 @@ impl From<Vec<JsValue>> for FFI {
             let decl: js_sys::Array = decl.into();
             let ability_hash = decl.get(0).as_string().unwrap();
             let ability_index = decl.get(1).as_f64().unwrap() as usize;
-            let handler_function: js_sys::Function = decl.get(2).into();
-            handlers.insert((ability_hash, ability_index), handler_function);
+            let is_sync = decl.get(2).as_bool().unwrap();
+            let handler_function: js_sys::Function = decl.get(3).into();
+            handlers.insert((ability_hash, ability_index, is_sync), handler_function);
         }
         FFI(handlers)
     }
+}
+
+#[wasm_bindgen]
+pub fn resume(
+    env_id: usize,
+    kont: JsValue,
+    arg: JsValue,
+    raw_handlers: Vec<JsValue>,
+) -> Result<JsValue, JsValue> {
+    let mut ffi = FFI::from(raw_handlers);
+
+    let mut l = ENV.lock().unwrap();
+    let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
+
+    // let hash = shared::types::Hash::from_string(term);
+    // let t = &env.terms.get(&hash).unwrap().1;
+    // // TODO effects!
+    // let (targs, _effects, _tres) = shared::ir_runtime::extract_args(t);
+    // let args = shared::ir_runtime::convert_args(
+    //     args.into_iter().map(|x| WrappedValue(x)).collect(),
+    //     &targs,
+    // )?;
+    // let eval_hash = env.add_eval(term, args)?;
+
+    let the_arg_type = env.types.get()
+
+    let (frames, kidx): (Vec<shared::frame::Frame>, usize) = arg.into_serde().unwrap();
+
+    let mut state = shared::ir_runtime::State::full_resume(
+        &env,
+        frames,
+        kidx,
+        shared::ir_runtime::convert_arg(WrappedValue(arg)),
+    );
+    let mut trace = shared::chrome_trace::Traces::new();
+    let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
+    Ok(JsValue::from_serde(&val).unwrap())
 }
 
 #[wasm_bindgen]

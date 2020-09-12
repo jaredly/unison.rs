@@ -7,10 +7,10 @@ export default async (data) => {
 
     return {
         run: (term, args, handlers) => {
-            //
+            return jsBridge.run(id, term, args, handlers);
         },
         runSync: (term, args, handlers) => {
-            //
+            return jsBridge.run_sync(id, term, args, handlers);
         },
         resume: (kont, arg, handlers) => {
             // we're in an async handler context, so don't expect resume to be sync?

@@ -42,7 +42,7 @@ pub trait ConvertibleArg<T: Sized> {
     fn is_empty(&self) -> bool;
 }
 
-fn convert_arg<'a, T>(
+pub fn convert_arg<'a, T>(
     arg: T,
     typ: &'a ABT<Type>,
     mut args: Vec<&'a ABT<Type>>,
