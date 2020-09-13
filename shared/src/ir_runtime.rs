@@ -253,6 +253,15 @@ impl RuntimeEnv {
         self.terms.insert(hash.clone(), (cmds, typ));
         Ok(hash)
     }
+
+    pub fn validate_ability_type(
+        &mut self,
+        kind: &Reference,
+        number: usize,
+        value: &Value,
+    ) -> bool {
+        false
+    }
 }
 
 impl<'a> State<'a> {
@@ -274,7 +283,7 @@ impl<'a> State<'a> {
         kidx: usize,
         arg: Arc<Value>,
     ) -> Self {
-        if !env.validate_ability_type(kind, constructor_index, *arg) {
+        if !env.validate_ability_type(&kind, constructor_index, &*arg) {
             return Err(BadNewsBears(kind, number, value));
         }
         let mut stack = Stack::from_frames(frames);
