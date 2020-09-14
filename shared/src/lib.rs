@@ -1,10 +1,13 @@
 pub mod check;
 pub mod chrome_trace;
+pub mod convert;
+pub mod ffi;
 pub mod frame;
 pub mod ir_exec;
 pub mod ir_runtime;
 pub mod pattern;
 pub mod stack;
+pub mod state;
 pub mod trace;
 pub mod types;
 

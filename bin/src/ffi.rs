@@ -1,5 +1,5 @@
 // #ed72l2mrh0
-use shared::ir_runtime::{FullRequest, InvalidFFI, State};
+use shared::state::{FullRequest, InvalidFFI, State};
 use shared::types::*;
 
 fn unit() -> Value {
@@ -56,7 +56,7 @@ impl RustFFI {
     }
 }
 
-impl shared::ir_runtime::FFI for RustFFI {
+impl shared::ffi::FFI for RustFFI {
     fn handle_request_sync(
         &mut self,
         _t: &ABT<Type>,

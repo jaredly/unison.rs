@@ -885,7 +885,7 @@ fn _run(file: &String) -> std::io::Result<()> {
 #[derive(Debug)]
 struct WrappedValue(String);
 
-impl shared::ir_runtime::ConvertibleArg<WrappedValue> for WrappedValue {
+impl shared::convert::ConvertibleArg<WrappedValue> for WrappedValue {
     fn as_f64(&self) -> Option<f64> {
         self.0.parse().ok()
     }
@@ -964,7 +964,7 @@ fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
     println!("Type: {:?}", t);
     let (targs, effects, tres) = shared::ir_runtime::extract_args(t);
 
-    let args = shared::ir_runtime::convert_args(
+    let args = shared::convert::convert_args(
         args.into_iter().map(|x| WrappedValue(x.clone())).collect(),
         &targs,
     )
@@ -984,13 +984,13 @@ fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
     let mut ffi = ffi::RustFFI(names, vec![]);
 
     for effect in effects {
-        use shared::ir_runtime::FFI;
+        use shared::ffi::FFI;
         if !ffi.handles(&effect) {
             return Err(std::io::ErrorKind::InvalidInput.into());
         }
     }
 
-    let mut state = shared::ir_runtime::State::new_value(&runtime_env, run_hash, false);
+    let mut state = shared::state::State::new_value(&runtime_env, run_hash, false);
     println!("[---running---]");
     let ret = state
         .run_to_end(&mut ffi, &mut trace)

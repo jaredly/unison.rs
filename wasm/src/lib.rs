@@ -29,17 +29,14 @@ lazy_static! {
     static ref ENV: Mutex<Envs> = Mutex::new(Default::default());
 }
 
-// #[derive(Serialize, Deserialize)]
-// struct Handlers(Vec<(String, bool, usize)>);
-
 // Handlers looks like Vec<(String - hash, usize - fnid for calling back, bool - is it sync)>
 
 struct FFI(HashMap<(String, usize, bool), js_sys::Function>);
 
-use shared::ir_runtime::FullRequest;
+use shared::state::FullRequest;
 use shared::types::*;
 use std::sync::Arc;
-impl shared::ir_runtime::FFI for FFI {
+impl shared::ffi::FFI for FFI {
     fn handle_request_sync(
         &mut self,
         t: &ABT<Type>,
@@ -80,7 +77,7 @@ impl shared::ir_runtime::FFI for FFI {
     }
 
     // This is used at the top level, once we've bailed.
-    fn handle_request(&mut self, request: shared::ir_runtime::FullRequest) {
+    fn handle_request(&mut self, request: FullRequest) {
         let FullRequest(kind, number, args, frames, final_index, t) = request;
         match &kind {
             Reference::DerivedId(Id(hash, _, _)) => {
@@ -164,13 +161,13 @@ pub fn resume(
 
     let t = env.get_ability_type(&kind, constructor_no);
 
-    let mut state = shared::ir_runtime::State::full_resume(
+    let mut state = shared::state::State::full_resume(
         &env,
         kind,
         constructor_no,
         frames,
         kidx,
-        Arc::new(shared::ir_runtime::convert_arg(WrappedValue(arg), &t, vec![]).unwrap()),
+        Arc::new(shared::convert::convert_arg(WrappedValue(arg), &t, vec![]).unwrap()),
     )
     .expect("Invalid Resume arg type");
     let mut trace = shared::chrome_trace::Traces::new();
@@ -197,19 +194,17 @@ pub fn run_sync(
     // TODO effects!
     let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
     for effect in effects {
-        use shared::ir_runtime::FFI;
+        use shared::ffi::FFI;
         if !ffi.handles(&effect) {
             return Err(JsValue::from("Doesn't handle all effects"));
         }
     }
-    let args = shared::ir_runtime::convert_args(
-        args.into_iter().map(|x| WrappedValue(x)).collect(),
-        &targs,
-    )?;
+    let args =
+        shared::convert::convert_args(args.into_iter().map(|x| WrappedValue(x)).collect(), &targs)?;
 
     let eval_hash = env.add_eval(term, args)?;
 
-    let mut state = shared::ir_runtime::State::new_value(&env, eval_hash, false);
+    let mut state = shared::state::State::new_value(&env, eval_hash, false);
     let mut trace = shared::chrome_trace::Traces::new();
     let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
     Ok(JsValue::from_serde(&val).unwrap())
@@ -232,19 +227,17 @@ pub fn run(
     // TODO validate that all effects are handled!
     let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
     for effect in effects {
-        use shared::ir_runtime::FFI;
+        use shared::ffi::FFI;
         if !ffi.handles(&effect) {
             return Err(JsValue::from("Doesn't handle all effects"));
         }
     }
-    let args = shared::ir_runtime::convert_args(
-        args.into_iter().map(|x| WrappedValue(x)).collect(),
-        &targs,
-    )?;
+    let args =
+        shared::convert::convert_args(args.into_iter().map(|x| WrappedValue(x)).collect(), &targs)?;
 
     let eval_hash = env.add_eval(term, args)?;
 
-    let mut state = shared::ir_runtime::State::new_value(&env, eval_hash, false);
+    let mut state = shared::state::State::new_value(&env, eval_hash, false);
     let mut trace = shared::chrome_trace::Traces::new();
     let _ignored = state.run_to_end(&mut ffi, &mut trace);
     Ok(JsValue::UNDEFINED)
@@ -260,7 +253,7 @@ pub fn load(data: &str) -> usize {
 #[derive(Debug)]
 struct WrappedValue(JsValue);
 
-impl shared::ir_runtime::ConvertibleArg<WrappedValue> for WrappedValue {
+impl shared::convert::ConvertibleArg<WrappedValue> for WrappedValue {
     fn as_f64(&self) -> Option<f64> {
         self.0.as_f64()
     }
@@ -289,15 +282,14 @@ pub fn eval_fn(env_id: usize, hash_raw: &str, values: Vec<JsValue>) -> Result<Js
     let t = &env.terms.get(&hash).unwrap().1;
     // TODO effects!
     let (targs, _effects, _tres) = shared::ir_runtime::extract_args(t);
-    let args = shared::ir_runtime::convert_args(
+    let args = shared::convert::convert_args(
         values.into_iter().map(|x| WrappedValue(x)).collect(),
         &targs,
     )?;
 
     let eval_hash = env.add_eval(hash_raw, args)?;
 
-    let mut state =
-        shared::ir_runtime::State::new_value(&l.map.get(&env_id).unwrap(), eval_hash, false);
+    let mut state = shared::state::State::new_value(&l.map.get(&env_id).unwrap(), eval_hash, false);
     let mut trace = shared::chrome_trace::Traces::new();
     let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
     Ok(JsValue::from_serde(&val).unwrap())
