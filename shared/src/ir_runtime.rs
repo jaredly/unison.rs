@@ -148,7 +148,13 @@ where
     Ok(res)
 }
 
-pub fn extract_args(typ: &ABT<Type>) -> (Vec<ABT<Type>>, Vec<ABT<Type>>, ABT<Type>) {
+pub fn extract_args(
+    typ: &ABT<Type>,
+) -> (
+    Vec<ABT<Type>>,
+    std::collections::HashSet<Reference>,
+    ABT<Type>,
+) {
     use Type::*;
     match typ {
         ABT::Abs(_, _, inner) => extract_args(inner),
@@ -156,21 +162,31 @@ pub fn extract_args(typ: &ABT<Type>) -> (Vec<ABT<Type>>, Vec<ABT<Type>>, ABT<Typ
             Forall(inner) => extract_args(inner),
             Effect(effects, inner) => {
                 let (a, mut b, c) = extract_args(inner);
-                let effects = match &**effects {
+                match &**effects {
                     ABT::Tm(t) => match t {
                         Effects(effects) => {
+                            for effect in effects {
+                                // println!("Ok {:?}", effect);
+                                match effect {
+                                    ABT::Var(_, _) => (),
+                                    ABT::Tm(Type::Ref(reference)) => {
+                                        b.insert(reference.clone());
+                                    }
+                                    _ => unreachable!("Effect not a reeference {:?}", effect),
+                                }
+                            }
                             // TODO go through and find the DerivedId refs, and just add those
                             // also dedup.
-                            effects.clone()
+                            // effects.clone()
                         }
                         _ => unreachable!(),
                     },
                     _ => unreachable!(),
                 };
-                b.extend(effects); // TODO do I care about ordering here?
-                                   // for e in effects {
-                                   //     b.push(e)
-                                   // }
+                // b.extend(effects); // TODO do I care about ordering here?
+                // for e in effects {
+                //     b.push(e)
+                // }
                 (a, b, c)
             }
             Arrow(one, two) => {
@@ -184,7 +200,7 @@ pub fn extract_args(typ: &ABT<Type>) -> (Vec<ABT<Type>>, Vec<ABT<Type>>, ABT<Typ
                 (a, b, c)
             }
             Ann(t, _) => extract_args(t),
-            t => (vec![], vec![], ABT::Tm(t.clone())),
+            t => (vec![], Default::default(), ABT::Tm(t.clone())),
         },
         _ => unreachable!("Um not a Tm {:?}", typ),
     }
@@ -213,6 +229,7 @@ pub trait FFI {
     // e.g. we need to just bail straight out.
     fn handle_request_sync(
         &mut self,
+        typ: &ABT<Type>,
         kind: &Reference,
         number: usize,
         args: &Vec<Arc<Value>>,
@@ -242,6 +259,7 @@ pub struct FullRequest(
     pub Vec<Arc<Value>>,
     pub Vec<Frame>,
     pub usize,
+    pub ABT<Type>,
 );
 
 pub enum Error {
@@ -507,33 +525,37 @@ impl<'a> State<'a> {
             Ret::ReRequest(kind, number, args, final_index, frames, current_frame_idx) => {
                 let (nidx, frame_index) =
                     match self.stack.back_again_to_handler(&frames, current_frame_idx) {
-                        None => match ffi.handle_request_sync(&kind, number, &args) {
-                            None => {
-                                return Err(Error::Request(FullRequest(
-                                    kind,
-                                    number,
-                                    args,
-                                    frames,
-                                    final_index,
-                                )))
-                            }
-                            Some(value) => {
-                                // OH TODO ok folks lets just bail here if the type from javascript is wrong
-                                // we have the power, folks.
-                                // If you're doing an FFI, we have the right to take it to pieces.
-                                // I guess that means I need to be able to return a different kind of
-                                // ship-stopping error
-                                if !self.env.validate_ability_type(&kind, number, &value) {
-                                    return Err(Error::InvalidFFI(InvalidFFI(
+                        None => {
+                            let t = self.env.get_ability_type(&kind, number);
+                            match ffi.handle_request_sync(&t, &kind, number, &args) {
+                                None => {
+                                    return Err(Error::Request(FullRequest(
                                         kind,
                                         number,
-                                        Arc::new(value),
-                                    )));
+                                        args,
+                                        frames,
+                                        final_index,
+                                        t,
+                                    )))
                                 }
-                                self.resume(frames, final_index, Arc::new(value));
-                                return Ok(());
+                                Some(value) => {
+                                    // OH TODO ok folks lets just bail here if the type from javascript is wrong
+                                    // we have the power, folks.
+                                    // If you're doing an FFI, we have the right to take it to pieces.
+                                    // I guess that means I need to be able to return a different kind of
+                                    // ship-stopping error
+                                    if !self.env.validate_ability_type(&kind, number, &value) {
+                                        return Err(Error::InvalidFFI(InvalidFFI(
+                                            kind,
+                                            number,
+                                            Arc::new(value),
+                                        )));
+                                    }
+                                    self.resume(frames, final_index, Arc::new(value));
+                                    return Ok(());
+                                }
                             }
-                        },
+                        }
                         Some((a, b)) => (a, b),
                     };
                 self.idx = nidx;
@@ -560,29 +582,33 @@ impl<'a> State<'a> {
                 );
                 let final_index = self.idx;
                 let (nidx, saved_frames, frame_idx) = match self.stack.back_to_handler() {
-                    None => match ffi.handle_request_sync(&kind, number, &args) {
-                        None => {
-                            return Err(Error::Request(FullRequest(
-                                kind,
-                                number,
-                                args,
-                                self.stack.frames.drain(..).collect(),
-                                final_index,
-                            )))
-                        }
-                        Some(value) => {
-                            if !self.env.validate_ability_type(&kind, number, &value) {
-                                return Err(Error::InvalidFFI(InvalidFFI(
+                    None => {
+                        let t = self.env.get_ability_type(&kind, number);
+                        match ffi.handle_request_sync(&t, &kind, number, &args) {
+                            None => {
+                                return Err(Error::Request(FullRequest(
                                     kind,
                                     number,
-                                    Arc::new(value),
-                                )));
+                                    args,
+                                    self.stack.frames.drain(..).collect(),
+                                    final_index,
+                                    t,
+                                )))
                             }
+                            Some(value) => {
+                                if !self.env.validate_ability_type(&kind, number, &value) {
+                                    return Err(Error::InvalidFFI(InvalidFFI(
+                                        kind,
+                                        number,
+                                        Arc::new(value),
+                                    )));
+                                }
 
-                            self.stack.push(Arc::new(value));
-                            return Ok(());
+                                self.stack.push(Arc::new(value));
+                                return Ok(());
+                            }
                         }
-                    },
+                    }
                     Some((a, b, c)) => (a, b, c),
                 };
                 self.idx = nidx;

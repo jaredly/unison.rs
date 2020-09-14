@@ -108,8 +108,17 @@ impl shared::ir_runtime::FFI for RustFFI {
         }
     }
 
-    fn handles(&self, _kind: &Reference) -> bool {
-        return true;
+    fn handles(&self, kind: &Reference) -> bool {
+        match kind {
+            Reference::DerivedId(Id(hash, _, _)) => match &hash.to_string()[0..10] {
+                "onasci86q4" => true,
+                "ed72l2mrh0" => true,
+                "s81fshin91" => true,
+                "mvd13op0i1" => true,
+                _ => false,
+            },
+            _ => false,
+        }
     }
 
     // This is used at the top level, once we've bailed.

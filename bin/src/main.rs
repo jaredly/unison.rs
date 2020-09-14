@@ -963,6 +963,7 @@ fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
     let t = &runtime_env.terms.get(&hash).unwrap().1;
     println!("Type: {:?}", t);
     let (targs, effects, tres) = shared::ir_runtime::extract_args(t);
+
     let args = shared::ir_runtime::convert_args(
         args.into_iter().map(|x| WrappedValue(x.clone())).collect(),
         &targs,
@@ -981,6 +982,13 @@ fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
     let mut names = Default::default();
     branch.get_names(&vec![], &mut names);
     let mut ffi = ffi::RustFFI(names, vec![]);
+
+    for effect in effects {
+        use shared::ir_runtime::FFI;
+        if !ffi.handles(&effect) {
+            return Err(std::io::ErrorKind::InvalidInput.into());
+        }
+    }
 
     let mut state = shared::ir_runtime::State::new_value(&runtime_env, run_hash, false);
     println!("[---running---]");

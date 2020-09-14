@@ -81,7 +81,7 @@ unison(packed_env, names).then((runtime) => {
     // theoretically it can be synchronous
     // if we don't have any async handlers
     // so it could be useful to distinguish
-    return runtime.run('ffi_3', [1000], handlers);
+    return runtime.run('ffi_6', [null], handlers);
 });
 
 // const js = import('./node_modules/unison_wasm/unison_wasm.js');

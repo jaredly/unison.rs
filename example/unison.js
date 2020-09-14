@@ -106,7 +106,7 @@ export default async (dataPromise, namesPromise) => {
         },
         // NOTE: you can only do single-argument functions at this point.
         lambda: (partial, arg, handlers) => {
-            throw new Error('No calling lambdas yet');
+            // throw new Error('No calling lambdas yet');
             //
         },
         lambdaSync: (partial, arg, handlers) => {
