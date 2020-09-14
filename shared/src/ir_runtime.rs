@@ -167,7 +167,7 @@ pub fn extract_args(typ: &ABT<Type>) -> (Vec<ABT<Type>>, Vec<ABT<Type>>, ABT<Typ
             }
             Arrow(one, two) => {
                 let (mut a, b, c) = extract_args(two);
-                println!("ARROW {:?} => {:?}", one, two);
+                // println!("ARROW {:?} => {:?}", one, two);
                 // let one = match &**one {
                 //     ABT::Tm(t) => t.clone(),
                 //     _ => unreachable!("Not a tm {:?}", one),
@@ -265,7 +265,21 @@ impl RuntimeEnv {
     }
 
     pub fn validate_ability_type(&self, kind: &Reference, number: usize, value: &Value) -> bool {
-        false
+        let decl = match kind {
+            Reference::DerivedId(Id(hash, _, _)) => {
+                self.types.get(hash).expect("Ability type not found")
+            }
+            _ => unreachable!("No builtin abilities"),
+        };
+        let data = match decl {
+            TypeDecl::Effect(data) => data,
+            _ => unreachable!("Not an effect type"),
+        };
+        let (_, constructor_type) = &data.constructors[number];
+        // println!("Extracting args: {:?}", constructor_type);
+        let (_arg_types, _effects, return_type) = extract_args(constructor_type);
+        // println!("Validating Ability Type: {:?} <=> {:?}", return_type, value);
+        crate::check::validate(Default::default(), &return_type, value).is_ok()
     }
 }
 
@@ -540,8 +554,15 @@ impl<'a> State<'a> {
                             )))
                         }
                         Some(value) => {
+                            if !self.env.validate_ability_type(&kind, number, &value) {
+                                return Err(Error::InvalidFFI(InvalidFFI(
+                                    kind,
+                                    number,
+                                    Arc::new(value),
+                                )));
+                            }
+
                             self.stack.push(Arc::new(value));
-                            // resume(frames, final_index, value);
                             return Ok(());
                         }
                     },

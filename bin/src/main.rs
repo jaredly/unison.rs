@@ -994,7 +994,8 @@ fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
 
     while ffi.has_next_request() {
         println!("> Async handler");
-        ffi.process_next_request(&runtime_env, &mut trace);
+        ffi.process_next_request(&runtime_env, &mut trace)
+            .expect("Invalid FFI Response");
     }
     // let ret = shared::ir_runtime::eval(&runtime_env, eval_hash, &mut trace);
 
