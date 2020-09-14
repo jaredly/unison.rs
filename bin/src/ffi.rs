@@ -20,7 +20,7 @@ impl RustFFI {
         env: &RuntimeEnv,
         trace: &mut shared::chrome_trace::Traces,
     ) -> Result<(), InvalidFFI> {
-        let FullRequest(kind, number, args, frames, final_index) = self.1.remove(0);
+        let FullRequest(kind, number, args, frames, final_index, _t) = self.1.remove(0);
         match &kind {
             Reference::DerivedId(Id(hash, _, _)) => match (&hash.to_string()[0..10], number) {
                 ("onasci86q4", 0) => {
@@ -59,6 +59,7 @@ impl RustFFI {
 impl shared::ir_runtime::FFI for RustFFI {
     fn handle_request_sync(
         &mut self,
+        _t: &ABT<Type>,
         kind: &Reference,
         number: usize,
         args: &Vec<std::sync::Arc<Value>>,

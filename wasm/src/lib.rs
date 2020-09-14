@@ -132,23 +132,19 @@ pub fn lambda(
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    let (kind, constructor_no, frames, kidx): (Reference, usize, Vec<shared::frame::Frame>, usize) =
-        kont.into_serde().unwrap();
-
-    let t = env.get_ability_type(&kind, constructor_no);
-
-    let mut state = shared::ir_runtime::State::full_resume(
-        &env,
-        kind,
-        constructor_no,
-        frames,
-        kidx,
-        Arc::new(shared::ir_runtime::convert_arg(WrappedValue(arg), &t, vec![]).unwrap()),
-    )
-    .expect("Invalid Resume arg type");
-    let mut trace = shared::chrome_trace::Traces::new();
-    let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
-    Ok(JsValue::from_serde(&val).unwrap())
+    // let mut state = shared::ir_runtime::State::full_resume(
+    //     &env,
+    //     kind,
+    //     constructor_no,
+    //     frames,
+    //     kidx,
+    //     Arc::new(shared::ir_runtime::convert_arg(WrappedValue(arg), &t, vec![]).unwrap()),
+    // )
+    // .expect("Invalid Resume arg type");
+    // let mut trace = shared::chrome_trace::Traces::new();
+    // let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
+    // Ok(JsValue::from_serde(&val).unwrap())
+    Ok(JsValue::UNDEFINED)
 }
 
 #[wasm_bindgen]
