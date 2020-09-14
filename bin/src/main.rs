@@ -398,7 +398,7 @@ fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> {
     std::fs::write(out, shared::pack(&runtime_env))?;
     std::fs::write(
         out.to_owned() + ".json",
-        serde_json::to_string(&env_names(&branch, &runtime_env)).unwrap(),
+        serde_json::to_string(&all_branch_names(&branch)).unwrap(),
     )?;
 
     Ok(())

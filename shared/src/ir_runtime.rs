@@ -264,7 +264,7 @@ impl RuntimeEnv {
         Ok(hash)
     }
 
-    pub fn validate_ability_type(&self, kind: &Reference, number: usize, value: &Value) -> bool {
+    pub fn get_ability_type(&self, kind: &Reference, number: usize) -> ABT<Type> {
         let decl = match kind {
             Reference::DerivedId(Id(hash, _, _)) => {
                 self.types.get(hash).expect("Ability type not found")
@@ -278,8 +278,17 @@ impl RuntimeEnv {
         let (_, constructor_type) = &data.constructors[number];
         // println!("Extracting args: {:?}", constructor_type);
         let (_arg_types, _effects, return_type) = extract_args(constructor_type);
+        return_type
+    }
+
+    pub fn validate_ability_type(&self, kind: &Reference, number: usize, value: &Value) -> bool {
         // println!("Validating Ability Type: {:?} <=> {:?}", return_type, value);
-        crate::check::validate(Default::default(), &return_type, value).is_ok()
+        crate::check::validate(
+            Default::default(),
+            &self.get_ability_type(kind, number),
+            value,
+        )
+        .is_ok()
     }
 }
 

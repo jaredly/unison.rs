@@ -12,7 +12,7 @@ pub fn validate(
     match typ {
         Var(_, _) => unimplemented!("Var"),
         Cycle(content) => validate(bindings, &*content, val),
-        Abs(sym, _, content) => unimplemented!("Nope"),
+        Abs(_sym, _, _content) => unimplemented!("Nope"),
         Tm(typ) => match typ {
             Type::Ref(Reference::Builtin(name)) => match (name.as_str(), val) {
                 ("Int", Value::Int(_)) => Ok(()),

@@ -9,15 +9,18 @@ import unison from './unison';
 // - otherwise, you get the plain, jsonified dealio
 //   NOTE that continuations are expensive ... but I can optimize that later
 
-unison(packed_env).then((runtime) => {
+const packed_env = fetch('./data/all.bin').then((r) => r.text());
+const names = fetch('./data/all.bin.json').then((r) => r.json());
+
+unison(packed_env, names).then((runtime) => {
     const mvars = [];
 
     // all the handlers have to be sync
     // and ... runtime.lambda has a "Sync" and an "async" version. Like
     // if you want to run a lambda with only sync handlers, you can get the sync results
 
-    runtime.runSync('one.two.three', [arg, arg, arg], handlers);
-    runtime.run('one.two.three', [arg, arg, arg], handlers); // all the handlers have to be sync
+    // runtime.runSync('one.two.three', [arg, arg, arg], handlers);
+    // runtime.run('one.two.three', [arg, arg, arg], handlers); // all the handlers have to be sync
 
     const handlers = {
         // So, for "full" handlers, you get the continuation passed to you.
@@ -27,7 +30,7 @@ unison(packed_env).then((runtime) => {
         // Should this happen automagically?
         //
         Wait: {
-            Wait: {
+            waitMs: {
                 type: 'full',
                 handler: (time, k) =>
                     setTimeout(() => runtime.resume(k, null, handlers), time),
@@ -60,7 +63,7 @@ unison(packed_env).then((runtime) => {
     // theoretically it can be synchronous
     // if we don't have any async handlers
     // so it could be useful to distinguish
-    return runtime.run('one.two.three', [arg1, arg2, arg3], handlers);
+    return runtime.run('.ffi_3', [null], handlers);
 });
 
 const js = import('./node_modules/unison_wasm/unison_wasm.js');

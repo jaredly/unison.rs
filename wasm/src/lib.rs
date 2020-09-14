@@ -86,6 +86,8 @@ impl shared::ir_runtime::FFI for FFI {
 }
 
 impl From<Vec<JsValue>> for FFI {
+    // (ability hash: string, ability index: usize, is_sync: false, handler_function: (...args) => 'a)
+    // (ability hash: string, ability index: usize, is_sync: true, handler_function: (...args, kont) => 'a)
     fn from(raw_handlers: Vec<JsValue>) -> Self {
         let mut handlers = HashMap::new();
         for decl in raw_handlers {
@@ -108,26 +110,31 @@ pub fn resume(
     raw_handlers: Vec<JsValue>,
 ) -> Result<JsValue, JsValue> {
     // STOPSHIP IMPLEMENT THIS
-    // let mut ffi = FFI::from(raw_handlers);
+    let mut ffi = FFI::from(raw_handlers);
 
-    // let mut l = ENV.lock().unwrap();
-    // let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
+    let mut l = ENV.lock().unwrap();
+    let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    // // let the_arg_type = env.types.get()
+    // let the_arg_type = env.types.get();
 
-    // let (kind, constructor_no, frames, kidx): (String, usize, Vec<shared::frame::Frame>, usize) =
-    //     arg.into_serde().unwrap();
+    let (kind, constructor_no, frames, kidx): (Reference, usize, Vec<shared::frame::Frame>, usize) =
+        arg.into_serde().unwrap();
 
-    // let mut state = shared::ir_runtime::State::full_resume(
-    //     &env,
-    //     frames,
-    //     kidx,
-    //     Arc::new(shared::ir_runtime::convert_arg(WrappedValue(arg)).unwrap()),
-    // );
-    // let mut trace = shared::chrome_trace::Traces::new();
-    // let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
-    // Ok(JsValue::from_serde(&val).unwrap())
-    Ok(JsValue::UNDEFINED)
+    let t = env.get_ability_type(&kind, constructor_no);
+
+    let mut state = shared::ir_runtime::State::full_resume(
+        &env,
+        kind,
+        constructor_no,
+        frames,
+        kidx,
+        Arc::new(shared::ir_runtime::convert_arg(WrappedValue(arg), &t, vec![]).unwrap()),
+    )
+    .expect("Invalid Resume arg type");
+    let mut trace = shared::chrome_trace::Traces::new();
+    let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
+    Ok(JsValue::from_serde(&val).unwrap())
+    // Ok(JsValue::UNDEFINED)
 }
 
 #[wasm_bindgen]
@@ -137,6 +144,7 @@ pub fn run_sync(
     args: Vec<JsValue>,
     raw_handlers: Vec<JsValue>,
 ) -> Result<JsValue, JsValue> {
+    // TODO bail if any handlers aer async?
     let mut ffi = FFI::from(raw_handlers);
 
     let mut l = ENV.lock().unwrap();
@@ -159,11 +167,34 @@ pub fn run_sync(
     Ok(JsValue::from_serde(&val).unwrap())
 }
 
-// #[wasm_bindgen]
-// extern "C" {
-//     #[wasm_bindgen(js_namespace = console)]
-//     fn log(s: &str);
-// }
+#[wasm_bindgen]
+pub fn run(
+    env_id: usize,
+    term: &str,
+    args: Vec<JsValue>,
+    raw_handlers: Vec<JsValue>,
+) -> Result<JsValue, JsValue> {
+    let mut ffi = FFI::from(raw_handlers);
+
+    let mut l = ENV.lock().unwrap();
+    let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
+
+    let hash = shared::types::Hash::from_string(term);
+    let t = &env.terms.get(&hash).unwrap().1;
+    // TODO validate that all effects are handled!
+    let (targs, _effects, _tres) = shared::ir_runtime::extract_args(t);
+    let args = shared::ir_runtime::convert_args(
+        args.into_iter().map(|x| WrappedValue(x)).collect(),
+        &targs,
+    )?;
+
+    let eval_hash = env.add_eval(term, args)?;
+
+    let mut state = shared::ir_runtime::State::new_value(&env, eval_hash, false);
+    let mut trace = shared::chrome_trace::Traces::new();
+    let _ignored = state.run_to_end(&mut ffi, &mut trace);
+    Ok(JsValue::UNDEFINED)
+}
 
 #[wasm_bindgen]
 pub fn load(data: &str) -> usize {
