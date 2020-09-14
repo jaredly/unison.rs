@@ -1,5 +1,5 @@
 // #ed72l2mrh0
-use shared::ir_runtime::{FullRequest, State};
+use shared::ir_runtime::{FullRequest, InvalidFFI, State};
 use shared::types::*;
 
 fn unit() -> Value {
@@ -19,21 +19,28 @@ impl RustFFI {
         &mut self,
         env: &RuntimeEnv,
         trace: &mut shared::chrome_trace::Traces,
-    ) {
+    ) -> Result<(), InvalidFFI> {
         let FullRequest(kind, number, args, frames, final_index) = self.1.remove(0);
-        match kind {
+        match &kind {
             Reference::DerivedId(Id(hash, _, _)) => match (&hash.to_string()[0..10], number) {
                 ("onasci86q4", 0) => {
-                    State::full_resume(env, frames.clone(), final_index, args[0].clone())
-                        .run_to_end(self, trace)
-                        .map(|v| {
-                            println!(
-                                "first run -> {}",
-                                crate::printer::value_to_pretty(&v, &self.0, 100)
-                            )
-                        });
-                    State::full_resume(env, frames, final_index, args[1].clone())
-                        .run_to_end(self, trace)
+                    State::full_resume(
+                        env,
+                        kind.clone(),
+                        number,
+                        frames.clone(),
+                        final_index,
+                        args[0].clone(),
+                    )?
+                    .run_to_end(self, trace)?
+                    .map(|v| {
+                        println!(
+                            "first run -> {}",
+                            crate::printer::value_to_pretty(&v, &self.0, 100)
+                        )
+                    });
+                    State::full_resume(env, kind, number, frames, final_index, args[1].clone())?
+                        .run_to_end(self, trace)?
                         .map(|v| {
                             println!(
                                 "second run -> {}",
@@ -45,6 +52,7 @@ impl RustFFI {
             },
             _ => unreachable!(),
         }
+        Ok(())
     }
 }
 

@@ -188,7 +188,7 @@ pub fn eval<T: FFI>(
     hash: &str,
     trace: &mut Traces,
     do_trace: bool,
-) -> Option<Arc<Value>> {
+) -> Result<Option<Arc<Value>>, InvalidFFI> {
     let mut state = State::new_value(&env, Hash::from_string(hash), do_trace);
     state.run_to_end(ffi, trace)
 }
@@ -236,6 +236,16 @@ pub struct FullRequest(
     pub usize,
 );
 
+pub enum Error {
+    Request(FullRequest),
+    InvalidFFI(InvalidFFI),
+}
+
+#[derive(Debug)]
+pub struct InvalidFFI(Reference, usize, Arc<Value>);
+
+pub type RunResult<T> = std::result::Result<T, Error>;
+
 impl RuntimeEnv {
     pub fn add_eval(&mut self, hash: &str, args: Vec<Value>) -> Result<Hash, String> {
         let typ = self.terms.get(&Hash::from_string(hash)).unwrap().1.clone();
@@ -254,12 +264,7 @@ impl RuntimeEnv {
         Ok(hash)
     }
 
-    pub fn validate_ability_type(
-        &mut self,
-        kind: &Reference,
-        number: usize,
-        value: &Value,
-    ) -> bool {
+    pub fn validate_ability_type(&self, kind: &Reference, number: usize, value: &Value) -> bool {
         false
     }
 }
@@ -282,18 +287,18 @@ impl<'a> State<'a> {
         frames: Vec<Frame>,
         kidx: usize,
         arg: Arc<Value>,
-    ) -> Self {
+    ) -> Result<Self, InvalidFFI> {
         if !env.validate_ability_type(&kind, constructor_index, &*arg) {
-            return Err(BadNewsBears(kind, number, value));
+            return Err(InvalidFFI(kind, constructor_index, arg.clone()));
         }
         let mut stack = Stack::from_frames(frames);
         stack.push(arg);
-        State {
+        Ok(State {
             env,
             cmds: env.cmds(&stack.frames[0].source),
             stack,
             idx: kidx,
-        }
+        })
     }
 
     fn resume(&mut self, mut frames: Vec<Frame>, kidx: usize, arg: Arc<Value>) {
@@ -319,7 +324,7 @@ impl<'a> State<'a> {
         ffi: &mut T,
         trace: &mut Traces,
         option_ref: &Reference,
-    ) -> Result<(), FullRequest> {
+    ) -> Result<(), Error> {
         #[cfg(not(target_arch = "wasm32"))]
         let mut n = 0;
         while self.idx < self.cmds.len() {
@@ -387,19 +392,24 @@ impl<'a> State<'a> {
 
     // If it was able to complete synchronously, you get the final value
     // Otherwise, you get None
-    pub fn run_to_end<T: FFI>(&mut self, ffi: &mut T, trace: &mut Traces) -> Option<Arc<Value>> {
+    pub fn run_to_end<T: FFI>(
+        &mut self,
+        ffi: &mut T,
+        trace: &mut Traces,
+    ) -> Result<Option<Arc<Value>>, InvalidFFI> {
         let option_ref = Reference::from_hash(OPTION_HASH);
 
         match self.run(ffi, trace, &option_ref) {
             Ok(()) => (),
-            Err(request) => {
+            Err(Error::Request(request)) => {
                 ffi.handle_request(request);
-                return None;
+                return Ok(None);
             }
+            Err(Error::InvalidFFI(error)) => return Err(error),
         }
 
         info!("Final stack: {:?}", self.stack);
-        Some(self.stack.pop().unwrap())
+        Ok(Some(self.stack.pop().unwrap()))
     }
 
     fn handle_tail(&mut self, trace: &mut Traces) {
@@ -418,12 +428,7 @@ impl<'a> State<'a> {
         }
     }
 
-    fn handle_ret<T>(
-        &mut self,
-        ffi: &mut T,
-        ret: Ret,
-        trace: &mut Traces,
-    ) -> Result<(), FullRequest>
+    fn handle_ret<T>(&mut self, ffi: &mut T, ret: Ret, trace: &mut Traces) -> Result<(), Error>
     where
         T: FFI,
     {
@@ -469,27 +474,37 @@ impl<'a> State<'a> {
                 // self.cmds = self.env.cmds(&self.stack.frames[0].source);
             }
             Ret::ReRequest(kind, number, args, final_index, frames, current_frame_idx) => {
-                let (nidx, frame_index) = match self
-                    .stack
-                    .back_again_to_handler(&frames, current_frame_idx)
-                {
-                    None => match ffi.handle_request_sync(&kind, number, &args) {
-                        None => return Err(FullRequest(kind, number, args, frames, final_index)),
-                        Some(value) => {
-                            // OH TODO ok folks lets just bail here if the type from javascript is wrong
-                            // we have the power, folks.
-                            // If you're doing an FFI, we have the right to take it to pieces.
-                            // I guess that means I need to be able to return a different kind of
-                            // ship-stopping error
-                            if !self.env.validate_ability_type(kind, number, value) {
-                                return Err(BadNewsBears(kind, number, value));
+                let (nidx, frame_index) =
+                    match self.stack.back_again_to_handler(&frames, current_frame_idx) {
+                        None => match ffi.handle_request_sync(&kind, number, &args) {
+                            None => {
+                                return Err(Error::Request(FullRequest(
+                                    kind,
+                                    number,
+                                    args,
+                                    frames,
+                                    final_index,
+                                )))
                             }
-                            self.resume(frames, final_index, Arc::new(value));
-                            return Ok(());
-                        }
-                    },
-                    Some((a, b)) => (a, b),
-                };
+                            Some(value) => {
+                                // OH TODO ok folks lets just bail here if the type from javascript is wrong
+                                // we have the power, folks.
+                                // If you're doing an FFI, we have the right to take it to pieces.
+                                // I guess that means I need to be able to return a different kind of
+                                // ship-stopping error
+                                if !self.env.validate_ability_type(&kind, number, &value) {
+                                    return Err(Error::InvalidFFI(InvalidFFI(
+                                        kind,
+                                        number,
+                                        Arc::new(value),
+                                    )));
+                                }
+                                self.resume(frames, final_index, Arc::new(value));
+                                return Ok(());
+                            }
+                        },
+                        Some((a, b)) => (a, b),
+                    };
                 self.idx = nidx;
                 info!(
                     "Handling a bubbled request : {} - {}",
@@ -516,13 +531,13 @@ impl<'a> State<'a> {
                 let (nidx, saved_frames, frame_idx) = match self.stack.back_to_handler() {
                     None => match ffi.handle_request_sync(&kind, number, &args) {
                         None => {
-                            return Err(FullRequest(
+                            return Err(Error::Request(FullRequest(
                                 kind,
                                 number,
                                 args,
                                 self.stack.frames.drain(..).collect(),
                                 final_index,
-                            ))
+                            )))
                         }
                         Some(value) => {
                             self.stack.push(Arc::new(value));

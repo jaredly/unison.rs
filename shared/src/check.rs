@@ -36,7 +36,7 @@ pub fn validate(
                 Abs(sym, _, inner) => validate(
                     {
                         let mut bindings = bindings.clone();
-                        bindings.insert(sym.text, (**v).clone());
+                        bindings.insert(sym.text.clone(), (**v).clone());
                         bindings
                     },
                     inner,

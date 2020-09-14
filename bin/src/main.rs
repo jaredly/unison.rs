@@ -608,7 +608,9 @@ fn run_term(
     let names = Default::default();
     // branch.get_names(&vec![], &mut names);
     let mut ffi = ffi::RustFFI(names, vec![]);
-    let ret = shared::ir_runtime::eval(&runtime_env, &mut ffi, hash, &mut trace, true).unwrap();
+    let ret = shared::ir_runtime::eval(&runtime_env, &mut ffi, hash, &mut trace, true)
+        .expect("Invalid FFI")
+        .unwrap();
     println!(
         "Time: {}ms ({}ns)",
         last.elapsed().as_millis(),
@@ -982,7 +984,9 @@ fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
 
     let mut state = shared::ir_runtime::State::new_value(&runtime_env, run_hash, false);
     println!("[---running---]");
-    let ret = state.run_to_end(&mut ffi, &mut trace);
+    let ret = state
+        .run_to_end(&mut ffi, &mut trace)
+        .expect("Invalid FFI I guess");
     match ret {
         None => (),
         Some(ret) => println!("-> {}", crate::printer::value_to_pretty(&ret, &ffi.0, 100)),
