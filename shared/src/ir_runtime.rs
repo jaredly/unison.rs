@@ -9,6 +9,8 @@ use super::ir_exec::Ret;
 use super::stack::Stack;
 
 pub static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
+pub const UNIT_HASH: &'static str = "568rsi7o3ghq8mmbea2sf8msdk20ohasob5s2rvjtqg2lr0vs39l1hm98urrjemsr3vo3fa52pibqu0maluq7g8sfg3h5f5re6vitj8";
+pub const TUPLE_HASH: &'static str = "onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0";
 
 pub struct State<'a> {
     pub env: &'a RuntimeEnv,
@@ -95,7 +97,13 @@ where
             },
             Ref(Reference::DerivedId(Id(hash, _, _))) => {
                 let hash_raw = hash.to_string();
-                if hash_raw == OPTION_HASH {
+                if hash_raw == UNIT_HASH {
+                    if arg.is_empty() {
+                        Ok(crate::unit())
+                    } else {
+                        Err(format!("Expected null/undefined"))
+                    }
+                } else if hash_raw == OPTION_HASH {
                     match args.as_slice() {
                         [targ] => {
                             if arg.is_empty() {

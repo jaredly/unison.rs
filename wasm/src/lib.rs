@@ -50,13 +50,17 @@ impl shared::ir_runtime::FFI for FFI {
             Reference::DerivedId(Id(hash, _, _)) => {
                 let js_args = js_sys::Array::new();
                 for arg in args {
-                    js_args.push(&JsValue::UNDEFINED);
+                    js_args.push(&JsValue::from_serde(&arg).unwrap());
                 }
                 self.0.get(&(hash.to_string(), number, true)).map(|f| {
-                    f.apply(&JsValue::UNDEFINED, &js_args)
-                        .unwrap()
-                        .into_serde()
-                        .unwrap()
+                    let result = f
+                        .apply(&JsValue::UNDEFINED, &js_args)
+                        .expect("JS Function failed with an error");
+                    if result.is_undefined() {
+                        shared::unit()
+                    } else {
+                        result.into_serde().expect("Unable to serde this jsvalue")
+                    }
                 })
             }
             _ => None,
@@ -70,15 +74,21 @@ impl shared::ir_runtime::FFI for FFI {
     // This is used at the top level, once we've bailed.
     fn handle_request(&mut self, request: shared::ir_runtime::FullRequest) {
         let FullRequest(kind, number, args, frames, final_index) = request;
-        match kind {
+        match &kind {
             Reference::DerivedId(Id(hash, _, _)) => {
                 let js_args = js_sys::Array::new();
                 for arg in args {
-                    js_args.push(&JsValue::UNDEFINED);
+                    js_args.push(&JsValue::from_serde(&arg).unwrap());
                 }
-                js_args.push(&JsValue::from_serde(&(frames, final_index)).unwrap());
-                let f = self.0.get(&(hash.to_string(), number, true)).unwrap();
-                f.apply(&JsValue::UNDEFINED, &js_args).unwrap();
+                js_args.push(
+                    &JsValue::from_serde(&(kind.clone(), number, frames, final_index)).unwrap(),
+                );
+                match self.0.get(&(hash.to_string(), number, false)) {
+                    Some(f) => {
+                        f.apply(&JsValue::UNDEFINED, &js_args).unwrap();
+                    }
+                    None => unreachable!("No handler provided for {:?} # {}", hash, number),
+                }
             }
             _ => unreachable!(),
         }
@@ -118,7 +128,7 @@ pub fn resume(
     // let the_arg_type = env.types.get();
 
     let (kind, constructor_no, frames, kidx): (Reference, usize, Vec<shared::frame::Frame>, usize) =
-        arg.into_serde().unwrap();
+        kont.into_serde().unwrap();
 
     let t = env.get_ability_type(&kind, constructor_no);
 

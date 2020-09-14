@@ -8,6 +8,14 @@ const hashesForConstrName = (names) => {
     return hashesByName;
 };
 
+const hashesForTermName = (names) => {
+    const hashesByName = {};
+    Object.keys(names[0]).forEach((hash) => {
+        names[0][hash].forEach((name) => (hashesByName[name.join('.')] = hash));
+    });
+    return hashesByName;
+};
+
 const convert_handlers = (handlers, typeNameHashes, names) => {
     const res = [];
     Object.keys(handlers).forEach((abilityName) => {
@@ -54,36 +62,47 @@ export default async (dataPromise, namesPromise) => {
     const jsBridge = await js;
     const data = await dataPromise;
     const names = await namesPromise;
+    // console.log('have data', data.slice(0, 100));
     const id = jsBridge.load(data);
     const hashesByName = hashesForConstrName(names);
+    const hashesByTermName = hashesForTermName(names);
 
     return {
         run: (term, args, handlers) => {
+            const hash = hashesByTermName[term];
+            if (!hash) {
+                console.log(Object.keys(hashesByTermName));
+                throw new Error(`Term not found ${term}`);
+            }
             return jsBridge.run(
                 id,
-                term,
+                hash,
                 args,
                 convert_handlers(handlers, hashesByName, names),
             );
         },
         runSync: (term, args, handlers) => {
+            const hash = hashesByTermName[term];
+            if (!hash) {
+                console.log(Object.keys(hashesByTermName));
+                throw new Error(`Term not found ${term}`);
+            }
             return jsBridge.run_sync(
                 id,
-                term,
+                hash,
                 args,
                 convert_handlers(handlers, hashesByName, names),
             );
         },
         resume: (kont, arg, handlers) => {
+            // console.log('Resuming');
+            // console.log(kont, arg, handlers);
             return jsBridge.resume(
                 id,
                 kont,
                 arg,
                 convert_handlers(handlers, hashesByName, names),
             );
-            // we're in an async handler context, so don't expect resume to be sync?
-            // would resume ... give you a value?
-            // I guess we might think it would ... hmm ... ... ...
         },
         // NOTE: you can only do single-argument functions at this point.
         lambda: (partial, arg, handlers) => {
