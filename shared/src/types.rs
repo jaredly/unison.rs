@@ -254,6 +254,25 @@ impl Type {
         }
     }
 
+    // pub fn parse_arrow(&self) -> Option<(Vec<ABT<Type>>, std::collections::HashSet<ABT<Type>>, ABT<Type>)> {
+    //     match self {
+    //         Effect(effects, inner) => {
+    //             let (a, mut b, c) = inner.as_tm();
+    //         }
+    //     }
+    // }
+
+    pub fn app_args(&self) -> Vec<ABT<Type>> {
+        match self {
+            Type::App(inner, arg) => {
+                let mut args = inner.as_tm().unwrap().app_args();
+                args.push((**arg).clone());
+                args
+            }
+            _ => vec![],
+        }
+    }
+
     pub fn as_reference(&self) -> Option<Reference> {
         match self {
             Type::Ref(reference) => Some(reference.clone()),

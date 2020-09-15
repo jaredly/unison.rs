@@ -391,6 +391,8 @@ impl<'a> State<'a> {
                             .effects
                             .get(&kind.hash().expect("Not a DerivedId").to_string())
                             .expect("No effect found");
+                        info!("COncrete type: {:?}", concrete_type);
+                        let constructor_args = concrete_type.as_tm().unwrap().app_args();
                         let (arg_types, _effects, return_type) =
                             crate::ir_runtime::extract_args(&constructor_type);
                         // for any partial functions, annotate them with the type
