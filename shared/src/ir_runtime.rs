@@ -28,7 +28,7 @@ pub fn extract_args(
     typ: &ABT<Type>,
 ) -> (
     Vec<ABT<Type>>,
-    std::collections::HashSet<(Reference, Option<Reference>)>,
+    std::collections::HashSet<ABT<Type>>,
     ABT<Type>,
 ) {
     use Type::*;
@@ -42,54 +42,17 @@ pub fn extract_args(
                     ABT::Tm(t) => match t {
                         Effects(effects) => {
                             for effect in effects {
-                                // println!("Ok {:?}", effect);
-                                match effect {
-                                    ABT::Var(_, _) => (),
-                                    ABT::Tm(Type::Ref(reference)) => {
-                                        b.insert((reference.clone(), None));
-                                    }
-                                    ABT::Tm(Type::App(obj, arg)) => {
-                                        let obj = match &**obj {
-                                            ABT::Tm(Type::Ref(reference)) => reference,
-                                            _ => unreachable!(
-                                                "Effect App(x, _) must be a Ref - {:?} => {:?} => {:?}",
-                                                obj, effect, typ
-                                            ),
-                                        };
-                                        let arg = match &**arg {
-                                            ABT::Tm(Type::Ref(reference)) => reference,
-                                            _ => unreachable!(
-                                                "Effect App(_, x) must be a Ref - {:?} => {:?} => {:?}",
-                                                arg, effect, typ
-                                            ),
-                                        };
-                                        b.insert((obj.clone(), Some(arg.clone())));
-                                    }
-                                    // Hmmm. How do we deal with "this reference is parameterized"
-                                    _ => unreachable!("Effect not a reeference {:?}", effect),
-                                }
+                                b.insert(effect.clone());
                             }
-                            // TODO go through and find the DerivedId refs, and just add those
-                            // also dedup.
-                            // effects.clone()
                         }
                         _ => unreachable!(),
                     },
                     _ => unreachable!(),
                 };
-                // b.extend(effects); // TODO do I care about ordering here?
-                // for e in effects {
-                //     b.push(e)
-                // }
                 (a, b, c)
             }
             Arrow(one, two) => {
                 let (mut a, b, c) = extract_args(two);
-                // println!("ARROW {:?} => {:?}", one, two);
-                // let one = match &**one {
-                //     ABT::Tm(t) => t.clone(),
-                //     _ => unreachable!("Not a tm {:?}", one),
-                // };
                 a.insert(0, (**one).clone());
                 (a, b, c)
             }
@@ -106,8 +69,10 @@ pub fn eval<T: crate::ffi::FFI>(
     hash: &str,
     trace: &mut Traces,
     do_trace: bool,
+    effects: std::collections::HashMap<String, ABT<Type>>,
 ) -> Result<Option<Arc<Value>>, crate::state::InvalidFFI> {
-    let mut state = crate::state::State::new_value(&env, Hash::from_string(hash), do_trace);
+    let mut state =
+        crate::state::State::new_value(&env, Hash::from_string(hash), do_trace, effects);
     state.run_to_end(ffi, trace)
 }
 

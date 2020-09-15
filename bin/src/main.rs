@@ -990,7 +990,12 @@ fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
         }
     }
 
-    let mut state = shared::state::State::new_value(&runtime_env, run_hash, false);
+    let mut state = shared::state::State::new_value(
+        &runtime_env,
+        run_hash,
+        false,
+        shared::state::build_effects_map(effects),
+    );
     println!("[---running---]");
     let ret = state
         .run_to_end(&mut ffi, &mut trace)

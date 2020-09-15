@@ -1,6 +1,7 @@
 use super::types::*;
 use super::types::{RuntimeEnv, IR};
 use log::info;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::chrome_trace::{Trace, Traces};
@@ -48,16 +49,36 @@ pub struct State<'a> {
     pub cmds: &'a Vec<IR>,
     pub stack: Stack,
     pub idx: usize,
+    // effects! The concrete versions of any external effects that might be raised
+    pub effects: HashMap<String, ABT<Type>>,
+}
+
+pub fn build_effects_map(
+    effects: std::collections::HashSet<ABT<Type>>,
+) -> HashMap<String, ABT<Type>> {
+    let mut res = HashMap::new();
+    for effect in effects {
+        if !effect.is_var() {
+            res.insert(effect.as_tm().unwrap().ref_name().unwrap(), effect);
+        }
+    }
+    res
 }
 
 impl<'a> State<'a> {
-    pub fn new_value(env: &'a RuntimeEnv, hash: Hash, trace: bool) -> Self {
+    pub fn new_value(
+        env: &'a RuntimeEnv,
+        hash: Hash,
+        trace: bool,
+        effects: HashMap<String, ABT<Type>>,
+    ) -> Self {
         let source = Source::Value(hash);
         State {
             cmds: env.cmds(&source),
             stack: Stack::new(source, trace),
             idx: 0,
             env: &env,
+            effects,
         }
     }
 
@@ -67,6 +88,7 @@ impl<'a> State<'a> {
         bindings: Vec<(Symbol, usize, Arc<Value>)>,
         value: Value,
         typ: &ABT<Type>,
+        effects: HashMap<String, ABT<Type>>,
     ) -> Result<Self, InvalidLambda> {
         if !crate::check::validate(Default::default(), &typ, &value).is_ok() {
             return Err(InvalidLambda(fnid, value.clone()));
@@ -79,6 +101,7 @@ impl<'a> State<'a> {
             cmds: env.cmds(&stack.frames[0].source),
             stack,
             idx: 0,
+            effects,
         })
     }
 
@@ -91,8 +114,7 @@ impl<'a> State<'a> {
         arg: Arc<Value>,
     ) -> Result<Self, InvalidFFI> {
         let constructor_type = env.get_ability_type(&kind, constructor_index);
-        let (_arg_types, _effects, return_type) =
-            crate::ir_runtime::extract_args(&constructor_type);
+        let (_arg_types, effects, return_type) = crate::ir_runtime::extract_args(&constructor_type);
 
         if !crate::check::validate(Default::default(), &return_type, &*arg).is_ok() {
             return Err(InvalidFFI(kind, constructor_index, arg.clone()));
@@ -104,6 +126,7 @@ impl<'a> State<'a> {
             cmds: env.cmds(&stack.frames[0].source),
             stack,
             idx: kidx,
+            effects: build_effects_map(effects),
         })
     }
 
@@ -364,6 +387,10 @@ impl<'a> State<'a> {
                 let (nidx, saved_frames, frame_idx) = match self.stack.back_to_handler() {
                     None => {
                         let constructor_type = self.env.get_ability_type(&kind, number);
+                        let concrete_type = self
+                            .effects
+                            .get(&kind.hash().expect("Not a DerivedId").to_string())
+                            .expect("No effect found");
                         let (arg_types, _effects, return_type) =
                             crate::ir_runtime::extract_args(&constructor_type);
                         // for any partial functions, annotate them with the type

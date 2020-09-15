@@ -43,10 +43,14 @@ pub fn validate(
             Type::Effects(_) => unimplemented!("Effects"),
             Type::Forall(_) => unimplemented!("Forall"),
             Type::IntroOuter(_) => unimplemented!("IntroOuter"),
-            Type::Arrow(arg, body) => match val {
+            Type::Arrow(_arg, _body) => match val {
                 _ => unimplemented!("Sorry, arrow not yet supported"), // ugh, I don't have enough type information right here
             },
             Type::App(inner, v) => match &**inner {
+                Tm(Type::Ref(Reference::DerivedId(Id(hash, _, _)))) if hash.0 == "ne22tbsth76tbte4ancb6p62khuv2c5jdegm4jk44o4n0nlou12inmjjldbjlo5hp66nqo8j55qglirsc1ecp9ea2ofcr0it9od3cl0" => {
+                    // this is my custom FFI type -- this is allowed without introspection...
+                    Ok(())
+                },
                 Abs(sym, _, inner) => validate(
                     {
                         let mut bindings = bindings.clone();
@@ -56,7 +60,7 @@ pub fn validate(
                     inner,
                     val,
                 ),
-                _ => unreachable!("Arrow must have abs inside"),
+                _ => unreachable!("Arrow must have abs inside - {:?}", inner),
             },
         },
     }

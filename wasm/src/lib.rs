@@ -60,7 +60,10 @@ impl shared::ffi::FFI for FFI {
                     if result.is_undefined() {
                         shared::unit()
                     } else {
-                        result.into_serde().expect("Unable to serde this jsvalue")
+                        match result.into_serde() {
+                            Err(_) => unreachable!("Not a value {:?}", result),
+                            Ok(r) => r,
+                        }
                     }
                 })
             }
@@ -153,6 +156,7 @@ pub fn lambda(
         // value,
         shared::convert::convert_arg(WrappedValue(arg), &arg_type, vec![]).unwrap(),
         &*arg_type,
+        std::collections::HashMap::new(),
     )
     .expect("Invalid Resume arg type");
     let mut trace = shared::chrome_trace::Traces::new();
@@ -209,9 +213,9 @@ pub fn run_sync(
     let t = &env.terms.get(&hash).unwrap().1;
     // TODO effects!
     let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
-    for (effect, _) in effects {
+    for effect in effects.iter() {
         use shared::ffi::FFI;
-        if !ffi.handles(&effect) {
+        if !effect.is_var() && !ffi.handles(&effect.as_tm().unwrap().as_reference().unwrap()) {
             return Err(JsValue::from("Doesn't handle all effects"));
         }
     }
@@ -220,7 +224,12 @@ pub fn run_sync(
 
     let eval_hash = env.add_eval(term, args)?;
 
-    let mut state = shared::state::State::new_value(&env, eval_hash, false);
+    let mut state = shared::state::State::new_value(
+        &env,
+        eval_hash,
+        false,
+        shared::state::build_effects_map(effects),
+    );
     let mut trace = shared::chrome_trace::Traces::new();
     let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
     Ok(JsValue::from_serde(&val).unwrap())
@@ -238,13 +247,23 @@ pub fn run(
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
+    wasm_logger::init(wasm_logger::Config::default().module_prefix("shared::state"));
+
     let hash = shared::types::Hash::from_string(term);
     let t = &env.terms.get(&hash).unwrap().1;
     // TODO validate that all effects are handled!
     let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
-    for (effect, _) in effects {
+    for effect in effects.iter() {
         use shared::ffi::FFI;
-        if !ffi.handles(&effect) {
+        if !effect.is_var()
+            && !ffi.handles(
+                &effect
+                    .as_tm()
+                    .expect("Not a TM")
+                    .as_reference()
+                    .expect("Not a reference"),
+            )
+        {
             return Err(JsValue::from("Doesn't handle all effects"));
         }
     }
@@ -253,7 +272,12 @@ pub fn run(
 
     let eval_hash = env.add_eval(term, args)?;
 
-    let mut state = shared::state::State::new_value(&env, eval_hash, false);
+    let mut state = shared::state::State::new_value(
+        &env,
+        eval_hash,
+        false,
+        shared::state::build_effects_map(effects),
+    );
     let mut trace = shared::chrome_trace::Traces::new();
     let _ignored = state.run_to_end(&mut ffi, &mut trace);
     Ok(JsValue::UNDEFINED)
@@ -285,47 +309,47 @@ impl shared::convert::ConvertibleArg<WrappedValue> for WrappedValue {
     // fn from_value()
 }
 
-#[wasm_bindgen]
-pub fn eval_fn(env_id: usize, hash_raw: &str, values: Vec<JsValue>) -> Result<JsValue, JsValue> {
-    console_error_panic_hook::set_once();
+// #[wasm_bindgen]
+// pub fn eval_fn(env_id: usize, hash_raw: &str, values: Vec<JsValue>) -> Result<JsValue, JsValue> {
+//     console_error_panic_hook::set_once();
 
-    let mut ffi = FFI(HashMap::new());
+//     let mut ffi = FFI(HashMap::new());
 
-    let mut l = ENV.lock().unwrap();
-    let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
+//     let mut l = ENV.lock().unwrap();
+//     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    let hash = shared::types::Hash::from_string(hash_raw);
-    let t = &env.terms.get(&hash).unwrap().1;
-    // TODO effects!
-    let (targs, _effects, _tres) = shared::ir_runtime::extract_args(t);
-    let args = shared::convert::convert_args(
-        values.into_iter().map(|x| WrappedValue(x)).collect(),
-        &targs,
-    )?;
+//     let hash = shared::types::Hash::from_string(hash_raw);
+//     let t = &env.terms.get(&hash).unwrap().1;
+//     // TODO effects!
+//     let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
+//     let args = shared::convert::convert_args(
+//         values.into_iter().map(|x| WrappedValue(x)).collect(),
+//         &targs,
+//     )?;
 
-    let eval_hash = env.add_eval(hash_raw, args)?;
+//     let eval_hash = env.add_eval(hash_raw, args)?;
 
-    let mut state = shared::state::State::new_value(&l.map.get(&env_id).unwrap(), eval_hash, false);
-    let mut trace = shared::chrome_trace::Traces::new();
-    let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
-    Ok(JsValue::from_serde(&val).unwrap())
-}
+//     let mut state = shared::state::State::new_value(&l.map.get(&env_id).unwrap(), eval_hash, false);
+//     let mut trace = shared::chrome_trace::Traces::new();
+//     let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
+//     Ok(JsValue::from_serde(&val).unwrap())
+// }
 
-#[wasm_bindgen]
-pub fn evalit(env_id: usize, hash: &str) -> JsValue {
-    console_error_panic_hook::set_once();
+// #[wasm_bindgen]
+// pub fn evalit(env_id: usize, hash: &str) -> JsValue {
+//     console_error_panic_hook::set_once();
 
-    let mut ffi = FFI(HashMap::new());
+//     let mut ffi = FFI(HashMap::new());
 
-    let mut trace = shared::chrome_trace::Traces::new();
-    let l = ENV.lock().unwrap();
-    let val = shared::ir_runtime::eval(
-        &l.map.get(&env_id).unwrap(),
-        &mut ffi,
-        &hash,
-        &mut trace,
-        false,
-    )
-    .unwrap();
-    JsValue::from_serde(&val).unwrap()
-}
+//     let mut trace = shared::chrome_trace::Traces::new();
+//     let l = ENV.lock().unwrap();
+//     let val = shared::ir_runtime::eval(
+//         &l.map.get(&env_id).unwrap(),
+//         &mut ffi,
+//         &hash,
+//         &mut trace,
+//         false,
+//     )
+//     .unwrap();
+//     JsValue::from_serde(&val).unwrap()
+// }

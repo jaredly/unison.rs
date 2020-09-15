@@ -71,6 +71,15 @@ pub enum Reference {
     DerivedId(Id),
 }
 
+impl Reference {
+    pub fn hash(&self) -> Option<&Hash> {
+        match self {
+            Reference::DerivedId(Id(hash, _, _)) => Some(hash),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Debug for Reference {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -188,7 +197,7 @@ impl Referent {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
 pub struct MatchCase(pub Pattern, pub Option<Box<ABT<Term>>>, pub Box<ABT<Term>>);
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd, Hash, Eq)]
 pub enum Kind {
     Star,
     Arrow(Box<Kind>, Box<Kind>),
@@ -220,7 +229,7 @@ pub enum SeqOp {
 }
 
 // Base functor for types in the Unison language
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd, Hash, Eq)]
 pub enum Type {
     Ref(Reference),
     Arrow(Box<ABT<Type>>, Box<ABT<Type>>),
@@ -233,6 +242,28 @@ pub enum Type {
     //  bound by outer type signatures, to support scoped type
     //  variables
     IntroOuter(Box<ABT<Type>>),
+}
+
+impl Type {
+    pub fn ref_name(&self) -> Option<String> {
+        match self {
+            Type::Ref(Reference::DerivedId(Id(hash, _, _))) => Some(hash.to_string()),
+            Type::Ann(inner, _) => inner.as_tm().and_then(|m| m.ref_name()),
+            Type::App(inner, _) => inner.as_tm().and_then(|m| m.ref_name()),
+            _ => None,
+        }
+    }
+
+    pub fn as_reference(&self) -> Option<Reference> {
+        match self {
+            Type::Ref(reference) => Some(reference.clone()),
+            Type::Ann(inner, _) => inner.as_tm().and_then(|m| m.as_reference()),
+            Type::App(inner, _) => inner.as_tm().and_then(|m| m.as_reference()),
+            _ => None,
+        }
+    }
+
+    // pub fn
 }
 
 // Runtime values
@@ -378,13 +409,29 @@ impl std::fmt::Debug for Term {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Hash, Eq)]
 pub enum ABT<Content> {
     Var(Symbol, usize), // usage number
     Cycle(Box<ABT<Content>>),
     // number of usages expected
     Abs(Symbol, usize, Box<ABT<Content>>),
     Tm(Content),
+}
+
+impl<Inner> ABT<Inner> {
+    pub fn is_var(&self) -> bool {
+        match self {
+            ABT::Var(_, _) => true,
+            _ => false,
+        }
+    }
+
+    pub fn as_tm(&self) -> Option<&Inner> {
+        match self {
+            ABT::Tm(inner) => Some(inner),
+            _ => None,
+        }
+    }
 }
 
 impl<Inner: std::fmt::Debug> std::fmt::Debug for ABT<Inner> {

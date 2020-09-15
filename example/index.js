@@ -62,15 +62,18 @@ unison(packed_env, names).then((runtime) => {
         },
         MVarAbility: {
             create: (v) => {
+                console.log('create mvar', v);
                 mvars.push(v);
-                return mvars.length;
+                return { Nat: mvars.length };
             },
             get: (m) => {
-                const idx = m.FFI;
+                console.log('get', n);
+                const idx = m.FFI.Nat;
                 return mvars[idx];
             },
             set: (m, v) => {
-                const idx = m.FFI;
+                console.log('set', m, v);
+                const idx = m.FFI.Nat;
                 mvars[idx] = v;
                 return null;
             },
