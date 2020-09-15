@@ -53,7 +53,11 @@ impl<'a> State<'a> {
         kidx: usize,
         arg: Arc<Value>,
     ) -> Result<Self, InvalidFFI> {
-        if !env.validate_ability_type(&kind, constructor_index, &*arg) {
+        let constructor_type = env.get_ability_type(&kind, constructor_index);
+        let (_arg_types, _effects, return_type) =
+            crate::ir_runtime::extract_args(&constructor_type);
+
+        if !crate::check::validate(Default::default(), &return_type, &*arg).is_ok() {
             return Err(InvalidFFI(kind, constructor_index, arg.clone()));
         }
         let mut stack = Stack::from_frames(frames);
@@ -238,42 +242,50 @@ impl<'a> State<'a> {
                 // self.stack.push(arg);
                 // self.cmds = self.env.cmds(&self.stack.frames[0].source);
             }
-            Ret::ReRequest(kind, number, args, final_index, frames, current_frame_idx) => {
-                let (nidx, frame_index) =
-                    match self.stack.back_again_to_handler(&frames, current_frame_idx) {
-                        None => {
-                            let t = self.env.get_ability_type(&kind, number);
-                            match ffi.handle_request_sync(&t, &kind, number, &args) {
-                                None => {
-                                    return Err(Error::Request(FullRequest(
+            Ret::ReRequest(kind, number, mut args, final_index, frames, current_frame_idx) => {
+                let (nidx, frame_index) = match self
+                    .stack
+                    .back_again_to_handler(&frames, current_frame_idx)
+                {
+                    None => {
+                        let constructor_type = self.env.get_ability_type(&kind, number);
+                        let (_arg_types, _effects, return_type) =
+                            crate::ir_runtime::extract_args(&constructor_type);
+                        // for any partial functions, annotate them with the type
+
+                        match ffi.handle_request_sync(&constructor_type, &kind, number, &args) {
+                            None => {
+                                return Err(Error::Request(FullRequest(
+                                    kind,
+                                    number,
+                                    args,
+                                    frames,
+                                    final_index,
+                                    return_type,
+                                )))
+                            }
+                            Some(value) => {
+                                // OH TODO ok folks lets just bail here if the type from javascript is wrong
+                                // we have the power, folks.
+                                // If you're doing an FFI, we have the right to take it to pieces.
+                                // I guess that means I need to be able to return a different kind of
+                                // ship-stopping error
+                                if !crate::check::validate(Default::default(), &return_type, &value)
+                                    .is_ok()
+                                {
+                                    return Err(Error::InvalidFFI(InvalidFFI(
                                         kind,
                                         number,
-                                        args,
-                                        frames,
-                                        final_index,
-                                        t,
-                                    )))
+                                        Arc::new(value),
+                                    )));
                                 }
-                                Some(value) => {
-                                    // OH TODO ok folks lets just bail here if the type from javascript is wrong
-                                    // we have the power, folks.
-                                    // If you're doing an FFI, we have the right to take it to pieces.
-                                    // I guess that means I need to be able to return a different kind of
-                                    // ship-stopping error
-                                    if !self.env.validate_ability_type(&kind, number, &value) {
-                                        return Err(Error::InvalidFFI(InvalidFFI(
-                                            kind,
-                                            number,
-                                            Arc::new(value),
-                                        )));
-                                    }
-                                    self.resume(frames, final_index, Arc::new(value));
-                                    return Ok(());
-                                }
+                                self.resume(frames, final_index, Arc::new(value));
+                                return Ok(());
                             }
                         }
-                        Some((a, b)) => (a, b),
-                    };
+                    }
+                    Some((a, b)) => (a, b),
+                };
                 self.idx = nidx;
                 info!(
                     "Handling a bubbled request : {} - {}",
@@ -299,8 +311,11 @@ impl<'a> State<'a> {
                 let final_index = self.idx;
                 let (nidx, saved_frames, frame_idx) = match self.stack.back_to_handler() {
                     None => {
-                        let t = self.env.get_ability_type(&kind, number);
-                        match ffi.handle_request_sync(&t, &kind, number, &args) {
+                        let constructor_type = self.env.get_ability_type(&kind, number);
+                        let (_arg_types, _effects, return_type) =
+                            crate::ir_runtime::extract_args(&constructor_type);
+
+                        match ffi.handle_request_sync(&return_type, &kind, number, &args) {
                             None => {
                                 return Err(Error::Request(FullRequest(
                                     kind,
@@ -308,11 +323,13 @@ impl<'a> State<'a> {
                                     args,
                                     self.stack.frames.drain(..).collect(),
                                     final_index,
-                                    t,
+                                    return_type,
                                 )))
                             }
                             Some(value) => {
-                                if !self.env.validate_ability_type(&kind, number, &value) {
+                                if !crate::check::validate(Default::default(), &return_type, &value)
+                                    .is_ok()
+                                {
                                     return Err(Error::InvalidFFI(InvalidFFI(
                                         kind,
                                         number,

@@ -129,19 +129,17 @@ impl RuntimeEnv {
         };
         let (_, constructor_type) = &data.constructors[number];
         // println!("Extracting args: {:?}", constructor_type);
-        let (_arg_types, _effects, return_type) = extract_args(constructor_type);
-        return_type
+        constructor_type.clone()
+        // let (_arg_types, _effects, return_type) = extract_args(constructor_type);
+        // return_type
     }
 
-    pub fn validate_ability_type(&self, kind: &Reference, number: usize, value: &Value) -> bool {
-        // println!("Validating Ability Type: {:?} <=> {:?}", return_type, value);
-        crate::check::validate(
-            Default::default(),
-            &self.get_ability_type(kind, number),
-            value,
-        )
-        .is_ok()
-    }
+    // pub fn validate_ability_type(&self, kind: &Reference, number: usize, value: &Value) -> bool {
+    //     let constructor_type = self.get_ability_type(kind, number);
+    //     let (_arg_types, _effects, return_type) = extract_args(constructor_type);
+    //     // println!("Validating Ability Type: {:?} <=> {:?}", return_type, value);
+    //     crate::check::validate(Default::default(), &return_type, value).is_ok()
+    // }
 
     pub fn cmds(&self, source: &Source) -> &Vec<IR> {
         match source {

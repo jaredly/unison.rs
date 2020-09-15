@@ -39,6 +39,9 @@ use std::sync::Arc;
 impl shared::ffi::FFI for FFI {
     fn handle_request_sync(
         &mut self,
+        // this is the type of the constructor.
+        // This gives us types of each of the arguments (in case one is a lambda)
+        // and of the expected return value (so we can type-check that too)
         t: &ABT<Type>,
         kind: &Reference,
         number: usize,

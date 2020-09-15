@@ -264,6 +264,14 @@ pub enum Value {
         )>,
         // Vec<(Symbol, usize, usize, Vec<usize>)>,
     ),
+
+    PartialFnBodyWithType(
+        usize,
+        Vec<(Symbol, usize, Arc<Value>)>,
+        // The whole type folks
+        ABT<Type>,
+    ),
+
     PartialFnBody(usize, Vec<(Symbol, usize, Arc<Value>)>),
     PartialNativeApp(String, Vec<Arc<Value>>),
     PartialConstructor(Reference, usize, Vector<Arc<Value>>),
