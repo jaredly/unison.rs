@@ -209,7 +209,7 @@ pub fn run_sync(
     let t = &env.terms.get(&hash).unwrap().1;
     // TODO effects!
     let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
-    for effect in effects {
+    for (effect, _) in effects {
         use shared::ffi::FFI;
         if !ffi.handles(&effect) {
             return Err(JsValue::from("Doesn't handle all effects"));
@@ -242,7 +242,7 @@ pub fn run(
     let t = &env.terms.get(&hash).unwrap().1;
     // TODO validate that all effects are handled!
     let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
-    for effect in effects {
+    for (effect, _) in effects {
         use shared::ffi::FFI;
         if !ffi.handles(&effect) {
             return Err(JsValue::from("Doesn't handle all effects"));

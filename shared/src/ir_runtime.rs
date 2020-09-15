@@ -28,7 +28,7 @@ pub fn extract_args(
     typ: &ABT<Type>,
 ) -> (
     Vec<ABT<Type>>,
-    std::collections::HashSet<Reference>,
+    std::collections::HashSet<(Reference, Option<Reference>)>,
     ABT<Type>,
 ) {
     use Type::*;
@@ -46,8 +46,26 @@ pub fn extract_args(
                                 match effect {
                                     ABT::Var(_, _) => (),
                                     ABT::Tm(Type::Ref(reference)) => {
-                                        b.insert(reference.clone());
+                                        b.insert((reference.clone(), None));
                                     }
+                                    ABT::Tm(Type::App(obj, arg)) => {
+                                        let obj = match &**obj {
+                                            ABT::Tm(Type::Ref(reference)) => reference,
+                                            _ => unreachable!(
+                                                "Effect App(x, _) must be a Ref - {:?} => {:?} => {:?}",
+                                                obj, effect, typ
+                                            ),
+                                        };
+                                        let arg = match &**arg {
+                                            ABT::Tm(Type::Ref(reference)) => reference,
+                                            _ => unreachable!(
+                                                "Effect App(_, x) must be a Ref - {:?} => {:?} => {:?}",
+                                                arg, effect, typ
+                                            ),
+                                        };
+                                        b.insert((obj.clone(), Some(arg.clone())));
+                                    }
+                                    // Hmmm. How do we deal with "this reference is parameterized"
                                     _ => unreachable!("Effect not a reeference {:?}", effect),
                                 }
                             }
