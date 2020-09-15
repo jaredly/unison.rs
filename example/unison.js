@@ -95,8 +95,6 @@ export default async (dataPromise, namesPromise) => {
             );
         },
         resume: (kont, arg, handlers) => {
-            // console.log('Resuming');
-            // console.log(kont, arg, handlers);
             return jsBridge.resume(
                 id,
                 kont,
@@ -106,8 +104,12 @@ export default async (dataPromise, namesPromise) => {
         },
         // NOTE: you can only do single-argument functions at this point.
         lambda: (partial, arg, handlers) => {
-            // throw new Error('No calling lambdas yet');
-            //
+            return jsBridge.lambda(
+                id,
+                partial,
+                arg,
+                convert_handlers(handlers, hashesByName, names),
+            );
         },
         lambdaSync: (partial, arg, handlers) => {
             throw new Error('No calling lambdas yet');

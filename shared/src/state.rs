@@ -10,7 +10,22 @@ use crate::ir_exec::Ret;
 use crate::stack::Stack;
 
 #[derive(Debug)]
+pub struct InvalidLambda(usize, Value);
+
+#[derive(Debug)]
 pub struct InvalidFFI(Reference, usize, Arc<Value>);
+
+// impl From<InvalidLambda> for Error {
+//     fn from(other: InvalidLambda) -> Self {
+//         Error::InvalidLambda(other)
+//     }
+// }
+
+impl From<InvalidFFI> for Error {
+    fn from(other: InvalidFFI) -> Self {
+        Error::InvalidFFI(other)
+    }
+}
 
 #[derive(Debug)]
 pub struct FullRequest(
@@ -25,6 +40,7 @@ pub struct FullRequest(
 pub enum Error {
     Request(FullRequest),
     InvalidFFI(InvalidFFI),
+    // InvalidLambda(InvalidLambda),
 }
 
 pub struct State<'a> {
@@ -43,6 +59,27 @@ impl<'a> State<'a> {
             idx: 0,
             env: &env,
         }
+    }
+
+    pub fn lambda(
+        env: &'a RuntimeEnv,
+        fnid: usize,
+        bindings: Vec<(Symbol, usize, Arc<Value>)>,
+        value: Value,
+        typ: &ABT<Type>,
+    ) -> Result<Self, InvalidLambda> {
+        if !crate::check::validate(Default::default(), &typ, &value).is_ok() {
+            return Err(InvalidLambda(fnid, value.clone()));
+        }
+        let mut stack = Stack::new(Source::Fn(fnid, Hash::from_string("Lambda")), false);
+        stack.frames[0].bindings = bindings;
+        stack.push(Arc::new(value));
+        Ok(State {
+            env,
+            cmds: env.cmds(&stack.frames[0].source),
+            stack,
+            idx: 0,
+        })
     }
 
     pub fn full_resume(
@@ -175,6 +212,7 @@ impl<'a> State<'a> {
                 return Ok(None);
             }
             Err(Error::InvalidFFI(error)) => return Err(error),
+            // Err(Error::InvalidLambda(error)) => return Err(error),
         }
 
         info!("Final stack: {:?}", self.stack);
@@ -249,9 +287,23 @@ impl<'a> State<'a> {
                 {
                     None => {
                         let constructor_type = self.env.get_ability_type(&kind, number);
-                        let (_arg_types, _effects, return_type) =
+                        let (arg_types, _effects, return_type) =
                             crate::ir_runtime::extract_args(&constructor_type);
                         // for any partial functions, annotate them with the type
+                        // for any partial functions, annotate them with the type
+                        for (i, arg) in args.iter_mut().enumerate() {
+                            match &**arg {
+                                Value::PartialFnBody(fnid, bindings) => {
+                                    *arg = Arc::new(Value::PartialFnBodyWithType(
+                                        *fnid,
+                                        bindings.clone(),
+                                        arg_types[i].clone(),
+                                    ))
+                                }
+                                _ => (),
+                            }
+                        }
+                        // ok folks
 
                         match ffi.handle_request_sync(&constructor_type, &kind, number, &args) {
                             None => {
@@ -303,7 +355,7 @@ impl<'a> State<'a> {
                     frame_index,
                 )))
             }
-            Ret::Request(kind, number, args) => {
+            Ret::Request(kind, number, mut args) => {
                 info!(
                     "Got a request! {:?}/{} - at {} ; self.idx {}",
                     kind, number, self.stack.frames[0], self.idx
@@ -312,8 +364,22 @@ impl<'a> State<'a> {
                 let (nidx, saved_frames, frame_idx) = match self.stack.back_to_handler() {
                     None => {
                         let constructor_type = self.env.get_ability_type(&kind, number);
-                        let (_arg_types, _effects, return_type) =
+                        let (arg_types, _effects, return_type) =
                             crate::ir_runtime::extract_args(&constructor_type);
+                        // for any partial functions, annotate them with the type
+                        for (i, arg) in args.iter_mut().enumerate() {
+                            match &**arg {
+                                Value::PartialFnBody(fnid, bindings) => {
+                                    *arg = Arc::new(Value::PartialFnBodyWithType(
+                                        *fnid,
+                                        bindings.clone(),
+                                        arg_types[i].clone(),
+                                    ))
+                                }
+                                _ => (),
+                            }
+                        }
+                        // ok folks
 
                         match ffi.handle_request_sync(&return_type, &kind, number, &args) {
                             None => {

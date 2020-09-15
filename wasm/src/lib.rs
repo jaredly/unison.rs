@@ -132,19 +132,32 @@ pub fn lambda(
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    // let mut state = shared::ir_runtime::State::full_resume(
-    //     &env,
-    //     kind,
-    //     constructor_no,
-    //     frames,
-    //     kidx,
-    //     Arc::new(shared::ir_runtime::convert_arg(WrappedValue(arg), &t, vec![]).unwrap()),
-    // )
-    // .expect("Invalid Resume arg type");
-    // let mut trace = shared::chrome_trace::Traces::new();
-    // let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
-    // Ok(JsValue::from_serde(&val).unwrap())
-    Ok(JsValue::UNDEFINED)
+    let value: Value = partial.into_serde().expect("Not a Value");
+    let (fnid, bindings, t) = match value {
+        Value::PartialFnBodyWithType(fnid, bindings, t) => (fnid, bindings, t),
+        _ => unreachable!(
+            "Lambda called with something other than PartialFnBodyWithType {:?}",
+            value
+        ),
+    };
+
+    let (arg_type, res_type) = match t {
+        ABT::Tm(Type::Arrow(arg, res)) => (arg, res),
+        _ => unreachable!("Unexpected fn type: {:?}", t),
+    };
+
+    let mut state = shared::state::State::lambda(
+        &env,
+        fnid,
+        bindings,
+        // value,
+        shared::convert::convert_arg(WrappedValue(arg), &arg_type, vec![]).unwrap(),
+        &*arg_type,
+    )
+    .expect("Invalid Resume arg type");
+    let mut trace = shared::chrome_trace::Traces::new();
+    let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
+    Ok(JsValue::from_serde(&val).unwrap())
 }
 
 #[wasm_bindgen]
