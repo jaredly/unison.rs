@@ -109,7 +109,7 @@ impl From<&String> for Hash {
 
 impl std::fmt::Debug for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        if self.0 == "<eval>" {
+        if self.0.len() <= 10 {
             f.write_str(&self.0)
         } else {
             f.write_str("#")?;
@@ -261,6 +261,36 @@ impl Type {
     //         }
     //     }
     // }
+
+    pub fn concretize(
+        &self,
+        args: &[ABT<Type>],
+        bindings: &im::HashMap<String, ABT<Type>>,
+    ) -> Self {
+        use Type::*;
+        match self {
+            Ref(_) => self.clone(),
+            Arrow(a, b) => Type::Arrow(
+                a.concretize(args, bindings).into(),
+                b.concretize(args, bindings).into(),
+            ),
+            Ann(a, b) => Type::Ann(a.concretize(args, bindings).into(), b.clone()),
+            App(a, b) => Type::App(
+                a.concretize(args, bindings).into(),
+                b.concretize(args, bindings).into(),
+            )
+            .into(),
+            Effect(a, b) => Type::Effect(
+                a.concretize(args, bindings).into(),
+                b.concretize(args, bindings).into(),
+            ),
+            Effects(inner) => {
+                Type::Effects(inner.iter().map(|m| m.concretize(args, bindings)).collect())
+            }
+            Forall(inner) => Type::Forall(inner.concretize(args, bindings).into()),
+            IntroOuter(inner) => Type::IntroOuter(inner.concretize(args, bindings).into()),
+        }
+    }
 
     pub fn app_args(&self) -> Vec<ABT<Type>> {
         match self {
@@ -449,6 +479,31 @@ impl<Inner> ABT<Inner> {
         match self {
             ABT::Tm(inner) => Some(inner),
             _ => None,
+        }
+    }
+}
+
+impl ABT<Type> {
+    pub fn concretize(
+        &self,
+        args: &[ABT<Type>],
+        bindings: &im::HashMap<String, ABT<Type>>,
+    ) -> Self {
+        match self {
+            ABT::Tm(inner) => (ABT::Tm(inner.concretize(args, bindings))),
+            ABT::Abs(sym, usage, inner) => {
+                if args.len() < 1 {
+                    ABT::Abs(sym.clone(), *usage, inner.concretize(args, bindings).into())
+                // Err(format!("Forall {}", text))
+                } else {
+                    let mut bindings = bindings.clone();
+                    bindings.insert(sym.text.clone(), args[0].clone());
+                    inner.concretize(&args[1..], &bindings)
+                }
+            }
+            ABT::Var(Symbol { text, .. }, _) => bindings.get(text).cloned().unwrap_or(self.clone()),
+            // .ok_or(format!("Unbound: {}", text)),
+            ABT::Cycle(inner) => ABT::Cycle(Box::new(inner.concretize(args, bindings))),
         }
     }
 }

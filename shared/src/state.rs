@@ -310,9 +310,24 @@ impl<'a> State<'a> {
                 {
                     None => {
                         let constructor_type = self.env.get_ability_type(&kind, number);
-                        let (arg_types, _effects, return_type) =
-                            crate::ir_runtime::extract_args(&constructor_type);
-                        // for any partial functions, annotate them with the type
+                        let concrete_type = match self
+                            .effects
+                            .get(&kind.hash().expect("Not a DerivedId").to_string())
+                        {
+                            Some(x) => x,
+                            None => unreachable!(
+                                "No effect found: {:?} - {:?}",
+                                kind.hash(),
+                                self.stack.frames[self.stack.frames.len() - 1].source
+                            ),
+                        };
+                        let constructor_args = concrete_type.as_tm().unwrap().app_args();
+                        // let (arg_types, _effects, return_type) =
+                        //     crate::ir_runtime::extract_args(&constructor_type);
+                        let (arg_types, _effects, return_type) = crate::ir_runtime::extract_args(
+                            &constructor_type
+                                .concretize(constructor_args.as_slice(), &Default::default()),
+                        );
                         // for any partial functions, annotate them with the type
                         for (i, arg) in args.iter_mut().enumerate() {
                             match &**arg {
@@ -387,14 +402,29 @@ impl<'a> State<'a> {
                 let (nidx, saved_frames, frame_idx) = match self.stack.back_to_handler() {
                     None => {
                         let constructor_type = self.env.get_ability_type(&kind, number);
-                        let concrete_type = self
+                        let concrete_type = match self
                             .effects
                             .get(&kind.hash().expect("Not a DerivedId").to_string())
-                            .expect("No effect found");
-                        info!("COncrete type: {:?}", concrete_type);
+                        {
+                            Some(x) => x,
+                            None => unreachable!(
+                                "No effect found: {:?} - {:?}",
+                                kind.hash(),
+                                self.stack.frames[self.stack.frames.len() - 1].source
+                            ),
+                        };
                         let constructor_args = concrete_type.as_tm().unwrap().app_args();
-                        let (arg_types, _effects, return_type) =
-                            crate::ir_runtime::extract_args(&constructor_type);
+                        let (arg_types, _effects, return_type) = crate::ir_runtime::extract_args(
+                            &constructor_type
+                                .concretize(constructor_args.as_slice(), &Default::default()),
+                        );
+                        info!(
+                            "Going through args and annotating effects: {:?}",
+                            constructor_type
+                        );
+                        info!("Going through arg_types: {:?}", arg_types);
+                        info!("Going through effects: {:?}", _effects);
+                        info!("Going through args: {:?}", args);
                         // for any partial functions, annotate them with the type
                         for (i, arg) in args.iter_mut().enumerate() {
                             match &**arg {

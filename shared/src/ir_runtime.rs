@@ -24,6 +24,35 @@ pub fn show_env(env: &RuntimeEnv) {
     }
 }
 
+// OK FOLKS heres what we're doing
+/*
+
+So the concrete type is like:
+    App(Ref(#thing), Ref(Nat))
+
+And the inner type is like:
+    Forall(|a| Arrow(a -> Effect(_effects, App(Ref(#b)))))
+
+// Ok, so anywhere we so `a`, substitute `Nat`
+// Ok, so I think my strategy is:
+// Make a new concretized type, and then pass it to `extract_args`.
+// Sounds great.
+Forall(|a/0 #0|
+    (Arrow(
+        App(
+            Ref(#ne22tbsth7),
+            App(Ref(#b8hn9sq0fe), 〰️a (#0))
+        ),
+        Effect(
+            Effects([App(Ref(#ie7ejjokeb), 〰️a (#0))]),
+            〰️a (#0)
+        )
+    ))
+)
+
+
+*/
+
 pub fn extract_args(
     typ: &ABT<Type>,
 ) -> (

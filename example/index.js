@@ -64,16 +64,17 @@ unison(packed_env, names).then((runtime) => {
             create: (v) => {
                 console.log('create mvar', v);
                 mvars.push(v);
-                return { Nat: mvars.length };
+                return { Nat: mvars.length - 1 };
             },
             get: (m) => {
-                console.log('get', n);
-                const idx = m.FFI.Nat;
+                console.log('get', m);
+                const idx = m.Nat;
+                console.log('Got', mvars[idx], mvars);
                 return mvars[idx];
             },
             set: (m, v) => {
                 console.log('set', m, v);
-                const idx = m.FFI.Nat;
+                const idx = m.Nat;
                 mvars[idx] = v;
                 return null;
             },

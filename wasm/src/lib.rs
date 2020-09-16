@@ -2,6 +2,7 @@
 
 extern crate im;
 extern crate js_sys;
+extern crate log;
 extern crate shared;
 extern crate wasm_bindgen;
 extern crate wasm_logger;
@@ -9,6 +10,7 @@ use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 #[macro_use]
 extern crate lazy_static;
+use log::info;
 use std::collections::HashMap;
 
 #[derive(Default)]
@@ -57,7 +59,7 @@ impl shared::ffi::FFI for FFI {
                     let result = f
                         .apply(&JsValue::UNDEFINED, &js_args)
                         .expect("JS Function failed with an error");
-                    if result.is_undefined() {
+                    if result.is_undefined() || result.is_null() {
                         shared::unit()
                     } else {
                         match result.into_serde() {
@@ -143,6 +145,8 @@ pub fn lambda(
             value
         ),
     };
+
+    info!("LAMBDA: type {:?}", t);
 
     let (arg_type, res_type) = match t {
         ABT::Tm(Type::Arrow(arg, res)) => (arg, res),
@@ -247,7 +251,7 @@ pub fn run(
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    wasm_logger::init(wasm_logger::Config::default().module_prefix("shared::state"));
+    wasm_logger::init(wasm_logger::Config::default());
 
     let hash = shared::types::Hash::from_string(term);
     let t = &env.terms.get(&hash).unwrap().1;
