@@ -608,9 +608,16 @@ fn run_term(
     let names = Default::default();
     // branch.get_names(&vec![], &mut names);
     let mut ffi = ffi::RustFFI(names, vec![]);
-    let ret = shared::ir_runtime::eval(&runtime_env, &mut ffi, hash, &mut trace, true)
-        .expect("Invalid FFI")
-        .unwrap();
+    let ret = shared::ir_runtime::eval(
+        &runtime_env,
+        &mut ffi,
+        hash,
+        &mut trace,
+        true,
+        Default::default(),
+    )
+    .expect("Invalid FFI")
+    .unwrap();
     println!(
         "Time: {}ms ({}ns)",
         last.elapsed().as_millis(),
@@ -983,12 +990,12 @@ fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
     branch.get_names(&vec![], &mut names);
     let mut ffi = ffi::RustFFI(names, vec![]);
 
-    for effect in effects {
-        use shared::ffi::FFI;
-        if !ffi.handles(&effect) {
-            return Err(std::io::ErrorKind::InvalidInput.into());
-        }
-    }
+    // for effect in effects {
+    //     use shared::ffi::FFI;
+    //     if !ffi.handles(&effect) {
+    //         return Err(std::io::ErrorKind::InvalidInput.into());
+    //     }
+    // }
 
     let mut state = shared::state::State::new_value(
         &runtime_env,

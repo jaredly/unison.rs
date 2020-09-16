@@ -56,10 +56,21 @@ pub struct State<'a> {
 pub fn build_effects_map(
     effects: std::collections::HashSet<ABT<Type>>,
 ) -> HashMap<String, ABT<Type>> {
+    use std::iter::FromIterator;
     let mut res = HashMap::new();
     for effect in effects {
         if !effect.is_var() {
-            res.insert(effect.as_tm().unwrap().ref_name().unwrap(), effect);
+            match effect {
+                ABT::Tm(Type::Effects(contents)) => res.extend(build_effects_map(
+                    std::collections::HashSet::from_iter(contents.into_iter()),
+                )),
+                _ => match effect.as_tm().and_then(|tm| tm.ref_name()) {
+                    None => unreachable!("Effect doesn't have a name? {:?}", effect),
+                    Some(name) => {
+                        res.insert(name, effect);
+                    }
+                },
+            }
         }
     }
     res

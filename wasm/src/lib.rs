@@ -148,10 +148,24 @@ pub fn lambda(
 
     info!("LAMBDA: type {:?}", t);
 
-    let (arg_type, res_type) = match t {
-        ABT::Tm(Type::Arrow(arg, res)) => (arg, res),
+    let (arg_type, effects, res_type) = match t {
+        ABT::Tm(Type::Arrow(arg, res)) => match &*res {
+            ABT::Tm(Type::Effect(effects, inner)) => (
+                arg,
+                match &**effects {
+                    ABT::Tm(Type::Effects(inner)) => inner.clone(),
+                    _ => unreachable!("Invalid effects first argument: {:?}", effects),
+                },
+                res,
+            ),
+            _ => (arg, vec![], res),
+        },
         _ => unreachable!("Unexpected fn type: {:?}", t),
     };
+    info!("Effects: {:?}", effects);
+
+    use std::iter::FromIterator;
+    let effects_set = std::collections::HashSet::from_iter(effects.into_iter());
 
     let mut state = shared::state::State::lambda(
         &env,
@@ -160,7 +174,7 @@ pub fn lambda(
         // value,
         shared::convert::convert_arg(WrappedValue(arg), &arg_type, vec![]).unwrap(),
         &*arg_type,
-        std::collections::HashMap::new(),
+        shared::state::build_effects_map(effects_set),
     )
     .expect("Invalid Resume arg type");
     let mut trace = shared::chrome_trace::Traces::new();
@@ -220,7 +234,10 @@ pub fn run_sync(
     for effect in effects.iter() {
         use shared::ffi::FFI;
         if !effect.is_var() && !ffi.handles(&effect.as_tm().unwrap().as_reference().unwrap()) {
-            return Err(JsValue::from("Doesn't handle all effects"));
+            return Err(JsValue::from(format!(
+                "Doesn't handle all effects: {:?}",
+                effect
+            )));
         }
     }
     let args =
@@ -251,7 +268,8 @@ pub fn run(
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    wasm_logger::init(wasm_logger::Config::default());
+    // CONSOLE.LOG right here to turn it on
+    // wasm_logger::init(wasm_logger::Config::default());
 
     let hash = shared::types::Hash::from_string(term);
     let t = &env.terms.get(&hash).unwrap().1;
@@ -268,7 +286,10 @@ pub fn run(
                     .expect("Not a reference"),
             )
         {
-            return Err(JsValue::from("Doesn't handle all effects"));
+            return Err(JsValue::from(format!(
+                "Doesn't handle all effects: {:?}",
+                effect
+            )));
         }
     }
     let args =

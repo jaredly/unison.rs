@@ -43,8 +43,8 @@ unison(packed_env, names).then((runtime) => {
             currentTimeStampMs: () => ({ Nat: Date.now() }),
         },
         // Ok, so these handlers are synchronous, which is very good.
-        SetTimeout: {
-            setTimeout: (time, fn) => {
+        SetTimeout1: {
+            setTimeout1: (time, fn) => {
                 setTimeout(() => runtime.lambda(fn, null, handlers), time);
             },
         },
