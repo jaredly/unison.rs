@@ -15,7 +15,7 @@ pub trait ToPretty {
 const UNIT_HASH: &'static str = "568rsi7o3ghq8mmbea2sf8msdk20ohasob5s2rvjtqg2lr0vs39l1hm98urrjemsr3vo3fa52pibqu0maluq7g8sfg3h5f5re6vitj8";
 const TUPLE_HASH: &'static str = "onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0";
 
-fn unwrap_tuple(value: &Value) -> Vec<&Value> {
+pub fn unwrap_tuple(value: &Value) -> Vec<&Value> {
     use Value::*;
     match value {
         PartialConstructor(Reference::DerivedId(Id(hash, _, _)), 0, args) => {

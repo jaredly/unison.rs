@@ -49,32 +49,41 @@ unison(packed_env, names).then((runtime) => {
             },
         },
         Console: {
-            log: (value, ...rest) => {
-                console.log('REST?', rest);
-                console.log('Ok folks', value);
+            log: (value) => {
+                if (Array.isArray(value)) {
+                    console.log(...value);
+                } else {
+                    console.log(value);
+                }
             },
             warn: (value) => {
-                console.warn('Ok folks', value);
+                if (Array.isArray(value)) {
+                    console.warn(...value);
+                } else {
+                    console.warn(value);
+                }
             },
             error: (value) => {
-                console.error('Ok folks', value);
+                if (Array.isArray(value)) {
+                    console.error(...value);
+                } else {
+                    console.error(value);
+                }
             },
         },
         MVarAbility: {
             create: (v) => {
-                console.log('create mvar', v);
+                // console.log('create mvar', v);
                 mvars.push(v);
                 return { Nat: mvars.length - 1 };
             },
-            get: (m) => {
-                console.log('get', m);
-                const idx = m.Nat;
-                console.log('Got', mvars[idx], mvars);
+            get: (idx) => {
+                // console.log('get', idx);
+                // console.log('Got', mvars[idx], mvars);
                 return mvars[idx];
             },
-            set: (m, v) => {
-                console.log('set', m, v);
-                const idx = m.Nat;
+            set: (idx, v) => {
+                // console.log('set', idx, v);
                 mvars[idx] = v;
                 return null;
             },
@@ -87,18 +96,3 @@ unison(packed_env, names).then((runtime) => {
     // so it could be useful to distinguish
     return runtime.run('ffi_7', [null], handlers);
 });
-
-// const js = import('./node_modules/unison_wasm/unison_wasm.js');
-// import data from 'raw-loader!../bin/get_random_ints.bin';
-// js.then((js) => {
-//     console.log('loading...');
-//     js.load(data);
-//     console.log('loaded...');
-//     console.log(
-//         '<- got back',
-//         js.eval_fn(
-//             'gdm03spbhhqlbh035rh42udv3bsirtpg76n9hosgc7igj9mjp68115urcdbfdbdn8r1c38anrf7blj1qf9mpi42dqvgu333rp41d9k8',
-//             [0, 10],
-//         ),
-//     );
-// });

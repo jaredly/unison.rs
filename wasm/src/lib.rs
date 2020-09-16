@@ -12,6 +12,7 @@ use wasm_bindgen::prelude::*;
 extern crate lazy_static;
 use log::info;
 use std::collections::HashMap;
+mod unwrap;
 
 #[derive(Default)]
 struct Envs {
@@ -53,7 +54,7 @@ impl shared::ffi::FFI for FFI {
             Reference::DerivedId(Id(hash, _, _)) => {
                 let js_args = js_sys::Array::new();
                 for arg in args {
-                    js_args.push(&JsValue::from_serde(&arg).unwrap());
+                    js_args.push(&crate::unwrap::unwrap(&arg));
                 }
                 self.0.get(&(hash.to_string(), number, true)).map(|f| {
                     let result = f
@@ -62,9 +63,14 @@ impl shared::ffi::FFI for FFI {
                     if result.is_undefined() || result.is_null() {
                         shared::unit()
                     } else {
-                        match result.into_serde() {
-                            Err(_) => unreachable!("Not a value {:?}", result),
-                            Ok(r) => r,
+                        let (_, _, return_type) = shared::ir_runtime::extract_args(t);
+
+                        match unwrap::wrap(&result, &return_type) {
+                            Some(x) => x,
+                            None => match result.into_serde() {
+                                Err(_) => unreachable!("Not a value {:?}", result),
+                                Ok(r) => r,
+                            },
                         }
                     }
                 })
@@ -91,7 +97,7 @@ impl shared::ffi::FFI for FFI {
             Reference::DerivedId(Id(hash, _, _)) => {
                 let js_args = js_sys::Array::new();
                 for arg in args {
-                    js_args.push(&JsValue::from_serde(&arg).unwrap());
+                    js_args.push(&crate::unwrap::unwrap(&arg));
                 }
                 js_args.push(
                     &JsValue::from_serde(&(kind.clone(), number, frames, final_index)).unwrap(),
@@ -179,7 +185,9 @@ pub fn lambda(
     .expect("Invalid Resume arg type");
     let mut trace = shared::chrome_trace::Traces::new();
     let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
-    Ok(JsValue::from_serde(&val).unwrap())
+    Ok(val
+        .map(|m| crate::unwrap::unwrap(&m))
+        .unwrap_or(JsValue::UNDEFINED))
 }
 
 #[wasm_bindgen]
@@ -210,8 +218,9 @@ pub fn resume(
     .expect("Invalid Resume arg type");
     let mut trace = shared::chrome_trace::Traces::new();
     let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
-    Ok(JsValue::from_serde(&val).unwrap())
-    // Ok(JsValue::UNDEFINED)
+    Ok(val
+        .map(|m| unwrap::unwrap(&m))
+        .unwrap_or(JsValue::UNDEFINED))
 }
 
 #[wasm_bindgen]
@@ -253,7 +262,9 @@ pub fn run_sync(
     );
     let mut trace = shared::chrome_trace::Traces::new();
     let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
-    Ok(JsValue::from_serde(&val).unwrap())
+    Ok(unwrap::unwrap(
+        &val.expect("This was expected to be synchronous"),
+    ))
 }
 
 #[wasm_bindgen]
@@ -331,50 +342,4 @@ impl shared::convert::ConvertibleArg<WrappedValue> for WrappedValue {
     fn is_empty(&self) -> bool {
         self.0.is_null() || self.0.is_undefined()
     }
-    // fn from_value()
 }
-
-// #[wasm_bindgen]
-// pub fn eval_fn(env_id: usize, hash_raw: &str, values: Vec<JsValue>) -> Result<JsValue, JsValue> {
-//     console_error_panic_hook::set_once();
-
-//     let mut ffi = FFI(HashMap::new());
-
-//     let mut l = ENV.lock().unwrap();
-//     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
-
-//     let hash = shared::types::Hash::from_string(hash_raw);
-//     let t = &env.terms.get(&hash).unwrap().1;
-//     // TODO effects!
-//     let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
-//     let args = shared::convert::convert_args(
-//         values.into_iter().map(|x| WrappedValue(x)).collect(),
-//         &targs,
-//     )?;
-
-//     let eval_hash = env.add_eval(hash_raw, args)?;
-
-//     let mut state = shared::state::State::new_value(&l.map.get(&env_id).unwrap(), eval_hash, false);
-//     let mut trace = shared::chrome_trace::Traces::new();
-//     let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
-//     Ok(JsValue::from_serde(&val).unwrap())
-// }
-
-// #[wasm_bindgen]
-// pub fn evalit(env_id: usize, hash: &str) -> JsValue {
-//     console_error_panic_hook::set_once();
-
-//     let mut ffi = FFI(HashMap::new());
-
-//     let mut trace = shared::chrome_trace::Traces::new();
-//     let l = ENV.lock().unwrap();
-//     let val = shared::ir_runtime::eval(
-//         &l.map.get(&env_id).unwrap(),
-//         &mut ffi,
-//         &hash,
-//         &mut trace,
-//         false,
-//     )
-//     .unwrap();
-//     JsValue::from_serde(&val).unwrap()
-// }

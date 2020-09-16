@@ -375,6 +375,18 @@ pub enum Value {
     TypeLink(Reference),
 }
 
+impl Value {
+    pub fn is_constr(&self, hash_str: &str) -> bool {
+        match self {
+            Value::Constructor(Reference::DerivedId(Id(hash, _, _)), ..) => hash.0 == hash_str,
+            Value::PartialConstructor(Reference::DerivedId(Id(hash, _, _)), ..) => {
+                hash.0 == hash_str
+            }
+            _ => false,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
 pub enum Term {
     Int(i64),
