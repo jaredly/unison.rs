@@ -74,12 +74,10 @@ export default async (dataPromise, namesPromise) => {
                 console.log(Object.keys(hashesByTermName));
                 throw new Error(`Term not found ${term}`);
             }
-            return jsBridge.run(
-                id,
-                hash,
-                args,
-                convert_handlers(handlers, hashesByName, names),
-            );
+            const converted = convert_handlers(handlers, hashesByName, names);
+            console.log('converted', handlers, hashesByName, names);
+            console.log(converted);
+            return jsBridge.run(id, hash, args, converted);
         },
         runSync: (term, args, handlers) => {
             const hash = hashesByTermName[term];

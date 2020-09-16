@@ -12,3 +12,8 @@ what if I make it explicit?
 
 SOLUTION! You always have to make explicit the effects of any lambdas, and include that in the type of the effect.
 Seems to have worked so far :D
+
+
+# Bugs
+
+- If a handler's return value fails to typecheck, it seems we're silently swolloeing the error

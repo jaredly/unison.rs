@@ -67,6 +67,9 @@ pub fn build_effects_map(
                 _ => match effect.as_tm().and_then(|tm| tm.ref_name()) {
                     None => unreachable!("Effect doesn't have a name? {:?}", effect),
                     Some(name) => {
+                        if res.contains_key(&name) {
+                            unreachable!("Multiple effects of different types defined!")
+                        }
                         res.insert(name, effect);
                     }
                 },

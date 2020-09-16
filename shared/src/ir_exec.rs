@@ -270,7 +270,7 @@ impl IR {
 
                             ("Nat.+", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a + b),
                             ("Nat.sub", [Value::Nat(a)], Value::Nat(b)) => {
-                                Value::Nat(a.wrapping_sub(*b))
+                                Value::Int((a - *b) as i64)
                             }
                             ("Nat.*", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a * b),
                             ("Nat./", [Value::Nat(a)], Value::Nat(b)) => Value::Nat(a / b),
