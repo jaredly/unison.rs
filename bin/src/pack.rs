@@ -50,10 +50,16 @@ impl<'a> visitor::Visitor for TypeWalker<'a> {
     fn post_abt<Inner: visitor::Accept>(&mut self, _: &mut ABT<Inner>) {}
 }
 
-pub fn get_head(root: &std::path::Path) -> std::io::Result<String> {
+pub fn head_dir(root: &std::path::Path) -> std::path::PathBuf {
     let root = std::path::PathBuf::from(root);
     let mut head = root.clone();
+    head.push("paths");
     head.push("_head");
+    head
+}
+
+pub fn get_head(root: &std::path::Path) -> std::io::Result<String> {
+    let head = head_dir(root);
     let entries = std::fs::read_dir(head.as_path())?
         .map(|res| res.map(|e| e.path()))
         .collect::<Result<Vec<_>, std::io::Error>>()?;
@@ -65,7 +71,7 @@ pub fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> 
     println!("Packing all the terms I can find");
     let root = terms_path.parent().unwrap();
     let paths = path_with(&root, "paths");
-    let mut branch = Branch::load(&paths, get_head(&paths)?)?;
+    let mut branch = Branch::load(&paths, get_head(&root)?)?;
     branch.load_children(&paths, true)?;
 
     let mut all_terms = std::collections::HashMap::new();
@@ -227,7 +233,7 @@ fn walk_env(env: &mut env::Env) {
 fn load_main_branch(root: &std::path::Path) -> std::io::Result<Branch> {
     println!("Loading all namespaces");
     let paths = path_with(&root, "paths");
-    let mut branch = Branch::load(&paths, get_head(&paths)?)?;
+    let mut branch = Branch::load(&paths, get_head(&root)?)?;
     branch.load_children(&paths, true)?;
     println!("Finished loading namespaces");
 
@@ -277,7 +283,7 @@ pub fn pack_all_json(file: &String, outfile: &String) -> std::io::Result<()> {
     println!("Packing all the terms I can find");
     let root = terms_path.parent().unwrap();
     let paths = path_with(&root, "paths");
-    let mut branch = Branch::load(&paths, get_head(&paths)?)?;
+    let mut branch = Branch::load(&paths, get_head(&root)?)?;
     branch.load_children(&paths, true)?;
 
     let mut all_terms = std::collections::HashMap::new();
@@ -367,5 +373,54 @@ pub fn pack(file: &String, outfile: &String) -> std::io::Result<()> {
         let mut branch = load_main_branch(root.as_path())?;
         let hash = find_term(root.as_path(), &mut branch, file);
         pack_term(branch, root.as_path(), &hash.0, outfile)
+    }
+}
+
+pub fn pack_watch(term: &String, outfile: &String) -> std::io::Result<()> {
+    use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+    use std::sync::mpsc::channel;
+    use std::time::Duration;
+
+    let root = default_root();
+    // TODO incremental reload!!!
+
+    let now = std::time::Instant::now();
+    println!("Initial build...");
+    let mut branch = load_main_branch(root.as_path())?;
+    let hash = find_term(root.as_path(), &mut branch, term);
+    pack_term(branch, root.as_path(), &hash.0, outfile)?;
+    println!("Finished! {:?}", now.elapsed());
+
+    // Create a channel to receive the events.
+    let (tx, rx) = channel();
+
+    // Automatically select the best implementation for your platform.
+    // You can also access each implementation directly e.g. INotifyWatcher.
+    let mut watcher: RecommendedWatcher =
+        Watcher::new(tx, Duration::from_millis(200)).expect("Can't make watcher");
+
+    // Add a path to be watched. All files and directories at that path and
+    // below will be monitored for changes.
+    watcher
+        .watch(head_dir(root.as_path()), RecursiveMode::Recursive)
+        .expect("Can't watch");
+
+    // This is a simple loop, but you may want to use more complex logic here,
+    // for example to handle I/O.
+    loop {
+        match rx.recv() {
+            Ok(event) => match event {
+                notify::DebouncedEvent::Remove(_) => {
+                    println!("Rebuilding...");
+                    let now = std::time::Instant::now();
+                    let mut branch = load_main_branch(root.as_path())?;
+                    let hash = find_term(root.as_path(), &mut branch, term);
+                    pack_term(branch, root.as_path(), &hash.0, outfile)?;
+                    println!("Finished! {:?}", now.elapsed());
+                }
+                _ => (),
+            },
+            Err(e) => println!("watch error: {:?}", e),
+        }
     }
 }

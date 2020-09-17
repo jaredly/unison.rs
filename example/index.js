@@ -2,7 +2,10 @@
 import unison, { fetch } from './unison';
 import makeHandlers from './handlers';
 
-fetch('./data/all.bin').then(
+// This is just to make webpack-dev-server refresh for me :D
+import './data/counter_new.bin.json';
+
+fetch('./data/counter_new.bin').then(
     (runtime) => {
         runtime.run('app_test.counter', [10], makeHandlers(runtime));
     },

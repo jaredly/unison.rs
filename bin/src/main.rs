@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 extern crate env_logger;
+extern crate notify;
 extern crate serde_derive;
 extern crate serde_json;
 
@@ -28,6 +29,7 @@ fn main() -> std::io::Result<()> {
         let cmd = args.remove(0);
         match (cmd.as_str(), args.as_slice()) {
             ("test", [path]) => run::run_test(path),
+            ("pack-watch", [path, output]) => pack::pack_watch(path, output),
             ("pack", [path, output]) => pack::pack(path, output),
             ("pack-json", [path, output]) => pack::pack_json(path, output),
             ("pack-all-json", [path, output]) => pack::pack_all_json(path, output),

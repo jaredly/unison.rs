@@ -28,15 +28,76 @@ pub struct RawBranch {
 }
 
 #[derive(Debug, Clone)]
+pub struct Codebase {
+    branches: HashMap<String, Branch>,
+    head: String,
+    paths_root: std::path::PathBuf,
+}
+
+pub fn default_root() -> std::path::PathBuf {
+    let mut project: std::path::PathBuf = std::env::var("HOME").unwrap().into();
+    project.push(".unison");
+    project.push("v1");
+    project
+}
+
+pub fn get_head(root: &std::path::Path) -> std::io::Result<String> {
+    let head = head_dir(root);
+    let entries = std::fs::read_dir(head.as_path())?
+        .map(|res| res.map(|e| e.path()))
+        .collect::<Result<Vec<_>, std::io::Error>>()?;
+    let name = entries[0].file_name().unwrap().to_str().unwrap().to_owned();
+    Ok(name)
+}
+
+pub fn head_dir(root: &std::path::Path) -> std::path::PathBuf {
+    let root = std::path::PathBuf::from(root);
+    let mut head = root.clone();
+    head.push("paths");
+    head.push("_head");
+    head
+}
+
+impl Codebase {
+    pub fn default() -> std::io::Result<Self> {
+        let root = default_root();
+        Codebase::new(root)
+    }
+
+    pub fn new(root: std::path::PathBuf) -> std::io::Result<Self> {
+        let mut paths_root = root.clone();
+        paths_root.push("paths");
+        let head = get_head(root.as_path())?;
+        let mut branches: HashMap<String, Branch> = Default::default();
+        branches.insert(head.clone(), Branch::load(&paths_root, head.clone())?);
+        Ok(Codebase {
+            branches,
+            head,
+            paths_root,
+        })
+    }
+
+    pub fn load(&mut self, hash: &str) -> std::io::Result<&Branch> {
+        if !self.branches.contains_key(hash) {
+            self.branches.insert(
+                hash.to_owned(),
+                Branch::load(&self.paths_root, hash.to_owned())?,
+            );
+        }
+        Ok(self.branches.get(hash).unwrap())
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Branch {
     pub raw: RawBranch,
     pub children: HashMap<NameSegment, Branch>,
 }
 
 impl Branch {
-    pub fn load(root: &std::path::PathBuf, hash: String) -> std::io::Result<Branch> {
+    pub fn load(paths_root: &std::path::PathBuf, hash: String) -> std::io::Result<Branch> {
         info!("Loading branch : {}", hash);
-        let mut head = root.clone();
+        let mut head = paths_root.clone();
         head.push(hash + ".ub");
         let head = parser::Buffer::from_file(head.as_path())?.get_branch();
         let head = resolve_branch(head)?;
@@ -46,7 +107,11 @@ impl Branch {
         })
     }
 
-    pub fn load_child(&mut self, root: &std::path::PathBuf, child: &str) -> std::io::Result<()> {
+    pub fn load_child(
+        &mut self,
+        paths_root: &std::path::PathBuf,
+        child: &str,
+    ) -> std::io::Result<()> {
         info!("Loading child : {}", child);
         let seg = NameSegment {
             text: child.to_owned(),
@@ -60,17 +125,21 @@ impl Branch {
             .get(&seg)
             .ok_or(std::io::Error::from(std::io::ErrorKind::NotFound))?;
         self.children
-            .insert(seg, Branch::load(root, hash.to_string())?);
+            .insert(seg, Branch::load(paths_root, hash.to_string())?);
         Ok(())
     }
 
-    pub fn load_children(&mut self, root: &std::path::PathBuf, deep: bool) -> std::io::Result<()> {
+    pub fn load_children(
+        &mut self,
+        paths_root: &std::path::PathBuf,
+        deep: bool,
+    ) -> std::io::Result<()> {
         let mut children: Vec<(&NameSegment, &Hash)> = self.raw.children.iter().collect();
         children.sort();
         for (k, v) in children {
-            let mut child = Branch::load(root, v.to_string())?;
+            let mut child = Branch::load(paths_root, v.to_string())?;
             if deep {
-                child.load_children(root, deep)?;
+                child.load_children(paths_root, deep)?;
             }
             self.children.insert(k.clone(), child);
         }
@@ -200,7 +269,11 @@ impl Branch {
         }
     }
 
-    pub fn find_term(&mut self, root: &std::path::PathBuf, path: &[&str]) -> std::io::Result<Hash> {
+    pub fn find_term(
+        &mut self,
+        paths_root: &std::path::PathBuf,
+        path: &[&str],
+    ) -> std::io::Result<Hash> {
         // let mut parts: Vec<&str> = path.split(".").collect();
         // if parts[0] == "." {
         //     parts.remove(0);
@@ -219,12 +292,12 @@ impl Branch {
             }
             return Err(std::io::ErrorKind::NotFound.into());
         } else {
-            self.load_child(root, path[0])?;
+            self.load_child(paths_root, path[0])?;
             let child = self
                 .children
                 .get_mut(&seg)
                 .ok_or(std::io::Error::from(std::io::ErrorKind::NotFound))?;
-            return child.find_term(root, &path[1..]);
+            return child.find_term(paths_root, &path[1..]);
         }
     }
 

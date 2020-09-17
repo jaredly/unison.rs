@@ -21,8 +21,9 @@ const convert_handlers = (handlers, typeNameHashes, names) => {
     Object.keys(handlers).forEach((abilityName) => {
         const hash = typeNameHashes[abilityName];
         if (!hash) {
-            console.log(typeNameHashes);
-            throw new Error(`Hash not found for ability ${abilityName}`);
+            // console.log(typeNameHashes);
+            // throw new Error(`Hash not found for ability ${abilityName}`);
+            return; // not needed
         }
         if (!names[1][hash]) {
             throw new Error(
