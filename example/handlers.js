@@ -1,13 +1,6 @@
 export default (runtime) => {
     const mvars = [];
 
-    // all the handlers have to be sync
-    // and ... runtime.lambda has a "Sync" and an "async" version. Like
-    // if you want to run a lambda with only sync handlers, you can get the sync results
-
-    // runtime.runSync('one.two.three', [arg, arg, arg], handlers);
-    // runtime.run('one.two.three', [arg, arg, arg], handlers); // all the handlers have to be sync
-
     const elements = [];
 
     const handlers = {
@@ -60,17 +53,11 @@ export default (runtime) => {
             addMouseEventListener: (idx, evt, handler) => {
                 console.log('event listener', idx, handler, elements);
                 elements[idx].addEventListener(evt, (evt) => {
-                    // TODO figure out how to make a MouseEvent
-                    // probably just pass around a tuple for the moment?
-                    // I don't think I properly wrap tuples yet.
                     runtime.lambda(handler, evt.clientY, handlers);
                 });
             },
             addKeyEventListener: (idx, evt, handler) => {
                 elements[idx].addEventListener(evt, (evt) => {
-                    // TODO figure out how to make a MouseEvent
-                    // probably just pass around a tuple for the moment?
-                    // I don't think I properly wrap tuples yet.
                     runtime.lambda(handler, evt.key, handlers);
                 });
             },
