@@ -34,13 +34,14 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: cargo build --release
+      - run: cargo install --path . --root export
+        working-directory: bin
 
       - name: Upload artifacts ${{ matrix.os }}
         uses: actions/upload-artifact@master
         with:
           name: ${{ matrix.os }}
-          path: target/release/unison_rs
+          path: bin/export/bin
 
   publish:
     needs: build
@@ -127,7 +128,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: binaries/windows/unison_rs
+          asset_path: binaries/windows/unison_rs.exe
           asset_name: unison_rs-windows.exe
           asset_content_type: application/executable
 
