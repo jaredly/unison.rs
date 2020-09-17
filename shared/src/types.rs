@@ -71,6 +71,15 @@ pub enum Reference {
     DerivedId(Id),
 }
 
+impl Reference {
+    pub fn hash(&self) -> Option<&Hash> {
+        match self {
+            Reference::DerivedId(Id(hash, _, _)) => Some(hash),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Debug for Reference {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -100,7 +109,7 @@ impl From<&String> for Hash {
 
 impl std::fmt::Debug for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        if self.0 == "<eval>" {
+        if self.0.len() <= 10 {
             f.write_str(&self.0)
         } else {
             f.write_str("#")?;
@@ -188,7 +197,7 @@ impl Referent {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
 pub struct MatchCase(pub Pattern, pub Option<Box<ABT<Term>>>, pub Box<ABT<Term>>);
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd, Hash, Eq)]
 pub enum Kind {
     Star,
     Arrow(Box<Kind>, Box<Kind>),
@@ -220,7 +229,7 @@ pub enum SeqOp {
 }
 
 // Base functor for types in the Unison language
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd, Hash, Eq)]
 pub enum Type {
     Ref(Reference),
     Arrow(Box<ABT<Type>>, Box<ABT<Type>>),
@@ -233,6 +242,77 @@ pub enum Type {
     //  bound by outer type signatures, to support scoped type
     //  variables
     IntroOuter(Box<ABT<Type>>),
+}
+
+impl Type {
+    pub fn ref_name(&self) -> Option<String> {
+        match self {
+            Type::Ref(Reference::DerivedId(Id(hash, _, _))) => Some(hash.to_string()),
+            Type::Ann(inner, _) => inner.as_tm().and_then(|m| m.ref_name()),
+            Type::App(inner, _) => inner.as_tm().and_then(|m| m.ref_name()),
+            _ => None,
+        }
+    }
+
+    // pub fn parse_arrow(&self) -> Option<(Vec<ABT<Type>>, std::collections::HashSet<ABT<Type>>, ABT<Type>)> {
+    //     match self {
+    //         Effect(effects, inner) => {
+    //             let (a, mut b, c) = inner.as_tm();
+    //         }
+    //     }
+    // }
+
+    pub fn concretize(
+        &self,
+        args: &[ABT<Type>],
+        bindings: &im::HashMap<String, ABT<Type>>,
+    ) -> Self {
+        use Type::*;
+        match self {
+            Ref(_) => self.clone(),
+            Arrow(a, b) => Type::Arrow(
+                a.concretize(args, bindings).into(),
+                b.concretize(args, bindings).into(),
+            ),
+            Ann(a, b) => Type::Ann(a.concretize(args, bindings).into(), b.clone()),
+            App(a, b) => Type::App(
+                a.concretize(args, bindings).into(),
+                b.concretize(args, bindings).into(),
+            )
+            .into(),
+            Effect(a, b) => Type::Effect(
+                a.concretize(args, bindings).into(),
+                b.concretize(args, bindings).into(),
+            ),
+            Effects(inner) => {
+                Type::Effects(inner.iter().map(|m| m.concretize(args, bindings)).collect())
+            }
+            Forall(inner) => Type::Forall(inner.concretize(args, bindings).into()),
+            IntroOuter(inner) => Type::IntroOuter(inner.concretize(args, bindings).into()),
+        }
+    }
+
+    pub fn app_args(&self) -> Vec<ABT<Type>> {
+        match self {
+            Type::App(inner, arg) => {
+                let mut args = inner.as_tm().unwrap().app_args();
+                args.push((**arg).clone());
+                args
+            }
+            _ => vec![],
+        }
+    }
+
+    pub fn as_reference(&self) -> Option<Reference> {
+        match self {
+            Type::Ref(reference) => Some(reference.clone()),
+            Type::Ann(inner, _) => inner.as_tm().and_then(|m| m.as_reference()),
+            Type::App(inner, _) => inner.as_tm().and_then(|m| m.as_reference()),
+            _ => None,
+        }
+    }
+
+    // pub fn
 }
 
 // Runtime values
@@ -264,6 +344,14 @@ pub enum Value {
         )>,
         // Vec<(Symbol, usize, usize, Vec<usize>)>,
     ),
+
+    PartialFnBodyWithType(
+        usize,
+        Vec<(Symbol, usize, Arc<Value>)>,
+        // The whole type folks
+        ABT<Type>,
+    ),
+
     PartialFnBody(usize, Vec<(Symbol, usize, Arc<Value>)>),
     PartialNativeApp(String, Vec<Arc<Value>>),
     PartialConstructor(Reference, usize, Vector<Arc<Value>>),
@@ -285,6 +373,18 @@ pub enum Value {
     Sequence(Vector<Arc<Value>>),
     TermLink(Referent),
     TypeLink(Reference),
+}
+
+impl Value {
+    pub fn is_constr(&self, hash_str: &str) -> bool {
+        match self {
+            Value::Constructor(Reference::DerivedId(Id(hash, _, _)), ..) => hash.0 == hash_str,
+            Value::PartialConstructor(Reference::DerivedId(Id(hash, _, _)), ..) => {
+                hash.0 == hash_str
+            }
+            _ => false,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
@@ -370,13 +470,54 @@ impl std::fmt::Debug for Term {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, PartialOrd, Hash, Eq)]
 pub enum ABT<Content> {
     Var(Symbol, usize), // usage number
     Cycle(Box<ABT<Content>>),
     // number of usages expected
     Abs(Symbol, usize, Box<ABT<Content>>),
     Tm(Content),
+}
+
+impl<Inner> ABT<Inner> {
+    pub fn is_var(&self) -> bool {
+        match self {
+            ABT::Var(_, _) => true,
+            _ => false,
+        }
+    }
+
+    pub fn as_tm(&self) -> Option<&Inner> {
+        match self {
+            ABT::Tm(inner) => Some(inner),
+            _ => None,
+        }
+    }
+}
+
+impl ABT<Type> {
+    pub fn concretize(
+        &self,
+        args: &[ABT<Type>],
+        bindings: &im::HashMap<String, ABT<Type>>,
+    ) -> Self {
+        match self {
+            ABT::Tm(inner) => (ABT::Tm(inner.concretize(args, bindings))),
+            ABT::Abs(sym, usage, inner) => {
+                if args.len() < 1 {
+                    ABT::Abs(sym.clone(), *usage, inner.concretize(args, bindings).into())
+                // Err(format!("Forall {}", text))
+                } else {
+                    let mut bindings = bindings.clone();
+                    bindings.insert(sym.text.clone(), args[0].clone());
+                    inner.concretize(&args[1..], &bindings)
+                }
+            }
+            ABT::Var(Symbol { text, .. }, _) => bindings.get(text).cloned().unwrap_or(self.clone()),
+            // .ok_or(format!("Unbound: {}", text)),
+            ABT::Cycle(inner) => ABT::Cycle(Box::new(inner.concretize(args, bindings))),
+        }
+    }
 }
 
 impl<Inner: std::fmt::Debug> std::fmt::Debug for ABT<Inner> {

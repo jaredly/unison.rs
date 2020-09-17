@@ -364,6 +364,7 @@ dependencies = [
  "im",
  "js-sys",
  "lazy_static",
+ "log",
  "serde_json",
  "shared",
  "wasm-bindgen",

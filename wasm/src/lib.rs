@@ -2,6 +2,7 @@
 
 extern crate im;
 extern crate js_sys;
+extern crate log;
 extern crate shared;
 extern crate wasm_bindgen;
 extern crate wasm_logger;
@@ -9,7 +10,9 @@ use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 #[macro_use]
 extern crate lazy_static;
+use log::info;
 use std::collections::HashMap;
+mod unwrap;
 
 #[derive(Default)]
 struct Envs {
@@ -29,19 +32,20 @@ lazy_static! {
     static ref ENV: Mutex<Envs> = Mutex::new(Default::default());
 }
 
-// #[derive(Serialize, Deserialize)]
-// struct Handlers(Vec<(String, bool, usize)>);
-
 // Handlers looks like Vec<(String - hash, usize - fnid for calling back, bool - is it sync)>
 
 struct FFI(HashMap<(String, usize, bool), js_sys::Function>);
 
-use shared::ir_runtime::{FullRequest, State};
+use shared::state::FullRequest;
 use shared::types::*;
 use std::sync::Arc;
-impl shared::ir_runtime::FFI for FFI {
+impl shared::ffi::FFI for FFI {
     fn handle_request_sync(
         &mut self,
+        // this is the type of the constructor.
+        // This gives us types of each of the arguments (in case one is a lambda)
+        // and of the expected return value (so we can type-check that too)
+        t: &ABT<Type>,
         kind: &Reference,
         number: usize,
         args: &Vec<Arc<Value>>,
@@ -50,13 +54,25 @@ impl shared::ir_runtime::FFI for FFI {
             Reference::DerivedId(Id(hash, _, _)) => {
                 let js_args = js_sys::Array::new();
                 for arg in args {
-                    js_args.push(&JsValue::UNDEFINED);
+                    js_args.push(&crate::unwrap::unwrap(&arg));
                 }
                 self.0.get(&(hash.to_string(), number, true)).map(|f| {
-                    f.apply(&JsValue::UNDEFINED, &js_args)
-                        .unwrap()
-                        .into_serde()
-                        .unwrap()
+                    let result = f
+                        .apply(&JsValue::UNDEFINED, &js_args)
+                        .expect("JS Function failed with an error");
+                    if result.is_undefined() || result.is_null() {
+                        shared::unit()
+                    } else {
+                        let (_, _, return_type) = shared::ir_runtime::extract_args(t);
+
+                        match unwrap::wrap(&result, &return_type) {
+                            Some(x) => x,
+                            None => match result.into_serde() {
+                                Err(_) => unreachable!("Not a value {:?}", result),
+                                Ok(r) => r,
+                            },
+                        }
+                    }
                 })
             }
             _ => None,
@@ -64,21 +80,34 @@ impl shared::ir_runtime::FFI for FFI {
     }
 
     fn handles(&self, kind: &Reference) -> bool {
-        true
+        match kind {
+            Reference::DerivedId(Id(hash, _, _)) => {
+                // TODO: need to iterate through all constructors
+                self.0.contains_key(&(hash.to_string(), 0, false))
+                    || self.0.contains_key(&(hash.to_string(), 0, true))
+            }
+            _ => false,
+        }
     }
 
     // This is used at the top level, once we've bailed.
-    fn handle_request(&mut self, request: shared::ir_runtime::FullRequest) {
-        let FullRequest(kind, number, args, frames, final_index) = request;
-        match kind {
+    fn handle_request(&mut self, request: FullRequest) {
+        let FullRequest(kind, number, args, frames, final_index, t) = request;
+        match &kind {
             Reference::DerivedId(Id(hash, _, _)) => {
                 let js_args = js_sys::Array::new();
                 for arg in args {
-                    js_args.push(&JsValue::UNDEFINED);
+                    js_args.push(&crate::unwrap::unwrap(&arg));
                 }
-                js_args.push(&JsValue::from_serde(&(frames, final_index)).unwrap());
-                let f = self.0.get(&(hash.to_string(), number, true)).unwrap();
-                f.apply(&JsValue::UNDEFINED, &js_args).unwrap();
+                js_args.push(
+                    &JsValue::from_serde(&(kind.clone(), number, frames, final_index)).unwrap(),
+                );
+                match self.0.get(&(hash.to_string(), number, false)) {
+                    Some(f) => {
+                        f.apply(&JsValue::UNDEFINED, &js_args).unwrap();
+                    }
+                    None => unreachable!("No handler provided for {:?} # {}", hash, number),
+                }
             }
             _ => unreachable!(),
         }
@@ -86,6 +115,8 @@ impl shared::ir_runtime::FFI for FFI {
 }
 
 impl From<Vec<JsValue>> for FFI {
+    // (ability hash: string, ability index: usize, is_sync: false, handler_function: (...args) => 'a)
+    // (ability hash: string, ability index: usize, is_sync: true, handler_function: (...args, kont) => 'a)
     fn from(raw_handlers: Vec<JsValue>) -> Self {
         let mut handlers = HashMap::new();
         for decl in raw_handlers {
@@ -101,6 +132,65 @@ impl From<Vec<JsValue>> for FFI {
 }
 
 #[wasm_bindgen]
+pub fn lambda(
+    env_id: usize,
+    partial: JsValue,
+    arg: JsValue,
+    raw_handlers: Vec<JsValue>,
+) -> Result<JsValue, JsValue> {
+    let mut ffi = FFI::from(raw_handlers);
+
+    let mut l = ENV.lock().unwrap();
+    let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
+
+    let value: Value = partial.into_serde().expect("Not a Value");
+    let (fnid, bindings, t) = match value {
+        Value::PartialFnBodyWithType(fnid, bindings, t) => (fnid, bindings, t),
+        _ => unreachable!(
+            "Lambda called with something other than PartialFnBodyWithType {:?}",
+            value
+        ),
+    };
+
+    info!("LAMBDA: type {:?}", t);
+
+    let (arg_type, effects, res_type) = match t {
+        ABT::Tm(Type::Arrow(arg, res)) => match &*res {
+            ABT::Tm(Type::Effect(effects, inner)) => (
+                arg,
+                match &**effects {
+                    ABT::Tm(Type::Effects(inner)) => inner.clone(),
+                    _ => unreachable!("Invalid effects first argument: {:?}", effects),
+                },
+                res,
+            ),
+            _ => (arg, vec![], res),
+        },
+        _ => unreachable!("Unexpected fn type: {:?}", t),
+    };
+    info!("Effects: {:?}", effects);
+
+    use std::iter::FromIterator;
+    let effects_set = std::collections::HashSet::from_iter(effects.into_iter());
+
+    let mut state = shared::state::State::lambda(
+        &env,
+        fnid,
+        bindings,
+        // value,
+        shared::convert::convert_arg(WrappedValue(arg), &arg_type, vec![]).unwrap(),
+        &*arg_type,
+        shared::state::build_effects_map(effects_set),
+    )
+    .expect("Invalid Resume arg type");
+    let mut trace = shared::chrome_trace::Traces::new();
+    let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
+    Ok(val
+        .map(|m| crate::unwrap::unwrap(&m))
+        .unwrap_or(JsValue::UNDEFINED))
+}
+
+#[wasm_bindgen]
 pub fn resume(
     env_id: usize,
     kont: JsValue,
@@ -112,33 +202,85 @@ pub fn resume(
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    // let hash = shared::types::Hash::from_string(term);
-    // let t = &env.terms.get(&hash).unwrap().1;
-    // // TODO effects!
-    // let (targs, _effects, _tres) = shared::ir_runtime::extract_args(t);
-    // let args = shared::ir_runtime::convert_args(
-    //     args.into_iter().map(|x| WrappedValue(x)).collect(),
-    //     &targs,
-    // )?;
-    // let eval_hash = env.add_eval(term, args)?;
+    let (kind, constructor_no, frames, kidx): (Reference, usize, Vec<shared::frame::Frame>, usize) =
+        kont.into_serde().unwrap();
 
-    let the_arg_type = env.types.get()
+    let t = env.get_ability_type(&kind, constructor_no);
 
-    let (frames, kidx): (Vec<shared::frame::Frame>, usize) = arg.into_serde().unwrap();
-
-    let mut state = shared::ir_runtime::State::full_resume(
+    let mut state = shared::state::State::full_resume(
         &env,
+        kind,
+        constructor_no,
         frames,
         kidx,
-        shared::ir_runtime::convert_arg(WrappedValue(arg)),
-    );
+        Arc::new(shared::convert::convert_arg(WrappedValue(arg), &t, vec![]).unwrap()),
+    )
+    .expect("Invalid Resume arg type");
     let mut trace = shared::chrome_trace::Traces::new();
     let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
-    Ok(JsValue::from_serde(&val).unwrap())
+    Ok(val
+        .map(|m| unwrap::unwrap(&m))
+        .unwrap_or(JsValue::UNDEFINED))
 }
 
 #[wasm_bindgen]
 pub fn run_sync(
+    env_id: usize,
+    term: &str,
+    args: Vec<JsValue>,
+    raw_handlers: Vec<JsValue>,
+) -> Result<JsValue, JsValue> {
+    // TODO bail if any handlers aer async?
+    let mut ffi = FFI::from(raw_handlers);
+
+    let mut l = ENV.lock().unwrap();
+    let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
+
+    let hash = shared::types::Hash::from_string(term);
+    let t = &env.terms.get(&hash).unwrap().1;
+    // TODO effects!
+    let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
+    for effect in effects.iter() {
+        use shared::ffi::FFI;
+        if !effect.is_var() && !ffi.handles(&effect.as_tm().unwrap().as_reference().unwrap()) {
+            return Err(JsValue::from(format!(
+                "Doesn't handle all effects: {:?}",
+                effect
+            )));
+        }
+    }
+    let args =
+        shared::convert::convert_args(args.into_iter().map(|x| WrappedValue(x)).collect(), &targs)?;
+
+    let eval_hash = env.add_eval(term, args)?;
+
+    let mut state = shared::state::State::new_value(
+        &env,
+        eval_hash,
+        false,
+        shared::state::build_effects_map(effects),
+    );
+    let mut trace = shared::chrome_trace::Traces::new();
+    let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
+    Ok(unwrap::unwrap(
+        &val.expect("This was expected to be synchronous"),
+    ))
+}
+
+#[wasm_bindgen]
+pub fn enable_logging() {
+    // CONSOLE.LOG right here to turn it on
+    wasm_logger::init(wasm_logger::Config::default());
+}
+
+#[wasm_bindgen]
+pub fn enable_logging_with_prefix(prefix: &str) {
+    // CONSOLE.LOG right here to turn it on
+    wasm_logger::init(wasm_logger::Config::default().module_prefix(prefix));
+}
+
+#[wasm_bindgen]
+pub fn run(
     env_id: usize,
     term: &str,
     args: Vec<JsValue>,
@@ -151,26 +293,40 @@ pub fn run_sync(
 
     let hash = shared::types::Hash::from_string(term);
     let t = &env.terms.get(&hash).unwrap().1;
-    // TODO effects!
-    let (targs, _effects, _tres) = shared::ir_runtime::extract_args(t);
-    let args = shared::ir_runtime::convert_args(
-        args.into_iter().map(|x| WrappedValue(x)).collect(),
-        &targs,
-    )?;
+    // TODO validate that all effects are handled!
+    let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
+    for effect in effects.iter() {
+        use shared::ffi::FFI;
+        if !effect.is_var()
+            && !ffi.handles(
+                &effect
+                    .as_tm()
+                    .expect("Not a TM")
+                    .as_reference()
+                    .expect("Not a reference"),
+            )
+        {
+            return Err(JsValue::from(format!(
+                "Doesn't handle all effects: {:?}",
+                effect
+            )));
+        }
+    }
+    let args =
+        shared::convert::convert_args(args.into_iter().map(|x| WrappedValue(x)).collect(), &targs)?;
 
     let eval_hash = env.add_eval(term, args)?;
 
-    let mut state = shared::ir_runtime::State::new_value(&env, eval_hash, false);
+    let mut state = shared::state::State::new_value(
+        &env,
+        eval_hash,
+        false,
+        shared::state::build_effects_map(effects),
+    );
     let mut trace = shared::chrome_trace::Traces::new();
-    let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
-    Ok(JsValue::from_serde(&val).unwrap())
+    let _ignored = state.run_to_end(&mut ffi, &mut trace);
+    Ok(JsValue::UNDEFINED)
 }
-
-// #[wasm_bindgen]
-// extern "C" {
-//     #[wasm_bindgen(js_namespace = console)]
-//     fn log(s: &str);
-// }
 
 #[wasm_bindgen]
 pub fn load(data: &str) -> usize {
@@ -182,7 +338,7 @@ pub fn load(data: &str) -> usize {
 #[derive(Debug)]
 struct WrappedValue(JsValue);
 
-impl shared::ir_runtime::ConvertibleArg<WrappedValue> for WrappedValue {
+impl shared::convert::ConvertibleArg<WrappedValue> for WrappedValue {
     fn as_f64(&self) -> Option<f64> {
         self.0.as_f64()
     }
@@ -195,51 +351,4 @@ impl shared::ir_runtime::ConvertibleArg<WrappedValue> for WrappedValue {
     fn is_empty(&self) -> bool {
         self.0.is_null() || self.0.is_undefined()
     }
-    // fn from_value()
-}
-
-#[wasm_bindgen]
-pub fn eval_fn(env_id: usize, hash_raw: &str, values: Vec<JsValue>) -> Result<JsValue, JsValue> {
-    console_error_panic_hook::set_once();
-
-    let mut ffi = FFI(HashMap::new());
-
-    let mut l = ENV.lock().unwrap();
-    let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
-
-    let hash = shared::types::Hash::from_string(hash_raw);
-    let t = &env.terms.get(&hash).unwrap().1;
-    // TODO effects!
-    let (targs, _effects, _tres) = shared::ir_runtime::extract_args(t);
-    let args = shared::ir_runtime::convert_args(
-        values.into_iter().map(|x| WrappedValue(x)).collect(),
-        &targs,
-    )?;
-
-    let eval_hash = env.add_eval(hash_raw, args)?;
-
-    let mut state =
-        shared::ir_runtime::State::new_value(&l.map.get(&env_id).unwrap(), eval_hash, false);
-    let mut trace = shared::chrome_trace::Traces::new();
-    let val = state.run_to_end(&mut ffi, &mut trace).unwrap();
-    Ok(JsValue::from_serde(&val).unwrap())
-}
-
-#[wasm_bindgen]
-pub fn evalit(env_id: usize, hash: &str) -> JsValue {
-    console_error_panic_hook::set_once();
-
-    let mut ffi = FFI(HashMap::new());
-
-    let mut trace = shared::chrome_trace::Traces::new();
-    let l = ENV.lock().unwrap();
-    let val = shared::ir_runtime::eval(
-        &l.map.get(&env_id).unwrap(),
-        &mut ffi,
-        &hash,
-        &mut trace,
-        false,
-    )
-    .unwrap();
-    JsValue::from_serde(&val).unwrap()
 }

@@ -65,7 +65,7 @@ impl Buffer {
         T::get(self, env, fvs)
     }
 
-    pub fn get_branch(&mut self) -> crate::Causal<crate::RawBranch> {
+    pub fn get_branch(&mut self) -> crate::branch::Causal<crate::branch::RawBranch> {
         self.get()
     }
 
@@ -433,9 +433,9 @@ impl FromBuffer for ABT<Term> {
     }
 }
 
-impl<T: FromBuffer> FromBuffer for crate::Causal<T> {
+impl<T: FromBuffer> FromBuffer for crate::branch::Causal<T> {
     fn get(buf: &mut Buffer) -> Self {
-        use crate::Causal::*;
+        use crate::branch::Causal::*;
         let tag = buf.get();
         match tag {
             0_u8 => One(buf.get()),
@@ -465,9 +465,9 @@ impl<K: FromBuffer + std::hash::Hash + std::cmp::Eq + Clone, V: FromBuffer> From
     }
 }
 
-impl FromBuffer for crate::RawBranch {
+impl FromBuffer for crate::branch::RawBranch {
     fn get(buf: &mut Buffer) -> Self {
-        crate::RawBranch {
+        crate::branch::RawBranch {
             terms: buf.get(),
             types: buf.get(),
             children: buf.get(),
