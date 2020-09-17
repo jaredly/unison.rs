@@ -37,14 +37,16 @@ pub fn unwrap_tuple(value: &Value) -> Vec<&Value> {
     return vec![value];
 }
 
+use std::collections::HashMap;
+
 #[derive(Default)]
-pub struct Names {
-    pub terms: std::collections::HashMap<String, Vec<String>>,
-    pub types: std::collections::HashMap<String, Vec<String>>,
-    pub constructors: std::collections::HashMap<(String, usize), Vec<String>>,
+pub struct FlatNames {
+    pub terms: HashMap<String, Vec<String>>,
+    pub types: HashMap<String, Vec<String>>,
+    pub constructors: HashMap<(String, usize), Vec<String>>,
 }
 
-fn value_to_doc(value: &Value, names: &Names) -> pretty::RcDoc<'static, ()> {
+fn value_to_doc(value: &Value, names: &FlatNames) -> pretty::RcDoc<'static, ()> {
     use Value::*;
     match value {
         Sequence(items) => RcDoc::text("[")
@@ -117,7 +119,7 @@ fn value_to_doc(value: &Value, names: &Names) -> pretty::RcDoc<'static, ()> {
     }
 }
 
-pub fn value_to_pretty(value: &Value, names: &Names, width: usize) -> String {
+pub fn value_to_pretty(value: &Value, names: &FlatNames, width: usize) -> String {
     let mut w = Vec::new();
     value_to_doc(value, names).render(width, &mut w).unwrap();
     String::from_utf8(w).unwrap()

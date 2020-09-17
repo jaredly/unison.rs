@@ -100,7 +100,7 @@ pub fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
     let mut trace = shared::chrome_trace::Traces::new();
 
     let mut names = Default::default();
-    branch.get_names(&vec![], &mut names);
+    branch.get_flat_names(&vec![], &mut names);
     let mut ffi = ffi::RustFFI(names, vec![]);
 
     // for effect in effects {
@@ -189,7 +189,7 @@ pub fn run_term(
 
     let mut trace = shared::chrome_trace::Traces::new();
     let names = Default::default();
-    // branch.get_names(&vec![], &mut names);
+    // branch.get_flat_names(&vec![], &mut names);
     let mut ffi = ffi::RustFFI(names, vec![]);
     let ret = shared::ir_runtime::eval(
         &runtime_env,

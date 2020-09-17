@@ -1,4 +1,4 @@
-use crate::branch::Branch;
+use crate::branch::Codebase;
 use crate::env;
 use crate::ir;
 use crate::visitor;
@@ -71,11 +71,11 @@ pub fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> 
     println!("Packing all the terms I can find");
     let root = terms_path.parent().unwrap();
     let paths = path_with(&root, "paths");
-    let mut branch = Branch::load(&paths, get_head(&root)?)?;
-    branch.load_children(&paths, true)?;
+    let mut codebase = Codebase::new(root.to_owned())?;
+    codebase.load_all();
 
     let mut all_terms = std::collections::HashMap::new();
-    branch.collect_terms(&vec![], &mut all_terms);
+    codebase.collect_terms(&codebase.head.clone(), &vec![], &mut all_terms);
 
     let env = env::Env::init(root);
     let mut ir_env = ir::TranslationEnv::new(env);
@@ -101,17 +101,40 @@ pub fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> 
     std::fs::write(out, shared::pack(&runtime_env))?;
     std::fs::write(
         out.to_owned() + ".json",
-        serde_json::to_string(&branch_names(&branch).serialize()).unwrap(),
+        serde_json::to_string(&codebase.get_names().serialize()).unwrap(),
     )?;
 
     Ok(())
 }
 
-struct Names<T: ToString> {
-    terms: HashMap<T, Vec<Vec<String>>>,
-    constrs: HashMap<T, HashMap<usize, Vec<Vec<String>>>>,
-    types: HashMap<T, Vec<Vec<String>>>,
+pub struct Names<T: ToString> {
+    pub terms: HashMap<T, Vec<Vec<String>>>,
+    pub constrs: HashMap<T, HashMap<usize, Vec<Vec<String>>>>,
+    pub types: HashMap<T, Vec<Vec<String>>>,
 }
+
+impl Default for Names<Hash> {
+    fn default() -> Self {
+        Names {
+            terms: Default::default(),
+            constrs: Default::default(),
+            types: Default::default(),
+        }
+    }
+}
+
+// impl From<&crate::printer::FlatNames> for Names<String> {
+//     fn from(other: &crate::printer::FlatNames) -> Self {
+//         let mut constrs = HashMap::new();
+//         for ((k, n), v) in other.constructors.iter() {
+//             if !constrs.contains_key(k) {
+//                 constrs.insert(k.clone(), HashMap::new());
+//             }
+//             constrs.get_mut(k).unwrap().insert(n, v);
+//         }
+//         Names {terms: other.terms.clone(), constrs, types: other.types.clone()}
+//     }
+// }
 
 impl<T: ToString> Names<T> {
     fn serialize(
@@ -132,22 +155,20 @@ impl<T: ToString> Names<T> {
     }
 }
 
-fn branch_names(branch: &Branch) -> Names<Hash> {
-    let mut all_names = HashMap::new();
-    let mut all_constr_names = HashMap::new();
-    branch.collect_names(&vec![], &mut all_names, &mut all_constr_names);
-    let mut all_type_names = HashMap::new();
-    branch.type_names(&vec![], &mut all_type_names);
-    Names {
-        terms: all_names,
-        constrs: all_constr_names,
-        types: all_type_names,
-    }
-}
+// fn branch_names(codebase: &Codebase) -> Names<Hash> {
+//     let mut all_names = HashMap::new();
+//     let mut all_constr_names = HashMap::new();
+//     codebase.collect_terms_and_constructors(&vec![], &mut all_names, &mut all_constr_names);
+//     let mut all_type_names = HashMap::new();
+//     codebase.collect_types(&vec![], &mut all_type_names);
+//     Names {
+//         terms: all_names,
+//         constrs: all_constr_names,
+//         types: all_type_names,
+//     }
+// }
 
-fn env_names(branch: &Branch, runtime_env: &RuntimeEnv) -> Names<String> {
-    let names = branch_names(branch);
-
+fn env_names(names: &Names<Hash>, runtime_env: &RuntimeEnv) -> Names<String> {
     let mut term_names = HashMap::new();
     let mut constr_names = HashMap::new();
     for hash in runtime_env.terms.keys() {
@@ -230,18 +251,20 @@ fn walk_env(env: &mut env::Env) {
     }
 }
 
-fn load_main_branch(root: &std::path::Path) -> std::io::Result<Branch> {
+fn load_main_branch(root: &std::path::Path) -> std::io::Result<Codebase> {
     println!("Loading all namespaces");
-    let paths = path_with(&root, "paths");
-    let mut branch = Branch::load(&paths, get_head(&root)?)?;
-    branch.load_children(&paths, true)?;
+    // let paths = path_with(&root, "paths");
+    // let mut codebase = Codebase::load(&paths, get_head(&root)?)?;
+    // codebase.load_children(&paths, true)?;
+    let mut codebase = Codebase::new(root.to_owned())?;
+    codebase.load_all()?;
     println!("Finished loading namespaces");
 
-    Ok(branch)
+    Ok(codebase)
 }
 
 pub fn pack_term_json(
-    branch: Branch,
+    codebase: Codebase,
     root: &std::path::Path,
     hash: &str,
     out: &str,
@@ -250,7 +273,8 @@ pub fn pack_term_json(
 
     std::fs::write(
         out.to_owned() + ".names.json",
-        serde_json::to_string_pretty(&env_names(&branch, &runtime_env).serialize()).unwrap(),
+        serde_json::to_string_pretty(&env_names(&codebase.get_names(), &runtime_env).serialize())
+            .unwrap(),
     )?;
 
     std::fs::write(
@@ -260,7 +284,7 @@ pub fn pack_term_json(
 }
 
 pub fn pack_term(
-    branch: Branch,
+    codebase: &Codebase,
     root: &std::path::Path,
     hash: &str,
     out: &str,
@@ -269,7 +293,8 @@ pub fn pack_term(
 
     std::fs::write(
         out.to_owned() + ".json",
-        serde_json::to_string_pretty(&env_names(&branch, &runtime_env).serialize()).unwrap(),
+        serde_json::to_string_pretty(&env_names(&codebase.get_names(), &runtime_env).serialize())
+            .unwrap(),
     )?;
 
     std::fs::write(out, shared::pack(&runtime_env))?;
@@ -283,11 +308,11 @@ pub fn pack_all_json(file: &String, outfile: &String) -> std::io::Result<()> {
     println!("Packing all the terms I can find");
     let root = terms_path.parent().unwrap();
     let paths = path_with(&root, "paths");
-    let mut branch = Branch::load(&paths, get_head(&root)?)?;
-    branch.load_children(&paths, true)?;
+    let mut codebase = Codebase::new(root.to_owned())?;
+    codebase.load_all();
 
     let mut all_terms = std::collections::HashMap::new();
-    branch.collect_terms(&vec![], &mut all_terms);
+    codebase.collect_terms(&codebase.head.clone(), &vec![], &mut all_terms);
 
     let env = env::Env::init(root);
     let mut ir_env = ir::TranslationEnv::new(env);
@@ -312,7 +337,7 @@ pub fn pack_all_json(file: &String, outfile: &String) -> std::io::Result<()> {
 
     std::fs::write(
         outfile.to_owned() + ".names.json",
-        serde_json::to_string_pretty(&branch_names(&branch).serialize()).unwrap(),
+        serde_json::to_string_pretty(&codebase.get_names().serialize()).unwrap(),
     )?;
     std::fs::write(
         outfile,
@@ -329,14 +354,10 @@ pub fn default_root() -> std::path::PathBuf {
     project
 }
 
-fn find_term(root: &std::path::Path, branch: &mut Branch, term: &str) -> Hash {
-    let paths = path_with(&root, "paths");
+fn find_term(codebase: &mut Codebase, term: &str) -> Hash {
     if &term[0..1] == "." {
-        branch
-            .find_term(
-                &paths,
-                &term[1..].split(".").collect::<Vec<&str>>().as_slice(),
-            )
+        codebase
+            .find_term(&term[1..].split(".").collect::<Vec<&str>>().as_slice())
             .unwrap()
     } else {
         types::Hash::from_string(term)
@@ -347,14 +368,14 @@ pub fn pack_json(file: &String, outfile: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
     if path.exists() {
         let root = path.parent().unwrap().parent().unwrap();
-        let branch = load_main_branch(root)?;
+        let codebase = load_main_branch(root)?;
         let hash = &path.file_name().unwrap().to_str().unwrap()[1..];
-        pack_term_json(branch, root, &hash, outfile)?;
+        pack_term_json(codebase, root, &hash, outfile)?;
     } else {
         let root = default_root();
-        let mut branch = load_main_branch(root.as_path())?;
-        let hash = find_term(root.as_path(), &mut branch, file);
-        pack_term_json(branch, root.as_path(), &hash.0, outfile)?;
+        let mut codebase = load_main_branch(root.as_path())?;
+        let hash = find_term(&mut codebase, file);
+        pack_term_json(codebase, root.as_path(), &hash.0, outfile)?;
     }
 
     return Ok(());
@@ -365,14 +386,14 @@ pub fn pack(file: &String, outfile: &String) -> std::io::Result<()> {
 
     if path.exists() {
         let root = path.parent().unwrap().parent().unwrap();
-        let branch = load_main_branch(root)?;
+        let codebase = load_main_branch(root)?;
         let hash = &path.file_name().unwrap().to_str().unwrap()[1..];
-        pack_term(branch, root, &hash, outfile)
+        pack_term(&codebase, root, &hash, outfile)
     } else {
         let root = default_root();
-        let mut branch = load_main_branch(root.as_path())?;
-        let hash = find_term(root.as_path(), &mut branch, file);
-        pack_term(branch, root.as_path(), &hash.0, outfile)
+        let mut codebase = load_main_branch(root.as_path())?;
+        let hash = find_term(&mut codebase, file);
+        pack_term(&codebase, root.as_path(), &hash.0, outfile)
     }
 }
 
@@ -386,9 +407,9 @@ pub fn pack_watch(term: &String, outfile: &String) -> std::io::Result<()> {
 
     let now = std::time::Instant::now();
     println!("Initial build...");
-    let mut branch = load_main_branch(root.as_path())?;
-    let hash = find_term(root.as_path(), &mut branch, term);
-    pack_term(branch, root.as_path(), &hash.0, outfile)?;
+    let mut codebase = load_main_branch(root.as_path())?;
+    let hash = find_term(&mut codebase, term);
+    pack_term(&codebase, root.as_path(), &hash.0, outfile)?;
     println!("Finished! {:?}", now.elapsed());
 
     // Create a channel to receive the events.
@@ -413,9 +434,9 @@ pub fn pack_watch(term: &String, outfile: &String) -> std::io::Result<()> {
                 notify::DebouncedEvent::Remove(_) => {
                     println!("Rebuilding...");
                     let now = std::time::Instant::now();
-                    let mut branch = load_main_branch(root.as_path())?;
-                    let hash = find_term(root.as_path(), &mut branch, term);
-                    pack_term(branch, root.as_path(), &hash.0, outfile)?;
+                    codebase.reload()?;
+                    let hash = find_term(&mut codebase, term);
+                    pack_term(&codebase, root.as_path(), &hash.0, outfile)?;
                     println!("Finished! {:?}", now.elapsed());
                 }
                 _ => (),
