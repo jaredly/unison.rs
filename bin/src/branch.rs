@@ -1,7 +1,9 @@
 use crate::parser;
+use log::info;
 use shared::types;
 use shared::types::*;
 use std::collections::HashMap;
+
 #[derive(Debug, Clone)]
 pub enum Causal<Contents> {
     One(Contents),
@@ -33,6 +35,7 @@ pub struct Branch {
 
 impl Branch {
     pub fn load(root: &std::path::PathBuf, hash: String) -> std::io::Result<Branch> {
+        info!("Loading branch : {}", hash);
         let mut head = root.clone();
         head.push(hash + ".ub");
         let head = parser::Buffer::from_file(head.as_path())?.get_branch();
@@ -44,6 +47,7 @@ impl Branch {
     }
 
     pub fn load_child(&mut self, root: &std::path::PathBuf, child: &str) -> std::io::Result<()> {
+        info!("Loading child : {}", child);
         let seg = NameSegment {
             text: child.to_owned(),
         };

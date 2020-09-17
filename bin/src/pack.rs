@@ -126,28 +126,6 @@ impl<T: ToString> Names<T> {
     }
 }
 
-// fn all_branch_names(branch: &Branch) -> Names<Hash> {
-//     let (all_names, all_constr_names, all_type_names) = branch_names(branch);
-//     use std::iter::FromIterator;
-//     let term_names = HashMap::from_iter(all_names.iter().map(|(k, v)| (k.to_string(), v.clone())));
-//     let constr_names = HashMap::from_iter(
-//         all_constr_names
-//             .iter()
-//             .map(|(k, v)| (k.to_string(), v.clone())),
-//     );
-//     let type_names = HashMap::from_iter(
-//         all_type_names
-//             .iter()
-//             .map(|(k, v)| (k.to_string(), v.clone())),
-//     );
-
-//     Names {
-//         terms: term_names,
-//         constrs: constr_names,
-//         types: type_names,
-//     }
-// }
-
 fn branch_names(branch: &Branch) -> Names<Hash> {
     let mut all_names = HashMap::new();
     let mut all_constr_names = HashMap::new();
@@ -170,15 +148,15 @@ fn env_names(branch: &Branch, runtime_env: &RuntimeEnv) -> Names<String> {
         if names.terms.contains_key(hash) {
             term_names.insert(hash.to_string(), names.terms.get(hash).unwrap().clone());
         }
-        if names.constrs.contains_key(hash) {
-            constr_names.insert(hash.to_string(), names.constrs.get(hash).unwrap().clone());
-        }
     }
 
     let mut type_names = HashMap::new();
     for hash in runtime_env.types.keys() {
         if names.types.contains_key(hash) {
             type_names.insert(hash.to_string(), names.types.get(hash).unwrap().clone());
+        }
+        if names.constrs.contains_key(hash) {
+            constr_names.insert(hash.to_string(), names.constrs.get(hash).unwrap().clone());
         }
     }
 
@@ -247,9 +225,11 @@ fn walk_env(env: &mut env::Env) {
 }
 
 fn load_main_branch(root: &std::path::Path) -> std::io::Result<Branch> {
+    println!("Loading all namespaces");
     let paths = path_with(&root, "paths");
     let mut branch = Branch::load(&paths, get_head(&paths)?)?;
     branch.load_children(&paths, true)?;
+    println!("Finished loading namespaces");
 
     Ok(branch)
 }
@@ -376,8 +356,6 @@ pub fn pack_json(file: &String, outfile: &String) -> std::io::Result<()> {
 
 pub fn pack(file: &String, outfile: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
-    // let root = path.parent().unwrap().parent().unwrap();
-    // let branch = load_main_branch(root)?;
 
     if path.exists() {
         let root = path.parent().unwrap().parent().unwrap();

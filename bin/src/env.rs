@@ -58,7 +58,7 @@ impl Env {
                 full.push("terms");
                 full.push("#".to_owned() + hash);
                 full.push("compiled.ub");
-                info!("Trying to load {:?}", full);
+                info!("Trying to load term {:?}", full);
                 let file = full.as_path();
                 if !file.exists() {
                     return Err(Error::TermNotFound(hash.to_owned()));
