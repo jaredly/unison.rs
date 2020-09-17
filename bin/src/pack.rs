@@ -180,7 +180,11 @@ fn env_names(
     (term_names, constr_names, type_names)
 }
 
-pub fn term_to_env(root: &std::path::Path, hash: &str, _out: &str) -> std::io::Result<RuntimeEnv> {
+pub fn term_to_env(
+    root: &std::path::Path,
+    hash: &str,
+    _out: &str,
+) -> std::io::Result<ir::TranslationEnv> {
     let env = env::Env::init(&root);
     let mut ir_env = ir::TranslationEnv::new(env);
     ir_env.load(&types::Hash::from_string(hash)).unwrap();
@@ -195,7 +199,7 @@ pub fn term_to_env(root: &std::path::Path, hash: &str, _out: &str) -> std::io::R
         }
     }
 
-    Ok(ir_env.into())
+    Ok(ir_env)
 }
 
 #[derive(Serialize, Debug)]
@@ -223,7 +227,7 @@ impl JsonEnv {
 
 pub fn pack_term_json(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
     let root = terms_path.parent().unwrap();
-    let runtime_env = term_to_env(root, hash, out)?;
+    let runtime_env = term_to_env(root, hash, out)?.into();
 
     let paths = path_with(&root, "paths");
     let mut branch = Branch::load(&paths, get_head(&paths)?)?;
@@ -242,7 +246,19 @@ pub fn pack_term_json(terms_path: &std::path::Path, hash: &str, out: &str) -> st
 
 pub fn pack_term(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
     let root = terms_path.parent().unwrap();
-    let runtime_env = term_to_env(root, hash, out)?;
+    let mut ir_env = term_to_env(root, hash, out)?;
+
+    {
+        let mut walker = TypeWalker(&mut ir_env.env);
+        let ks: Vec<String> = walker.0.type_cache.keys().cloned().collect();
+        for k in ks {
+            use visitor::Accept;
+            let mut m = walker.0.load_type(&k);
+            m.accept(&mut walker);
+        }
+    }
+
+    let runtime_env = ir_env.into();
 
     let paths = path_with(&root, "paths");
     let mut branch = Branch::load(&paths, get_head(&paths)?)?;

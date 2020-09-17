@@ -24,6 +24,11 @@ const convert_handlers = (handlers, typeNameHashes, names) => {
             console.log(typeNameHashes);
             throw new Error(`Hash not found for ability ${abilityName}`);
         }
+        if (!names[1][hash]) {
+            throw new Error(
+                `No constructor data found for #${hash.slice(0, 10)}`,
+            );
+        }
         Object.keys(handlers[abilityName]).forEach((constrName) => {
             const v = handlers[abilityName][constrName];
             const idx = Object.keys(names[1][hash]).find((idx) => {
