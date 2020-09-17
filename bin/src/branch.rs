@@ -9,33 +9,11 @@ pub enum Causal<Contents> {
     Merge(Vec<Hash>, Contents),
 }
 
-fn resolve_branch(
-    _root: &std::path::Path,
-    branch: Causal<RawBranch>,
-) -> std::io::Result<RawBranch> {
+fn resolve_branch(branch: Causal<RawBranch>) -> std::io::Result<RawBranch> {
     match branch {
         Causal::One(c) => Ok(c),
-        Causal::Cons(_, b) => {
-            // let mut p = std::path::PathBuf::from(root);
-            // p.push(h.to_string() + ".ub");
-            // // println!("Resolve: {:?}", p);
-            // b.merge(&resolve_branch(
-            //     root,
-            //     parser::Buffer::from_file(p.as_path())?.get_branch(),
-            // )?);
-            Ok(b)
-        }
-        Causal::Merge(_, b) => {
-            // for hash in hashes.iter() {
-            //     let mut p = std::path::PathBuf::from(root);
-            //     p.push(hash.to_string() + ".ub");
-            //     b.merge(&resolve_branch(
-            //         root,
-            //         parser::Buffer::from_file(p.as_path())?.get_branch(),
-            //     )?)
-            // }
-            Ok(b)
-        }
+        Causal::Cons(_, b) => Ok(b),
+        Causal::Merge(_, b) => Ok(b),
     }
 }
 
@@ -57,9 +35,8 @@ impl Branch {
     pub fn load(root: &std::path::PathBuf, hash: String) -> std::io::Result<Branch> {
         let mut head = root.clone();
         head.push(hash + ".ub");
-        // println!("Yes: {:?}", head);
         let head = parser::Buffer::from_file(head.as_path())?.get_branch();
-        let head = resolve_branch(&root, head)?;
+        let head = resolve_branch(head)?;
         Ok(Branch {
             raw: head,
             children: std::collections::HashMap::new(),

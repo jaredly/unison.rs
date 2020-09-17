@@ -268,6 +268,18 @@ pub fn run_sync(
 }
 
 #[wasm_bindgen]
+pub fn enable_logging() {
+    // CONSOLE.LOG right here to turn it on
+    wasm_logger::init(wasm_logger::Config::default());
+}
+
+#[wasm_bindgen]
+pub fn enable_logging_with_prefix(prefix: &str) {
+    // CONSOLE.LOG right here to turn it on
+    wasm_logger::init(wasm_logger::Config::default().module_prefix(prefix));
+}
+
+#[wasm_bindgen]
 pub fn run(
     env_id: usize,
     term: &str,
@@ -278,9 +290,6 @@ pub fn run(
 
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
-
-    // CONSOLE.LOG right here to turn it on
-    // wasm_logger::init(wasm_logger::Config::default());
 
     let hash = shared::types::Hash::from_string(term);
     let t = &env.terms.get(&hash).unwrap().1;

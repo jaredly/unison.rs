@@ -58,7 +58,14 @@ const convert_handlers = (handlers, typeNameHashes, names) => {
     return res;
 };
 
-export default async (dataPromise, namesPromise) => {
+export const fetch = (dataUrl) => {
+    return load(
+        window.fetch(dataUrl).then((r) => r.text()),
+        window.fetch(dataUrl + '.json').then((r) => r.json()),
+    );
+};
+
+const load = async (dataPromise, namesPromise) => {
     const jsBridge = await js;
     const data = await dataPromise;
     const names = await namesPromise;
@@ -68,6 +75,10 @@ export default async (dataPromise, namesPromise) => {
     const hashesByTermName = hashesForTermName(names);
 
     return {
+        enableLogging: (prefix) =>
+            prefix
+                ? jsBridge.enable_logging_with_prefix(prefix)
+                : jsBridge.enable_logging(),
         run: (term, args, handlers) => {
             const hash = hashesByTermName[term];
             if (!hash) {
@@ -75,8 +86,8 @@ export default async (dataPromise, namesPromise) => {
                 throw new Error(`Term not found ${term}`);
             }
             const converted = convert_handlers(handlers, hashesByName, names);
-            console.log('converted', handlers, hashesByName, names);
-            console.log(converted);
+            // console.log('converted', handlers, hashesByName, names);
+            // console.log(converted);
             return jsBridge.run(id, hash, args, converted);
         },
         runSync: (term, args, handlers) => {
