@@ -14,6 +14,7 @@ mod pack;
 mod parser;
 mod printer;
 mod run;
+mod server;
 mod unique;
 mod visitor;
 
