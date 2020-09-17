@@ -9,6 +9,7 @@ fetch('./data/all.bin').then(
     (err) => console.error(err),
 );
 
+// TODO: this is super slow
 // fetch('./data/get_random_ints.bin').then(
 //     (runtime) => {
 //         window.runtime = runtime;
