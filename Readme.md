@@ -10,3 +10,10 @@ An experimental runtime for unison code, written in rust, compiled to wasm for u
 - open `http://localhost:8080`!
 
 ![screenshot](./screenshot.png)
+
+
+## Dreamcode:
+
+- download the binary, run `unison_rs pack-watch .my-app data/my-app.bin`
+- run `yarn serve`
+- hmmmmmmmm what if I have a quickstart that doesn't rely on webpack? because we've got everything prebuilt.... hmm.... yes.... probably want a rust server folks, yesiree

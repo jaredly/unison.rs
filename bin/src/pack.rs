@@ -70,9 +70,8 @@ pub fn get_head(root: &std::path::Path) -> std::io::Result<String> {
 pub fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> {
     println!("Packing all the terms I can find");
     let root = terms_path.parent().unwrap();
-    let paths = path_with(&root, "paths");
     let mut codebase = Codebase::new(root.to_owned())?;
-    codebase.load_all();
+    codebase.load_all()?;
 
     let mut all_terms = std::collections::HashMap::new();
     codebase.collect_terms(&codebase.head.clone(), &vec![], &mut all_terms);
@@ -307,9 +306,8 @@ pub fn pack_all_json(file: &String, outfile: &String) -> std::io::Result<()> {
 
     println!("Packing all the terms I can find");
     let root = terms_path.parent().unwrap();
-    let paths = path_with(&root, "paths");
     let mut codebase = Codebase::new(root.to_owned())?;
-    codebase.load_all();
+    codebase.load_all()?;
 
     let mut all_terms = std::collections::HashMap::new();
     codebase.collect_terms(&codebase.head.clone(), &vec![], &mut all_terms);
