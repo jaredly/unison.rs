@@ -1,0 +1,159 @@
+name: github release
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Use Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: 12
+
+      # Check the issue
+      - working-directory: .github/actions
+        id: check
+        run: node check.js
+
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: check
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: cargo build --release
+
+      - name: Upload artifacts ${{ matrix.os }}
+        uses: actions/upload-artifact@master
+        with:
+          name: ${{ matrix.os }}
+          path: target/release/unison_rs
+
+  publish:
+    needs: build
+    name: Publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Use Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: 12
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download linux artifacts
+        uses: actions/download-artifact@master
+        with:
+          name: ubuntu-latest
+          path: binaries/linux
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@master
+        with:
+          name: macOS-latest
+          path: binaries/darwin
+
+      - name: Download windows artifacts
+        uses: actions/download-artifact@master
+        with:
+          name: windows-latest
+          path: binaries/windows
+
+      # - name: Make zips
+      #   run: |
+
+      #     # https://docs.microsoft.com/en-us/azure/devops/pipelines/artifacts/build-artifacts?view=azure-devops&tabs=yaml
+      #     mkdir -p rls-windows
+      #     cp -r binaries/windows/bin.exe ./rls-windows/reason-language-server.exe
+      #     zip -r rls-windows.zip rls-windows
+
+      #     mkdir -p rls-linux
+      #     cp -r binaries/linux/bin.exe ./rls-linux/reason-language-server
+      #     chmod +x rls-linux/reason-language-server
+      #     zip -r rls-linux.zip rls-linux
+
+      #     mkdir -p rls-macos
+      #     cp -r binaries/darwin/bin.exe ./rls-macos/reason-language-server
+      #     chmod +x rls-macos/reason-language-server
+      #     zip -r rls-macos.zip rls-macos
+
+
+      # - name: Bundle up the vsix
+      #   run: |
+      #     cd editor-extensions/vscode
+      #     # Todo use more descriptive names for these binaries
+      #     cp ../../binaries/darwin/bin.exe ./bin.native
+      #     cp ../../binaries/windows/bin.exe ./bin.native.exe
+      #     cp ../../binaries/linux/bin.exe ./bin.native.linux
+      #     npm i
+      #     chmod +x bin.native.exe
+      #     chmod +x bin.native.linux
+      #     chmod +x bin.native
+      #     npx vsce@1.53.2 package --out ../../reason-vscode-${{ steps.version.outputs.version }}.vsix
+
+      # - name: Upload package tarball
+      #   uses: actions/upload-artifact@master
+      #   with:
+      #     name: package
+      #     path: reason-vscode-${{ steps.version.outputs.version }}.vsix
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          release_name: Release
+          draft: true
+          prerelease: false
+
+      - name: Upload Windows Binary
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: binaries/windows/unison_rs
+          asset_name: unison_rs-windows.exe
+          asset_content_type: application/executable
+
+      - name: Upload Linux Zip
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: binaries/linux/unison_rs
+          asset_name: unison_rs-linux
+          asset_content_type: application/executable
+
+      - name: Upload macOS Zip
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: binaries/darwin/unison_rs
+          asset_name: unison_rs-macos
+          asset_content_type: application/executable
+
+      # - name: Tag it up
+      #   run: |
+      #     git tag $(node -e 'process.stdout.write(require("./editor-extensions/vscode/package.json").version)')
+      #     git push --tags https://${GITHUB_ACTOR}:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
