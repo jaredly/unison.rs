@@ -111,6 +111,18 @@ jobs:
       #   with:
       #     name: package
       #     path: reason-vscode-${{ steps.version.outputs.version }}.vsix
+      - uses: actions/github-script@v3
+        id: get_tag
+        name: Generate a new release number
+        with:
+          script: |
+            const releases = await github.repos.listReleases(context.repo)
+            if (!releases.length) {
+              return 1
+            }
+            const num = releases[0].tag_name.match(/\d+/)
+            return parseInt(num[0]) + 1
+          result-encoding: string
 
       - name: Create Release
         id: create_release
@@ -118,7 +130,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          release_name: Release
+          release_name: Release ${{ steps.get_tag.outputs.result }}
+          tag_name: release-${{ steps.get_tag.outputs.result }}
           draft: true
           prerelease: false
 
