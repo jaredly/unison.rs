@@ -1,14 +1,13 @@
 use super::types::*;
-use super::types::{RuntimeEnv, IR};
-use log::info;
-use std::sync::Arc;
-
-use super::chrome_trace::Traces;
-use super::frame::Source;
+// use super::types::{RuntimeEnv, IR};
+// use log::info;
+// use std::sync::Arc;
+// use super::chrome_trace::Traces;
+// use super::frame::Source;
 
 pub static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8";
 pub const UNIT_HASH: &'static str = "568rsi7o3ghq8mmbea2sf8msdk20ohasob5s2rvjtqg2lr0vs39l1hm98urrjemsr3vo3fa52pibqu0maluq7g8sfg3h5f5re6vitj8";
-pub const TUPLE_HASH: &'static str = "onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0";
+// pub const TUPLE_HASH: &'static str = "onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0";
 
 pub trait ConvertibleArg<T: Sized> {
     fn as_f64(&self) -> Option<f64>;

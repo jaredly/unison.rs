@@ -23,9 +23,7 @@ impl shared::convert::ConvertibleArg<WrappedValue> for WrappedValue {
 }
 
 pub fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
-    let mut project: std::path::PathBuf = std::env::var("HOME").unwrap().into();
-    project.push(".unison");
-    project.push("v1");
+    let project = crate::pack::default_root();
 
     let terms_path = {
         let mut path = project.clone();

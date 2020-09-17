@@ -136,6 +136,12 @@ impl Reference {
 )]
 pub struct Hash(pub String);
 
+impl ToString for Hash {
+    fn to_string(&self) -> String {
+        self.0.clone()
+    }
+}
+
 impl Hash {
     pub fn from_string(hash: &str) -> Self {
         // if hash == "<eval>" {

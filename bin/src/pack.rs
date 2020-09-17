@@ -95,96 +95,105 @@ pub fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> 
     std::fs::write(out, shared::pack(&runtime_env))?;
     std::fs::write(
         out.to_owned() + ".json",
-        serde_json::to_string(&all_branch_names(&branch)).unwrap(),
+        serde_json::to_string(&branch_names(&branch).serialize()).unwrap(),
     )?;
 
     Ok(())
 }
 
-fn all_branch_names(
-    branch: &Branch,
-) -> (
-    HashMap<String, Vec<Vec<String>>>,
-    HashMap<String, HashMap<usize, Vec<Vec<String>>>>,
-    HashMap<String, Vec<Vec<String>>>,
-) {
-    let (all_names, all_constr_names, all_type_names) = branch_names(branch);
-    use std::iter::FromIterator;
-    let term_names = HashMap::from_iter(all_names.iter().map(|(k, v)| (k.to_string(), v.clone())));
-    let constr_names = HashMap::from_iter(
-        all_constr_names
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.clone())),
-    );
-    let type_names = HashMap::from_iter(
-        all_type_names
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.clone())),
-    );
-
-    (term_names, constr_names, type_names)
+struct Names<T: ToString> {
+    terms: HashMap<T, Vec<Vec<String>>>,
+    constrs: HashMap<T, HashMap<usize, Vec<Vec<String>>>>,
+    types: HashMap<T, Vec<Vec<String>>>,
 }
 
-fn branch_names(
-    branch: &Branch,
-) -> (
-    HashMap<Hash, Vec<Vec<String>>>,
-    HashMap<Hash, HashMap<usize, Vec<Vec<String>>>>,
-    HashMap<Hash, Vec<Vec<String>>>,
-) {
+impl<T: ToString> Names<T> {
+    fn serialize(
+        self,
+    ) -> (
+        HashMap<String, Vec<Vec<String>>>,
+        HashMap<String, HashMap<usize, Vec<Vec<String>>>>,
+        HashMap<String, Vec<Vec<String>>>,
+    ) {
+        use std::iter::FromIterator;
+        let term_names =
+            HashMap::from_iter(self.terms.iter().map(|(k, v)| (k.to_string(), v.clone())));
+        let constr_names =
+            HashMap::from_iter(self.constrs.iter().map(|(k, v)| (k.to_string(), v.clone())));
+        let type_names =
+            HashMap::from_iter(self.types.iter().map(|(k, v)| (k.to_string(), v.clone())));
+        (term_names, constr_names, type_names)
+    }
+}
+
+// fn all_branch_names(branch: &Branch) -> Names<Hash> {
+//     let (all_names, all_constr_names, all_type_names) = branch_names(branch);
+//     use std::iter::FromIterator;
+//     let term_names = HashMap::from_iter(all_names.iter().map(|(k, v)| (k.to_string(), v.clone())));
+//     let constr_names = HashMap::from_iter(
+//         all_constr_names
+//             .iter()
+//             .map(|(k, v)| (k.to_string(), v.clone())),
+//     );
+//     let type_names = HashMap::from_iter(
+//         all_type_names
+//             .iter()
+//             .map(|(k, v)| (k.to_string(), v.clone())),
+//     );
+
+//     Names {
+//         terms: term_names,
+//         constrs: constr_names,
+//         types: type_names,
+//     }
+// }
+
+fn branch_names(branch: &Branch) -> Names<Hash> {
     let mut all_names = HashMap::new();
     let mut all_constr_names = HashMap::new();
     branch.collect_names(&vec![], &mut all_names, &mut all_constr_names);
     let mut all_type_names = HashMap::new();
     branch.type_names(&vec![], &mut all_type_names);
-    (all_names, all_constr_names, all_type_names)
+    Names {
+        terms: all_names,
+        constrs: all_constr_names,
+        types: all_type_names,
+    }
 }
 
-fn env_names(
-    branch: &Branch,
-    runtime_env: &RuntimeEnv,
-) -> (
-    HashMap<String, Vec<Vec<String>>>,
-    HashMap<String, HashMap<usize, Vec<Vec<String>>>>,
-    HashMap<String, Vec<Vec<String>>>,
-) {
-    let (all_names, all_constr_names, all_type_names) = branch_names(branch);
-
-    // let mut all_names = HashMap::new();
-    // let mut all_constr_names = HashMap::new();
-    // branch.collect_names(&vec![], &mut all_names, &mut all_constr_names);
-    // let mut all_type_names = HashMap::new();
-    // branch.type_names(&vec![], &mut all_type_names);
+fn env_names(branch: &Branch, runtime_env: &RuntimeEnv) -> Names<String> {
+    let names = branch_names(branch);
 
     let mut term_names = HashMap::new();
     let mut constr_names = HashMap::new();
     for hash in runtime_env.terms.keys() {
-        if all_names.contains_key(hash) {
-            term_names.insert(hash.to_string(), all_names.get(hash).unwrap().clone());
+        if names.terms.contains_key(hash) {
+            term_names.insert(hash.to_string(), names.terms.get(hash).unwrap().clone());
         }
-        if all_constr_names.contains_key(hash) {
-            constr_names.insert(
-                hash.to_string(),
-                all_constr_names.get(hash).unwrap().clone(),
-            );
+        if names.constrs.contains_key(hash) {
+            constr_names.insert(hash.to_string(), names.constrs.get(hash).unwrap().clone());
         }
     }
 
     let mut type_names = HashMap::new();
     for hash in runtime_env.types.keys() {
-        if all_type_names.contains_key(hash) {
-            type_names.insert(hash.to_string(), all_type_names.get(hash).unwrap().clone());
+        if names.types.contains_key(hash) {
+            type_names.insert(hash.to_string(), names.types.get(hash).unwrap().clone());
         }
     }
 
-    (term_names, constr_names, type_names)
+    Names {
+        terms: term_names,
+        constrs: constr_names,
+        types: type_names,
+    }
 }
 
 pub fn term_to_env(
     root: &std::path::Path,
     hash: &str,
     _out: &str,
-) -> std::io::Result<ir::TranslationEnv> {
+) -> std::io::Result<types::RuntimeEnv> {
     let env = env::Env::init(&root);
     let mut ir_env = ir::TranslationEnv::new(env);
     ir_env.load(&types::Hash::from_string(hash)).unwrap();
@@ -199,7 +208,9 @@ pub fn term_to_env(
         }
     }
 
-    Ok(ir_env)
+    walk_env(&mut ir_env.env);
+
+    Ok(ir_env.into())
 }
 
 #[derive(Serialize, Debug)]
@@ -225,17 +236,35 @@ impl JsonEnv {
     }
 }
 
-pub fn pack_term_json(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
-    let root = terms_path.parent().unwrap();
-    let runtime_env = term_to_env(root, hash, out)?.into();
+fn walk_env(env: &mut env::Env) {
+    let mut walker = TypeWalker(env);
+    let ks: Vec<String> = walker.0.type_cache.keys().cloned().collect();
+    for k in ks {
+        use visitor::Accept;
+        let mut m = walker.0.load_type(&k);
+        m.accept(&mut walker);
+    }
+}
 
+fn load_main_branch(root: &std::path::Path) -> std::io::Result<Branch> {
     let paths = path_with(&root, "paths");
     let mut branch = Branch::load(&paths, get_head(&paths)?)?;
     branch.load_children(&paths, true)?;
 
+    Ok(branch)
+}
+
+pub fn pack_term_json(
+    branch: Branch,
+    root: &std::path::Path,
+    hash: &str,
+    out: &str,
+) -> std::io::Result<()> {
+    let runtime_env = term_to_env(root, hash, out)?;
+
     std::fs::write(
         out.to_owned() + ".names.json",
-        serde_json::to_string(&env_names(&branch, &runtime_env)).unwrap(),
+        serde_json::to_string_pretty(&env_names(&branch, &runtime_env).serialize()).unwrap(),
     )?;
 
     std::fs::write(
@@ -244,31 +273,20 @@ pub fn pack_term_json(terms_path: &std::path::Path, hash: &str, out: &str) -> st
     )
 }
 
-pub fn pack_term(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
-    let root = terms_path.parent().unwrap();
-    let mut ir_env = term_to_env(root, hash, out)?;
+pub fn pack_term(
+    branch: Branch,
+    root: &std::path::Path,
+    hash: &str,
+    out: &str,
+) -> std::io::Result<()> {
+    let runtime_env = term_to_env(root, hash, out)?;
 
-    {
-        let mut walker = TypeWalker(&mut ir_env.env);
-        let ks: Vec<String> = walker.0.type_cache.keys().cloned().collect();
-        for k in ks {
-            use visitor::Accept;
-            let mut m = walker.0.load_type(&k);
-            m.accept(&mut walker);
-        }
-    }
-
-    let runtime_env = ir_env.into();
-
-    let paths = path_with(&root, "paths");
-    let mut branch = Branch::load(&paths, get_head(&paths)?)?;
-    branch.load_children(&paths, true)?;
-
-    std::fs::write(out, shared::pack(&runtime_env))?;
     std::fs::write(
         out.to_owned() + ".json",
-        serde_json::to_string(&env_names(&branch, &runtime_env)).unwrap(),
+        serde_json::to_string_pretty(&env_names(&branch, &runtime_env).serialize()).unwrap(),
     )?;
+
+    std::fs::write(out, shared::pack(&runtime_env))?;
 
     Ok(())
 }
@@ -308,61 +326,68 @@ pub fn pack_all_json(file: &String, outfile: &String) -> std::io::Result<()> {
 
     std::fs::write(
         outfile.to_owned() + ".names.json",
-        serde_json::to_string(&all_branch_names(&branch)).unwrap(),
+        serde_json::to_string_pretty(&branch_names(&branch).serialize()).unwrap(),
     )?;
     std::fs::write(
         outfile,
-        serde_json::to_string(&JsonEnv::from_runtime(runtime_env)).unwrap(),
+        serde_json::to_string_pretty(&JsonEnv::from_runtime(runtime_env)).unwrap(),
     )?;
 
     Ok(())
+}
 
-    // pack_all_terms_json(
-    //     path.parent().unwrap(),
-    //     &path.file_name().unwrap().to_str().unwrap()[1..],
-    //     outfile,
-    // )?;
+pub fn default_root() -> std::path::PathBuf {
+    let mut project: std::path::PathBuf = std::env::var("HOME").unwrap().into();
+    project.push(".unison");
+    project.push("v1");
+    project
+}
 
-    // fn pack_term_json(terms_path: &std::path::Path, hash: &str, out: &str) -> std::io::Result<()> {
-    // let root = terms_path.parent().unwrap();
-    // let runtime_env = term_to_env(root, hash, out)?;
-
-    // let paths = path_with(&root, "paths");
-    // let mut branch = Branch::load(&paths, get_head(&paths)?)?;
-    // branch.load_children(&paths, true)?;
-
-    // std::fs::write(
-    //     out.to_owned() + ".names.json",
-    //     serde_json::to_string(&env_names(&branch, &runtime_env)).unwrap(),
-    // )?;
-
-    // std::fs::write(
-    //     out,
-    //     serde_json::to_string(&JsonEnv::from_runtime(runtime_env)).unwrap(),
-    // )
-    // }
-
-    // return Ok(());
+fn find_term(root: &std::path::Path, branch: &mut Branch, term: &str) -> Hash {
+    let paths = path_with(&root, "paths");
+    if &term[0..1] == "." {
+        branch
+            .find_term(
+                &paths,
+                &term[1..].split(".").collect::<Vec<&str>>().as_slice(),
+            )
+            .unwrap()
+    } else {
+        types::Hash::from_string(term)
+    }
 }
 
 pub fn pack_json(file: &String, outfile: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
+    if path.exists() {
+        let root = path.parent().unwrap().parent().unwrap();
+        let branch = load_main_branch(root)?;
+        let hash = &path.file_name().unwrap().to_str().unwrap()[1..];
+        pack_term_json(branch, root, &hash, outfile)?;
+    } else {
+        let root = default_root();
+        let mut branch = load_main_branch(root.as_path())?;
+        let hash = find_term(root.as_path(), &mut branch, file);
+        pack_term_json(branch, root.as_path(), &hash.0, outfile)?;
+    }
 
-    pack_term_json(
-        path.parent().unwrap(),
-        &path.file_name().unwrap().to_str().unwrap()[1..],
-        outfile,
-    )?;
     return Ok(());
 }
 
 pub fn pack(file: &String, outfile: &String) -> std::io::Result<()> {
     let path = std::path::PathBuf::from(file);
+    // let root = path.parent().unwrap().parent().unwrap();
+    // let branch = load_main_branch(root)?;
 
-    pack_term(
-        path.parent().unwrap(),
-        &path.file_name().unwrap().to_str().unwrap()[1..],
-        outfile,
-    )?;
-    return Ok(());
+    if path.exists() {
+        let root = path.parent().unwrap().parent().unwrap();
+        let branch = load_main_branch(root)?;
+        let hash = &path.file_name().unwrap().to_str().unwrap()[1..];
+        pack_term(branch, root, &hash, outfile)
+    } else {
+        let root = default_root();
+        let mut branch = load_main_branch(root.as_path())?;
+        let hash = find_term(root.as_path(), &mut branch, file);
+        pack_term(branch, root.as_path(), &hash.0, outfile)
+    }
 }

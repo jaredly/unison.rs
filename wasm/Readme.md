@@ -16,10 +16,10 @@ Seems to have worked so far :D
 # Todo:
 
 - [ ] make a pack-term that takes a common name
+    - [ ] need a "watch" mode, so we get ~auto-update. Yeah that's probably top-ish priority?
 - [ ] wrap/unwrap tuples correctly
 - [ ] typecheck handler's return value, and if it's null/undefined, then raise an error
 - [ ] make a little TODOmvc example? could be fun
-
 
 # Bugs
 
