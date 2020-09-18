@@ -28,6 +28,27 @@ pub struct RawBranch {
 }
 
 impl RawBranch {
+    pub fn collect_some_types(
+        &self,
+        path: &Vec<String>,
+        names: &mut std::collections::HashMap<String, Vec<Vec<String>>>,
+    ) {
+        let mut children: Vec<(&Reference, &NameSegment)> = self.types.d1.iter().collect();
+        children.sort();
+        for (k, v) in children {
+            match k {
+                types::Reference::DerivedId(types::Id(hash, _, _)) => {
+                    if names.contains_key(&hash.0) {
+                        let mut full = path.clone();
+                        full.push(v.text.clone());
+                        names.get_mut(&hash.0).unwrap().push(full);
+                    }
+                }
+                _ => (),
+            }
+        }
+    }
+
     pub fn collect_types(
         &self,
         path: &Vec<String>,
@@ -49,6 +70,19 @@ impl RawBranch {
                 _ => (),
             }
         }
+    }
+
+    pub fn get_names(&self) -> (Vec<(String, String)>, Vec<String>) {
+        let mut terms = vec![];
+        for (k, v) in self.terms.d1.iter() {
+            if let types::Referent::Ref(Reference::DerivedId(Id(hash, _, _))) = k {
+                terms.push((v.text.clone(), hash.to_string()));
+            }
+        }
+        (
+            terms,
+            self.children.keys().map(|k| k.text.clone()).collect(),
+        )
     }
 
     pub fn collect_terms_and_constructors(
@@ -260,6 +294,13 @@ impl Codebase {
         Ok(me)
     }
 
+    pub fn terms_and_children(
+        &mut self,
+        of: &str,
+    ) -> std::io::Result<(Vec<(String, String)>, Vec<String>)> {
+        self.load(of).map(|branch| branch.get_names())
+    }
+
     pub fn reload(&mut self) -> std::io::Result<()> {
         let head = get_head(self.paths_root.parent().unwrap())?;
         self.set_head(head)
@@ -312,6 +353,21 @@ impl Codebase {
         dest
     }
 
+    pub fn collect_some_types(
+        &self,
+        of: &str,
+        path: &Vec<String>,
+        names: &mut std::collections::HashMap<String, Vec<Vec<String>>>,
+    ) {
+        let item = self.branches.get(of).unwrap();
+        item.collect_some_types(path, names);
+        for (k, v) in &item.children {
+            let mut full = path.clone();
+            full.push(k.text.clone());
+            self.collect_some_types(&v.0, &full, names);
+        }
+    }
+
     pub fn collect_names(&self, of: &str, path: &Vec<String>, dest: &mut crate::pack::Names<Hash>) {
         let item = self.branches.get(of).unwrap();
         item.collect_names(path, dest);
@@ -338,7 +394,30 @@ impl Codebase {
         }
     }
 
+    pub fn find_ns(&mut self, path: &[&str]) -> std::io::Result<Hash> {
+        self.find_ns_inner(&self.head.clone(), path)
+    }
+
+    fn find_ns_inner(&mut self, of: &str, path: &[&str]) -> std::io::Result<Hash> {
+        let seg = NameSegment {
+            text: path[0].to_owned(),
+        };
+        let item = self.load(of)?;
+        // self.load_child(of, path[0])?;
+        let child = item
+            .children
+            .get(&seg)
+            .ok_or(std::io::Error::from(std::io::ErrorKind::NotFound))?
+            .clone();
+        if path.len() == 1 {
+            Ok(child)
+        } else {
+            return self.find_ns_inner(&child.0, &path[1..]);
+        }
+    }
+
     pub fn find_term(&mut self, path: &[&str]) -> std::io::Result<Hash> {
+        // TODO refactor to just use find_ns_inner
         self.find_term_inner(&self.head.clone(), path)
     }
 

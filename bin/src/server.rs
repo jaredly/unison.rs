@@ -188,7 +188,7 @@ async fn main() {
     let root = crate::pack::default_root();
 
     // assigning here so it doesn't get dropped
-    let watcher = {
+    let _watcher = {
         use notify::{RecommendedWatcher, RecursiveMode, Watcher};
         use std::sync::mpsc::channel;
         use std::time::Duration;
@@ -249,8 +249,22 @@ async fn main() {
         .and(warp::path::param::<String>())
         .and(warp::path("names"))
         .and(warp::path::end())
-        .and(codebase_for_warp)
+        .and(codebase_for_warp.clone())
         .and_then(|hash, term, codebase| serve_json(hash, term, codebase));
+
+    // terms/:hash/:ns
+    let root_terms = warp::path("terms")
+        .and(warp::path::param::<String>())
+        .and(warp::path::end())
+        .and(codebase_for_warp.clone())
+        .and_then(|hash, codebase| serve_terms(hash, "".to_owned(), codebase));
+
+    let terms = warp::path("terms")
+        .and(warp::path::param::<String>())
+        .and(warp::path::param::<String>())
+        .and(warp::path::end())
+        .and(codebase_for_warp)
+        .and_then(|hash, ns, codebase| serve_terms(hash, ns, codebase));
 
     // So I think I'll be spawning a thread for the notify thing?
 
@@ -272,9 +286,70 @@ async fn main() {
     // let other_assets = as_filter::<Asset>().or(index_filter::<Asset>());
 
     println!("Serving at http://127.0.0.1:3030");
-    warp::serve(ws.or(fs).or(wasm_assets).or(other_assets).or(bin).or(json))
-        .run(([127, 0, 0, 1], 3030))
-        .await
+    warp::serve(
+        ws.or(fs)
+            .or(wasm_assets)
+            .or(other_assets)
+            .or(bin)
+            .or(json)
+            .or(terms)
+            .or(root_terms),
+    )
+    .run(([127, 0, 0, 1], 3030))
+    .await
+}
+
+#[derive(Default)]
+struct TypeHashCollector(std::collections::HashSet<String>);
+impl crate::visitor::Visitor for TypeHashCollector {
+    fn visit_type(&mut self, typ: &mut shared::types::Type) -> bool {
+        use shared::types::Type::*;
+        use shared::types::*;
+        match typ {
+            Ref(Reference::DerivedId(Id(hash, _, _))) => {
+                self.0.insert(hash.to_string());
+            }
+            _ => (),
+        };
+        true
+    }
+}
+
+async fn serve_terms(
+    hash: String,
+    ns: String,
+    codebase: Arc<RwLock<crate::branch::Codebase>>,
+) -> Result<impl warp::Reply, Infallible> {
+    let mut codebase = codebase.write().await;
+    codebase.set_head(hash).unwrap();
+
+    let ns = if ns == "" || ns == "." {
+        codebase.head.clone()
+    } else {
+        codebase
+            .find_ns(ns.split(".").collect::<Vec<&str>>().as_slice())
+            .unwrap()
+            .0
+    };
+
+    let (terms, children) = codebase.terms_and_children(&ns).unwrap();
+    let mut env = crate::env::Env::init(codebase.root().as_path());
+    let mut typed_terms = vec![];
+    let mut type_hashes = TypeHashCollector::default();
+    for (name, hash) in terms {
+        let (_source, mut typ) = env.load(&hash).unwrap();
+        use crate::visitor::Accept;
+        typ.accept(&mut type_hashes);
+        typed_terms.push((name, typ));
+    }
+
+    let mut type_names = std::collections::HashMap::new();
+    for hash in type_hashes.0 {
+        type_names.insert(hash, vec![]);
+    }
+    codebase.collect_some_types(&codebase.head.clone(), &vec![], &mut type_names);
+
+    Ok(serde_json::to_string_pretty(&(children, typed_terms, type_names)).unwrap())
 }
 
 async fn serve_json(
@@ -282,9 +357,7 @@ async fn serve_json(
     term: String,
     codebase: Arc<RwLock<crate::branch::Codebase>>,
 ) -> Result<impl warp::Reply, Infallible> {
-    println!("Serving JSON");
     let mut codebase = codebase.write().await;
-    println!("Got json lock");
     codebase.set_head(hash).unwrap();
     let hash = crate::pack::find_term(&mut codebase, &term);
     let runtime_env =
@@ -301,9 +374,7 @@ async fn serve_bin(
     term: String,
     codebase: Arc<RwLock<crate::branch::Codebase>>,
 ) -> Result<impl warp::Reply, Infallible> {
-    println!("Serving bin!");
     let mut codebase = codebase.write().await;
-    println!("Got bin lock");
     codebase.set_head(hash).unwrap();
     let hash = crate::pack::find_term(&mut codebase, &term);
     let runtime_env =
