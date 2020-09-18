@@ -136,7 +136,7 @@ impl Default for Names<Hash> {
 // }
 
 impl<T: ToString> Names<T> {
-    fn serialize(
+    pub fn serialize(
         self,
     ) -> (
         HashMap<String, Vec<Vec<String>>>,
@@ -167,7 +167,7 @@ impl<T: ToString> Names<T> {
 //     }
 // }
 
-fn env_names(names: &Names<Hash>, runtime_env: &RuntimeEnv) -> Names<String> {
+pub fn env_names(names: &Names<Hash>, runtime_env: &RuntimeEnv) -> Names<String> {
     let mut term_names = HashMap::new();
     let mut constr_names = HashMap::new();
     for hash in runtime_env.terms.keys() {
@@ -193,11 +193,7 @@ fn env_names(names: &Names<Hash>, runtime_env: &RuntimeEnv) -> Names<String> {
     }
 }
 
-pub fn term_to_env(
-    root: &std::path::Path,
-    hash: &str,
-    _out: &str,
-) -> std::io::Result<types::RuntimeEnv> {
+pub fn term_to_env(root: &std::path::Path, hash: &str) -> std::io::Result<types::RuntimeEnv> {
     let env = env::Env::init(&root);
     let mut ir_env = ir::TranslationEnv::new(env);
     ir_env.load(&types::Hash::from_string(hash)).unwrap();
@@ -250,7 +246,7 @@ fn walk_env(env: &mut env::Env) {
     }
 }
 
-fn load_main_branch(root: &std::path::Path) -> std::io::Result<Codebase> {
+pub fn load_main_branch(root: &std::path::Path) -> std::io::Result<Codebase> {
     println!("Loading all namespaces");
     // let paths = path_with(&root, "paths");
     // let mut codebase = Codebase::load(&paths, get_head(&root)?)?;
@@ -268,7 +264,7 @@ pub fn pack_term_json(
     hash: &str,
     out: &str,
 ) -> std::io::Result<()> {
-    let runtime_env = term_to_env(root, hash, out)?;
+    let runtime_env = term_to_env(root, hash)?;
 
     std::fs::write(
         out.to_owned() + ".names.json",
@@ -288,7 +284,7 @@ pub fn pack_term(
     hash: &str,
     out: &str,
 ) -> std::io::Result<()> {
-    let runtime_env = term_to_env(root, hash, out)?;
+    let runtime_env = term_to_env(root, hash)?;
 
     std::fs::write(
         out.to_owned() + ".json",
@@ -352,7 +348,7 @@ pub fn default_root() -> std::path::PathBuf {
     project
 }
 
-fn find_term(codebase: &mut Codebase, term: &str) -> Hash {
+pub fn find_term(codebase: &mut Codebase, term: &str) -> Hash {
     if &term[0..1] == "." {
         codebase
             .find_term(&term[1..].split(".").collect::<Vec<&str>>().as_slice())

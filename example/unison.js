@@ -64,10 +64,10 @@ const convert_handlers = (handlers, typeNameHashes, names) => {
     return res;
 };
 
-export const fetch = (dataUrl) => {
+export const fetch = (dataUrl, namesUrl) => {
     return load(
         window.fetch(dataUrl).then((r) => r.text()),
-        window.fetch(dataUrl + '.json').then((r) => r.json()),
+        window.fetch(namesUrl).then((r) => r.json()),
     );
 };
 

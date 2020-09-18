@@ -1,4 +1,5 @@
 const js = wasm_bindgen('/unison_wasm_bg.wasm');
+// const js = import('/unison_wasm.js');
 
 const hashesForConstrName = (names) => {
     const hashesByName = {};
@@ -65,13 +66,13 @@ const convert_handlers = (handlers, typeNameHashes, names) => {
 };
 
 export const fetch = (dataUrl) => {
-    return load(
+    return loadIt(
         window.fetch(dataUrl).then((r) => r.text()),
         window.fetch(dataUrl + '.json').then((r) => r.json()),
     );
 };
 
-const load = async (dataPromise, namesPromise) => {
+const loadIt = async (dataPromise, namesPromise) => {
     const jsBridge = await js;
     const data = await dataPromise;
     const names = await namesPromise;

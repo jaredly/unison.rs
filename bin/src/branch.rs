@@ -243,6 +243,10 @@ impl Codebase {
         Codebase::new(root)
     }
 
+    pub fn root(&self) -> std::path::PathBuf {
+        self.paths_root.parent().unwrap().into()
+    }
+
     pub fn new(root: std::path::PathBuf) -> std::io::Result<Self> {
         let head = get_head(root.as_path())?;
         let mut paths_root = root;

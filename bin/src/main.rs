@@ -31,7 +31,7 @@ fn main() -> std::io::Result<()> {
         let cmd = args.remove(0);
         match (cmd.as_str(), args.as_slice()) {
             ("test", [path]) => run::run_test(path),
-            ("serve", [path]) => server::serve(path),
+            ("serve", []) => server::serve(),
             ("pack-watch", [path, output]) => pack::pack_watch(path, output),
             ("pack", [path, output]) => pack::pack(path, output),
             ("pack-json", [path, output]) => pack::pack_json(path, output),
