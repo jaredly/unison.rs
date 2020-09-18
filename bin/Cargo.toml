@@ -11,6 +11,7 @@ warp = "0.2.5"
 futures-util = ""
 futures = { version = "", features = ["std"] }
 tokio = ""
+http = ""
 serde = ""
 serde_derive = ""
 serde_json = ""
@@ -23,3 +24,4 @@ pretty = "0.10.0"
 im = ""
 shared = { path = "../shared" }
 notify = "4.0.15"
+rust-embed="5.6.0"
