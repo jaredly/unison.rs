@@ -298,6 +298,30 @@ impl Type {
         }
     }
 
+    pub fn args_and_effects(&self) -> (Vec<ABT<Type>>, HashSet<ABT<Type>>, ABT<Type>) {
+        use Type::*;
+        match self {
+            Arrow(a, b) => {
+                let (mut args, effects, res) = b.args_and_effects();
+                args.insert(0, (**a).clone());
+                (args, effects, res)
+            }
+            Effect(first, rest) => {
+                let (args, mut effects, res) = rest.args_and_effects();
+                match &**first {
+                    ABT::Tm(Type::Effects(items)) => {
+                        effects.extend(items.clone());
+                    }
+                    _ => (),
+                };
+                (args, effects, res)
+            }
+            Forall(inner) => inner.args_and_effects(),
+            IntroOuter(inner) => inner.args_and_effects(),
+            _ => (vec![], HashSet::new(), ABT::Tm(self.clone())),
+        }
+    }
+
     pub fn app_args(&self) -> Vec<ABT<Type>> {
         match self {
             Type::App(inner, arg) => {
@@ -318,7 +342,52 @@ impl Type {
         }
     }
 
+    pub fn is_primitive(&self) -> bool {
+        use Type::*;
+        match self {
+            Ann(inner, _) => inner.is_primitive(),
+            App(inner, v) => inner.is_primitive() && v.is_primitive(),
+            Forall(inner) => inner.is_primitive(),
+            IntroOuter(inner) => inner.is_primitive(),
+            Ref(Reference::Builtin(_)) => true,
+            Ref(Reference::DerivedId(Id(hash, _, _))) if hash.0 == crate::convert::OPTION_HASH => {
+                true
+            }
+            Ref(Reference::DerivedId(Id(hash, _, _))) if hash.0 == crate::convert::UNIT_HASH => {
+                true
+            }
+            Ref(Reference::DerivedId(Id(hash, _, _))) if hash.0 == crate::convert::TUPLE_HASH => {
+                true
+            }
+            _ => false,
+        }
+    }
     // pub fn
+}
+
+use std::collections::HashSet;
+
+impl ABT<Type> {
+    pub fn is_primitive(&self) -> bool {
+        use ABT::*;
+        match self {
+            Tm(term) => term.is_primitive(),
+            Cycle(inner) => inner.is_primitive(),
+            Abs(_, _, inner) => inner.is_primitive(),
+            Var(Symbol { text, .. }, _) => text == "()",
+            _ => false,
+        }
+    }
+
+    pub fn args_and_effects(&self) -> (Vec<ABT<Type>>, HashSet<ABT<Type>>, ABT<Type>) {
+        use ABT::*;
+        match self {
+            Tm(term) => term.args_and_effects(),
+            Cycle(inner) => inner.args_and_effects(),
+            Abs(_, _, inner) => inner.args_and_effects(),
+            _ => (vec![], HashSet::new(), self.clone()),
+        }
+    }
 }
 
 // Runtime values

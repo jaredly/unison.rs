@@ -135,10 +135,10 @@ impl<T: ToDoc> ToDoc for ABT<T> {
         match self {
             Tm(t) => t.to_doc(names),
             Cycle(t) => RcDoc::text("<cycle>").append(t.to_doc(names)),
-            Var(sym, u) => RcDoc::text(format!("{}/{}#{}", sym.text, sym.unique, u)),
-            Abs(sym, u, c) => {
-                RcDoc::text(format!("{}/{} = {}", sym.text, sym.unique, u)).append(c.to_doc(names))
-            }
+            Var(sym, _) => RcDoc::text(&sym.text),
+            // Var(sym, u) => RcDoc::text(format!("{}/{}#{}", sym.text, sym.unique, u)),
+            // The term or type should unwrap this if it's needed (like in a lambda? or a forall?)
+            Abs(_, _, c) => c.to_doc(names),
         }
     }
 }
@@ -189,15 +189,36 @@ impl ToDoc for MatchCase {
     }
 }
 
-// fn shortest_name(names: &Vec<Vec<String>>) -> String {
-//     let mut shortest = &names[0];
-//     for name in names {
-//         if name.len() < shortest.len() {
-//             shortest = name;
-//         }
-//     }
-//     shortest.join(".")
-// }
+fn shortest_name(names: Vec<Vec<String>>) -> Vec<String> {
+    let mut shortest = names[0].clone();
+    for name in names {
+        if name.len() < shortest.len() {
+            shortest = name;
+        }
+    }
+    shortest
+}
+
+impl<T: ToString> From<crate::pack::Names<T>> for FlatNames {
+    fn from(other: crate::pack::Names<T>) -> Self {
+        let mut res: Self = Default::default();
+
+        for (k, v) in other.constrs.into_iter() {
+            for (n, v) in v.into_iter() {
+                res.constructors
+                    .insert((k.to_string(), n), shortest_name(v));
+            }
+        }
+        for (k, v) in other.terms.into_iter() {
+            res.terms.insert(k.to_string(), shortest_name(v));
+        }
+        for (k, v) in other.types.into_iter() {
+            res.types.insert(k.to_string(), shortest_name(v));
+        }
+
+        res
+    }
+}
 
 impl ToDoc for Reference {
     fn to_doc(&self, names: &FlatNames) -> pretty::RcDoc<()> {
@@ -205,9 +226,11 @@ impl ToDoc for Reference {
         match self {
             Builtin(name) => RcDoc::text(name),
             DerivedId(Id(hash, _, _)) => RcDoc::text(
+                // Try both terms and types, there won't be a collision, so it's fine
                 names
                     .terms
                     .get(&hash.0)
+                    .or_else(|| names.types.get(&hash.0))
                     .map(|name| name.join("."))
                     .unwrap_or(format!("{:?}", hash)),
             ),
@@ -319,7 +342,7 @@ impl ToDoc for Term {
                 .append(RcDoc::text(" || "))
                 .append(b.to_doc(names)),
             // Lam(a, free) => RcDoc::text(format!("->(capture {:?})", free)).append(a.to_doc(names)),
-            Lam(a, free) => RcDoc::text("->").append(a.to_doc(names)),
+            Lam(a, _free) => RcDoc::text("->").append(a.to_doc(names)),
             LetRec(_, a, b) => RcDoc::text("let(rec)")
                 .append(RcDoc::space())
                 .append(RcDoc::intersperse(

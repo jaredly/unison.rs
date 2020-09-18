@@ -122,19 +122,6 @@ impl Default for Names<Hash> {
     }
 }
 
-// impl From<&crate::printer::FlatNames> for Names<String> {
-//     fn from(other: &crate::printer::FlatNames) -> Self {
-//         let mut constrs = HashMap::new();
-//         for ((k, n), v) in other.constructors.iter() {
-//             if !constrs.contains_key(k) {
-//                 constrs.insert(k.clone(), HashMap::new());
-//             }
-//             constrs.get_mut(k).unwrap().insert(n, v);
-//         }
-//         Names {terms: other.terms.clone(), constrs, types: other.types.clone()}
-//     }
-// }
-
 impl<T: ToString> Names<T> {
     pub fn serialize(
         self,

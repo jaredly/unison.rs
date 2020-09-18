@@ -332,24 +332,41 @@ async fn serve_terms(
             .0
     };
 
+    let flat_names: crate::printer::FlatNames = codebase.get_names().into();
+
     let (terms, children) = codebase.terms_and_children(&ns).unwrap();
     let mut env = crate::env::Env::init(codebase.root().as_path());
     let mut typed_terms = vec![];
-    let mut type_hashes = TypeHashCollector::default();
+    // let mut type_hashes = TypeHashCollector::default();
     for (name, hash) in terms {
-        let (_source, mut typ) = env.load(&hash).unwrap();
-        use crate::visitor::Accept;
-        typ.accept(&mut type_hashes);
-        typed_terms.push((name, typ));
+        let (_source, typ) = env.load(&hash).unwrap();
+        // use crate::visitor::Accept;
+        // typ.accept(&mut type_hashes);
+
+        let (args, effects, res) = typ.args_and_effects();
+
+        let all_primitive = args.iter().all(|m| m.is_primitive()) && res.is_primitive();
+
+        use crate::printer::ToPretty;
+        typed_terms.push((
+            name,
+            typ.to_pretty(100, &flat_names),
+            if all_primitive {
+                Some((args, effects))
+            } else {
+                println!("Not primitive: {:?}", args);
+                None
+            },
+        ));
     }
 
-    let mut type_names = std::collections::HashMap::new();
-    for hash in type_hashes.0 {
-        type_names.insert(hash, vec![]);
-    }
-    codebase.collect_some_types(&codebase.head.clone(), &vec![], &mut type_names);
+    // let mut type_names = std::collections::HashMap::new();
+    // for hash in type_hashes.0 {
+    //     type_names.insert(hash, vec![]);
+    // }
+    // codebase.collect_some_types(&codebase.head.clone(), &vec![], &mut type_names);
 
-    Ok(serde_json::to_string_pretty(&(children, typed_terms, type_names)).unwrap())
+    Ok(serde_json::to_string_pretty(&(children, typed_terms)).unwrap())
 }
 
 async fn serve_json(
