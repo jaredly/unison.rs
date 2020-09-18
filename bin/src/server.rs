@@ -9,40 +9,72 @@ use warp::Filter;
 
 type Receiver = watch::Receiver<Message>;
 
+#[derive(Default)]
+struct Pool {
+    listeners: HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>,
+    next_id: usize,
+}
+
+impl Pool {
+    fn push(&mut self, tx: mpsc::UnboundedSender<Result<Message, warp::Error>>) -> usize {
+        let n = self.next_id;
+        self.next_id += 1;
+        self.listeners.insert(n, tx);
+        n
+    }
+
+    fn drop(&mut self, id: usize) {
+        self.listeners.remove(&id);
+    }
+
+    fn broadcast(&self, message: Message) {
+        for l in self.listeners.values() {
+            if let Err(_) = l.send(Ok(message.clone())) {
+                // it's fine
+            }
+        }
+    }
+}
+
 // type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
+type PoolRef = Arc<RwLock<Pool>>;
+
+async fn add(pool: PoolRef, ws: WebSocket) {
+    // Split the socket into a sender and receive of messages.
+    let (user_ws_tx, mut user_ws_rx) = ws.split();
+
+    // Use an unbounded channel to handle buffering and flushing of messages
+    // to the websocket...
+    let (tx, rx) = mpsc::unbounded_channel();
+    tokio::task::spawn(rx.forward(user_ws_tx).map(|result| {
+        if let Err(e) = result {
+            eprintln!("websocket send error: {}", e);
+        }
+    }));
+    let id = pool.write().await.push(tx);
+
+    // Every time the user sends a message, broadcast it to
+    // all other users...
+    while let Some(_) = user_ws_rx.next().await {
+        // ignore folks
+    }
+
+    pool.write().await.drop(id);
+}
 
 async fn main() {
-    let (sender, receiver) = watch::channel(Message::text("hi"));
-    let receiver = warp::any().map(|| receiver.clone());
+    let pool = PoolRef::default();
+    let pool = warp::any().map(move || pool.clone());
 
-    let ws = warp::path("reload-notifier")
-        // The `ws()` filter will prepare the Websocket handshake.
-        .and(warp::ws())
-        .and(receiver)
-        .map(|ws: warp::ws::Ws, receiver: Receiver| {
-            let x = move |websocket: warp::filters::ws::WebSocket| {
-                // Just echo all messages back...
-                let (tx, rx) = websocket.split();
-                // let m: futures_util::stream::Forward<futures::channel::mpsc::Receiver<()>, ()> =
-                receiver.map(|m| Ok(m)).forward(tx).map(|result| {
-                    if let Err(e) = result {
-                        eprintln!("websocket error: {:?}", e);
-                    }
-                })
-                // m
-                // *inner.lock().unwrap() = Some(tx);
-                // async { () }
-                // rx.forward(tx).map(|result| {
-                //     if let Err(e) = result {
-                //         eprintln!("websocket error: {:?}", e);
-                //     }
-                // })
-            };
-            // And then our closure will be called when it completes...
-            ws.on_upgrade(x)
-        });
+    let ws =
+        warp::path("reload-notifier")
+            .and(warp::ws())
+            .and(pool)
+            .map(|ws: warp::ws::Ws, pool| {
+                ws.on_upgrade(|websocket: warp::filters::ws::WebSocket| add(pool, websocket))
+            });
 
     let fs = warp::fs::dir(".");
 
-    warp::serve(fs).run(([127, 0, 0, 1], 3030)).await
+    warp::serve(ws.or(fs)).run(([127, 0, 0, 1], 3030)).await
 }
