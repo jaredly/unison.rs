@@ -1,4 +1,4 @@
-const js = import('./node_modules/unison_wasm/unison_wasm.js');
+const js = wasm_bindgen('/unison_wasm_bg.wasm');
 
 const hashesForConstrName = (names) => {
     const hashesByName = {};
@@ -75,7 +75,7 @@ const load = async (dataPromise, namesPromise) => {
     const jsBridge = await js;
     const data = await dataPromise;
     const names = await namesPromise;
-    // console.log('have data', data.slice(0, 100));
+    console.log('have data', data.slice(0, 100));
     const id = jsBridge.load(data);
     const hashesByName = hashesForConstrName(names);
     const hashesByTermName = hashesForTermName(names);
@@ -132,5 +132,3 @@ const load = async (dataPromise, namesPromise) => {
         },
     };
 };
-
-export default load;

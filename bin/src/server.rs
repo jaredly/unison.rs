@@ -74,6 +74,10 @@ enum Embed {
     Failure,
 }
 
+// impl futures::Future for Embed {
+//     type Output = warp::reply::Response;
+// }
+
 impl warp::Reply for Embed {
     fn into_response(self) -> warp::reply::Response {
         use http::{Response, StatusCode};
@@ -101,6 +105,8 @@ fn mime_for_ext(f: &str) -> &'static str {
         "text/html"
     } else if f.ends_with(".css") {
         "text/css"
+    } else if f.ends_with(".wasm") {
+        "application/wasm"
     } else {
         "application/octet-stream"
     }
@@ -119,22 +125,55 @@ async fn main(path: &str) {
             });
 
     let fs = warp::fs::dir(".");
+    use http::{Response, StatusCode};
     let wasm_assets =
-        warp::get().and(warp::path::tail()).map(
-            |tail: warp::filters::path::Tail| match WasmPkg::get(tail.as_str()) {
-                None => Embed::Failure,
-                Some(value) => Embed::Success(mime_for_ext(tail.as_str()), value.into_owned()),
-            },
-        );
+        warp::get()
+            .and(warp::path::tail())
+            .and_then(
+                |tail: warp::filters::path::Tail| match WasmPkg::get(tail.as_str()) {
+                    None => futures::future::Either::Right(futures::future::ready(Err(
+                        warp::reject::not_found(),
+                    ))),
+                    Some(value) => futures::future::Either::Left(futures::future::ready(Ok(
+                        // warp::reply::
+                        Response::builder()
+                            .header("Content-type", mime_for_ext(tail.as_str()))
+                            .status(StatusCode::OK)
+                            .body(value)
+                            .unwrap(),
+                    ))),
+                },
+            );
 
-    let other_assets = warp::get().and(warp::path::tail()).map(
-        |tail: warp::filters::path::Tail| match Asset::get(tail.as_str()) {
-            None => Embed::Failure,
-            Some(value) => Embed::Success(mime_for_ext(tail.as_str()), value.into_owned()),
-        },
-    );
+    let other_assets =
+        warp::get()
+            .and(warp::path::tail())
+            .and_then(
+                |tail: warp::filters::path::Tail| match Asset::get(tail.as_str()) {
+                    None => futures::future::Either::Right(futures::future::ready(Err(
+                        warp::reject::not_found(),
+                    ))),
+                    Some(value) => futures::future::Either::Left(futures::future::ready(Ok(
+                        Response::builder()
+                            .header("Content-type", mime_for_ext(tail.as_str()))
+                            .status(StatusCode::OK)
+                            .body(value)
+                            .unwrap(),
+                    ))),
+                },
+            );
 
-    let res = ws.or(fs).or(wasm_assets).or(other_assets);
+    let res = ws
+        .or(fs)
+        .or(wasm_assets)
+        .or(other_assets)
+        .or(warp::path::end().map(|| {
+            Response::builder()
+                .header("Content-type", "text/html")
+                .status(StatusCode::OK)
+                .body(Asset::get("index.html").unwrap().into_owned())
+                .unwrap()
+        }));
 
     println!("Ok folks");
     warp::serve(res).run(([127, 0, 0, 1], 3030)).await
