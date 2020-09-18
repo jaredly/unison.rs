@@ -1,16 +1,20 @@
 use pretty::{Doc, RcDoc};
 use shared::types::*;
 
-use Term::*;
-
 pub trait ToDoc {
     // TODO add names to these too
-    fn to_doc(&self) -> pretty::RcDoc<()>;
+    fn to_doc(&self, names: &FlatNames) -> pretty::RcDoc<()>;
 }
 
-pub trait ToPretty {
-    fn to_pretty(&self, width: usize) -> String;
+pub trait ToPretty: ToDoc {
+    fn to_pretty(&self, width: usize, names: &FlatNames) -> String {
+        let mut w = Vec::new();
+        self.to_doc(names).render(width, &mut w).unwrap();
+        String::from_utf8(w).unwrap()
+    }
 }
+
+impl<T: ToDoc> ToPretty for ABT<T> {}
 
 const UNIT_HASH: &'static str = "568rsi7o3ghq8mmbea2sf8msdk20ohasob5s2rvjtqg2lr0vs39l1hm98urrjemsr3vo3fa52pibqu0maluq7g8sfg3h5f5re6vitj8";
 const TUPLE_HASH: &'static str = "onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0";
@@ -125,30 +129,22 @@ pub fn value_to_pretty(value: &Value, names: &FlatNames, width: usize) -> String
     String::from_utf8(w).unwrap()
 }
 
-impl ToPretty for ABT<Term> {
-    fn to_pretty(&self, width: usize) -> String {
-        let mut w = Vec::new();
-        self.to_doc().render(width, &mut w).unwrap();
-        String::from_utf8(w).unwrap()
-    }
-}
-
-impl ToDoc for ABT<Term> {
-    fn to_doc(&self) -> pretty::RcDoc<()> {
+impl<T: ToDoc> ToDoc for ABT<T> {
+    fn to_doc(&self, names: &FlatNames) -> pretty::RcDoc<()> {
         use ABT::*;
         match self {
-            Tm(t) => t.to_doc(),
-            Cycle(t) => RcDoc::text("<cycle>").append(t.to_doc()),
-            Var(sym, u) => RcDoc::text(format!("🍿({}/{} #{})", sym.text, sym.unique, u)),
+            Tm(t) => t.to_doc(names),
+            Cycle(t) => RcDoc::text("<cycle>").append(t.to_doc(names)),
+            Var(sym, u) => RcDoc::text(format!("{}/{}#{}", sym.text, sym.unique, u)),
             Abs(sym, u, c) => {
-                RcDoc::text(format!("👋({}/{} ##{}) ", sym.text, sym.unique, u)).append(c.to_doc())
+                RcDoc::text(format!("{}/{} = {}", sym.text, sym.unique, u)).append(c.to_doc(names))
             }
         }
     }
 }
 
 impl ToDoc for Pattern {
-    fn to_doc(&self) -> RcDoc<()> {
+    fn to_doc(&self, names: &FlatNames) -> RcDoc<()> {
         use Pattern::*;
         match self {
             Unbound => RcDoc::text("_"),
@@ -162,15 +158,15 @@ impl ToDoc for Pattern {
             Constructor(r, n, _children) => {
                 RcDoc::text(format!("{:?} # ", r)).append(RcDoc::as_string(n))
             }
-            As(i) => i.to_doc(),
+            As(i) => i.to_doc(names),
             EffectPure(p) => RcDoc::text("{ ")
-                .append(p.to_doc())
+                .append(p.to_doc(names))
                 .append(RcDoc::text(" }")),
             EffectBind(_r, _n, _v, _k) => RcDoc::text("Effect"),
             SequenceLiteral(l) => RcDoc::text("[")
                 .append(
                     RcDoc::intersperse(
-                        l.iter().map(|m| m.to_doc()),
+                        l.iter().map(|m| m.to_doc(names)),
                         RcDoc::text(",").append(Doc::line()),
                     )
                     .nest(1)
@@ -183,53 +179,118 @@ impl ToDoc for Pattern {
 }
 
 impl ToDoc for MatchCase {
-    fn to_doc(&self) -> RcDoc<()> {
-        let m = self.0.to_doc();
+    fn to_doc(&self, names: &FlatNames) -> RcDoc<()> {
+        let m = self.0.to_doc(names);
         let m = match &self.1 {
             None => m,
-            Some(o) => m.append(RcDoc::text(" | ")).append(o.to_doc()),
+            Some(o) => m.append(RcDoc::text(" | ")).append(o.to_doc(names)),
         };
-        m.append(RcDoc::text(" -> ")).append(self.2.to_doc())
+        m.append(RcDoc::text(" -> ")).append(self.2.to_doc(names))
+    }
+}
+
+// fn shortest_name(names: &Vec<Vec<String>>) -> String {
+//     let mut shortest = &names[0];
+//     for name in names {
+//         if name.len() < shortest.len() {
+//             shortest = name;
+//         }
+//     }
+//     shortest.join(".")
+// }
+
+impl ToDoc for Reference {
+    fn to_doc(&self, names: &FlatNames) -> pretty::RcDoc<()> {
+        use Reference::*;
+        match self {
+            Builtin(name) => RcDoc::text(name),
+            DerivedId(Id(hash, _, _)) => RcDoc::text(
+                names
+                    .terms
+                    .get(&hash.0)
+                    .map(|name| name.join("."))
+                    .unwrap_or(format!("{:?}", hash)),
+            ),
+        }
+    }
+}
+
+impl ToDoc for Type {
+    fn to_doc(&self, names: &FlatNames) -> pretty::RcDoc<()> {
+        use Type::*;
+        match self {
+            Ref(r) => r.to_doc(names),
+            Arrow(one, two) => one
+                .to_doc(names)
+                .append(RcDoc::text(" -> "))
+                .append(two.to_doc(names)),
+            Ann(inner, _) => inner.to_doc(names),
+            App(one, two) => one
+                .to_doc(names)
+                .append(RcDoc::text(" "))
+                .append(two.to_doc(names)),
+            Effect(effects, value) => RcDoc::text("{")
+                .append(effects.to_doc(names))
+                .append(RcDoc::text("}"))
+                .append(RcDoc::text(" "))
+                .append(value.to_doc(names)),
+            Effects(items) => RcDoc::intersperse(
+                items.iter().map(|m| m.to_doc(names)),
+                RcDoc::text(",").append(Doc::line()),
+            ),
+            Forall(inner) => inner.to_doc(names),
+            IntroOuter(inner) => inner.to_doc(names),
+        }
     }
 }
 
 impl ToDoc for Term {
-    fn to_doc(&self) -> pretty::RcDoc<()> {
+    fn to_doc(&self, names: &FlatNames) -> pretty::RcDoc<()> {
+        use Term::*;
         match self {
             Int(i) => RcDoc::as_string(i),
             Nat(i) => RcDoc::as_string(i),
             Float(i) => RcDoc::as_string(i),
             Boolean(i) => RcDoc::as_string(i),
-            Text(i) => RcDoc::as_string(i),
+            Text(i) => RcDoc::text(format!("{:?}", i)),
             Bytes(_) => RcDoc::text("<bytes>"),
             Char(i) => RcDoc::as_string(i),
             Blank => RcDoc::text("<blank>"),
             // PartialNativeApp(name, _) => f.write_fmt(format_args!("partial({})", name)),
-            Ref(i) => RcDoc::text(format!("{:?}", i)),
-            Constructor(i, n) => RcDoc::text(format!("[constructor]{:?}#{}", i, n)),
+            Ref(r) => r.to_doc(names),
+            Constructor(Reference::DerivedId(Id(hash, _, _)), n) => RcDoc::text(
+                names
+                    .constructors
+                    .get(&(hash.0.clone(), *n))
+                    .map(|n| n.join("."))
+                    .unwrap_or(format!("{:?}#{}", hash, n)),
+            ),
+            // I don't think this will ever happen?
+            Constructor(r, _) => r.to_doc(names),
             Request(i, n) => RcDoc::text(format!("[request]{:?}#{}", i, n)),
             Handle(i, n) => RcDoc::text("handle")
                 .append(RcDoc::space())
-                .append((*i).to_doc())
+                .append((*i).to_doc(names))
                 .append(RcDoc::space())
                 .append(RcDoc::text("with"))
                 .append(RcDoc::space())
-                .append((*n).to_doc())
+                .append((*n).to_doc(names))
                 .nest(1)
                 .group(),
+            // TODO unfold "App"s into one list of args
             App(i, n) => i
-                .to_doc()
-                .append(RcDoc::text("("))
-                .append(n.to_doc().nest(1))
-                .append(RcDoc::text(")"))
+                .to_doc(names)
+                .append(RcDoc::text(" "))
+                .append(n.to_doc(names).nest(1))
+                .append(RcDoc::text(" "))
                 .group(),
             // RcDoc::text(format!("{:?} <app> {:?}", i, n)),
-            Ann(i, _) => i.to_doc(),
+            Ann(i, _) => i.to_doc(names),
             // RcDoc::text(format!("t- {:?} :: {:?} -t", i, n)),
             Sequence(i) => RcDoc::text("[")
                 .append(
                     RcDoc::intersperse(
-                        i.iter().map(|m| (*m).to_doc()),
+                        i.iter().map(|m| (*m).to_doc(names)),
                         RcDoc::text(",").append(Doc::line()),
                     )
                     .nest(1)
@@ -239,41 +300,50 @@ impl ToDoc for Term {
             // RcDoc::text(format!("{:?}", i)),
             If(i, a, b) => RcDoc::text("if")
                 .append(RcDoc::space())
-                .append(i.to_doc())
+                .append(i.to_doc(names))
                 .append(RcDoc::space())
                 .append(RcDoc::text("then"))
                 .append(RcDoc::space())
-                .append(a.to_doc().nest(1))
+                .append(a.to_doc(names).nest(1))
                 .append(RcDoc::space())
                 .append(RcDoc::text("else"))
                 .append(RcDoc::space())
-                .append(b.to_doc().nest(1)),
+                .append(b.to_doc(names).nest(1)),
             // RcDoc::text(format!("if {:?} then\n{:?}\nelse\n{:?}", i, a, b)),
-            And(a, b) => a.to_doc().append(RcDoc::text(" && ")).append(b.to_doc()),
-            Or(a, b) => a.to_doc().append(RcDoc::text(" || ")).append(b.to_doc()),
-            Lam(a, free) => RcDoc::text(format!("->(capture {:?})", free)).append(a.to_doc()),
+            And(a, b) => a
+                .to_doc(names)
+                .append(RcDoc::text(" && "))
+                .append(b.to_doc(names)),
+            Or(a, b) => a
+                .to_doc(names)
+                .append(RcDoc::text(" || "))
+                .append(b.to_doc(names)),
+            // Lam(a, free) => RcDoc::text(format!("->(capture {:?})", free)).append(a.to_doc(names)),
+            Lam(a, free) => RcDoc::text("->").append(a.to_doc(names)),
             LetRec(_, a, b) => RcDoc::text("let(rec)")
                 .append(RcDoc::space())
                 .append(RcDoc::intersperse(
-                    a.iter().map(|m| m.to_doc()),
+                    a.iter().map(|m| m.to_doc(names)),
                     Doc::line(),
                 ))
                 .append(RcDoc::text(" in "))
                 .append(RcDoc::hardline())
-                .append(b.to_doc()),
+                .append(b.to_doc(names)),
             Let(_, a, b) => RcDoc::text("let")
                 .append(RcDoc::space())
-                .append(a.to_doc())
+                .append(a.to_doc(names))
                 .append(RcDoc::text(" in "))
                 .append(RcDoc::hardline())
-                .append(b.to_doc()),
+                .append(b.to_doc(names)),
             Match(a, b) => RcDoc::text("match")
                 .append(RcDoc::space())
-                .append(a.to_doc())
+                .append(a.to_doc(names))
                 .append(RcDoc::space())
                 .append(RcDoc::text("with"))
                 .append(RcDoc::hardline())
-                .append(RcDoc::intersperse(b.iter().map(|b| b.to_doc()), Doc::hardline()).nest(1)),
+                .append(
+                    RcDoc::intersperse(b.iter().map(|b| b.to_doc(names)), Doc::hardline()).nest(1),
+                ),
             TermLink(a) => RcDoc::text(format!("termLink {:?}", a)),
             TypeLink(a) => RcDoc::text(format!("typeLink {:?}", a)),
         }

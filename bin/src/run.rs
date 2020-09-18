@@ -171,7 +171,8 @@ pub fn run_term(
                     .get(&k.to_string())
                     .unwrap()
                     .0
-                    .to_pretty(80)
+                    // TODO maybe do names here? although having the hashes is maybe most helpful in this logging case
+                    .to_pretty(80, &Default::default())
                     .as_bytes(),
             )?;
             file.write_all(b"\n\n")?;
