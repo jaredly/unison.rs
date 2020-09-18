@@ -147,17 +147,6 @@ fn mime_for_ext(f: &str) -> &'static str {
     }
 }
 
-// So, I should probably move to use these, but I want to
-// do a prod build, while also
-
-// #[derive(RustEmbed)]
-// #[folder = "static"]
-// struct Asset;
-
-// #[derive(RustEmbed)]
-// #[folder = "../wasm/pkg"]
-// struct WasmPkg;
-
 async fn main() {
     let pool_ref = PoolRef::default();
     let pool_for_head_message = pool_ref.clone();
@@ -252,13 +241,23 @@ async fn main() {
         .and(codebase_for_warp.clone())
         .and_then(|hash, term, codebase| serve_json(hash, term, codebase));
 
-    // terms/:hash/:ns
+    // /build/:hash/:term/info
+    let info = warp::path("build")
+        .and(warp::path::param::<String>())
+        .and(warp::path::param::<String>())
+        .and(warp::path("info"))
+        .and(warp::path::end())
+        .and(codebase_for_warp.clone())
+        .and_then(|hash, term, codebase| serve_info(hash, term, codebase));
+
+    // terms/:hash
     let root_terms = warp::path("terms")
         .and(warp::path::param::<String>())
         .and(warp::path::end())
         .and(codebase_for_warp.clone())
         .and_then(|hash, codebase| serve_terms(hash, "".to_owned(), codebase));
 
+    // terms/:hash/:ns
     let terms = warp::path("terms")
         .and(warp::path::param::<String>())
         .and(warp::path::param::<String>())
@@ -293,11 +292,23 @@ async fn main() {
             .or(bin)
             .or(json)
             .or(terms)
-            .or(root_terms),
+            .or(root_terms)
+            .or(info),
     )
     .run(([127, 0, 0, 1], 3030))
     .await
 }
+
+// So, I should probably move to use these, but I want to
+// do a prod build, while also
+
+// #[derive(RustEmbed)]
+// #[folder = "static"]
+// struct Asset;
+
+// #[derive(RustEmbed)]
+// #[folder = "../example/dist"]
+// struct WasmPkg;
 
 #[derive(Default)]
 struct TypeHashCollector(std::collections::HashSet<String>);
@@ -367,6 +378,20 @@ async fn serve_terms(
     // codebase.collect_some_types(&codebase.head.clone(), &vec![], &mut type_names);
 
     Ok(serde_json::to_string_pretty(&(children, typed_terms)).unwrap())
+}
+
+async fn serve_info(
+    hash: String,
+    term: String,
+    codebase: Arc<RwLock<crate::branch::Codebase>>,
+) -> Result<impl warp::Reply, Infallible> {
+    let mut codebase = codebase.write().await;
+    codebase.set_head(hash).unwrap();
+    let hash = crate::pack::find_term(&mut codebase, &term);
+    let runtime_env =
+        crate::pack::term_to_env(codebase.root().as_path(), &hash.to_string()).unwrap();
+    let (_ir, typ) = runtime_env.terms.get(&hash).unwrap();
+    Ok(serde_json::to_string_pretty(&typ.args_and_effects()).unwrap())
 }
 
 async fn serve_json(

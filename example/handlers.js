@@ -1,4 +1,4 @@
-export default (runtime) => {
+export default (runtime, root) => {
     const mvars = [];
 
     const elements = [];
@@ -39,7 +39,7 @@ export default (runtime) => {
                 return { Nat: elements.length - 1 };
             },
             addToBody: (idx) => {
-                document.body.appendChild(elements[idx]);
+                root.appendChild(elements[idx]);
             },
             setAttribute: (idx, attr, value) => {
                 elements[idx].setAttribute(attr, value);

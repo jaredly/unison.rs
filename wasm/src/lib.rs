@@ -280,6 +280,15 @@ pub fn enable_logging_with_prefix(prefix: &str) {
 }
 
 #[wasm_bindgen]
+pub fn info(env_id: usize, term: &str) -> Result<JsValue, JsValue> {
+    let mut l = ENV.lock().unwrap();
+    let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
+
+    let (_, typ) = env.terms.get(&Hash::from_string(term)).unwrap();
+    Ok(JsValue::from_serde(&typ.args_and_effects()).unwrap())
+}
+
+#[wasm_bindgen]
 pub fn run(
     env_id: usize,
     term: &str,

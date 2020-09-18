@@ -62,14 +62,57 @@ const showTerms = (head, ns) => {
     });
 };
 
+window.argsData = null;
+
+// const renderArgs =
+
+const showResult = (result) => {
+    console.log('--- RESULT ---');
+    console.log(result);
+    const node = document.createElement('div');
+    node.textContent = JSON.stringify(result);
+    Object.assign(node.style, {
+        display: 'block',
+        whiteSpace: 'pre-wrap',
+    });
+    rootNode.appendChild(node);
+};
+
+const rootNode = document.createElement('div');
+document.body.appendChild(rootNode);
+
 const render = (hash, term) => {
+    if (!window.argsData || window.argsData.hash != hash) {
+        window.argsData = { hash, args: null };
+    }
     console.log('rendering', hash, term);
     window
         .loadUnison(`/build/${hash}/.${term}`, `/build/${hash}/.${term}/names`)
         .then((runtime) => {
+            const [args, effects, result] = runtime.info(term);
+            rootNode.innerHTML = '';
             console.log('Reloading!');
-            document.body.innerHTML = '';
-            runtime.run(term, [null], window.makeDefaultHandlers(runtime));
+            console.log(args, effects, result);
+            const handlers = window.makeDefaultHandlers(runtime, rootNode);
+            // ok no effects needed
+            if (!args.length) {
+                showResult(runtime.runSync(term, [], {}));
+            } else if (
+                window.argsData.args &&
+                window.argsData.args.every((m) => m !== undefined)
+            ) {
+                if (runtime.canRunSync(term, handlers)) {
+                    showResult(
+                        runtime.runSync(term, window.argsData.args, handlers),
+                    );
+                } else {
+                    runtime.run(term, window.argsData.args, handlers);
+                }
+            } else {
+                if (!window.argsData.args) {
+                    window.argsData.args = args.map((_) => undefined);
+                }
+            }
         });
 };
 

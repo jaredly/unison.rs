@@ -2,6 +2,7 @@ export default (runtime) => {
     const mvars = [];
 
     const elements = [];
+    let root = null;
 
     const handlers = {
         Time: {
@@ -39,7 +40,12 @@ export default (runtime) => {
                 return { Nat: elements.length - 1 };
             },
             addToBody: (idx) => {
-                document.body.appendChild(elements[idx]);
+                if (root == null) {
+                    root = document.createElement('div');
+                    document.body.appendChild(root);
+                }
+                root.innerHTML = '';
+                root.appendChild(elements[idx]);
             },
             setAttribute: (idx, attr, value) => {
                 elements[idx].setAttribute(attr, value);
