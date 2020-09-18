@@ -285,7 +285,54 @@ pub fn info(env_id: usize, term: &str) -> Result<JsValue, JsValue> {
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
     let (_, typ) = env.terms.get(&Hash::from_string(term)).unwrap();
-    Ok(JsValue::from_serde(&typ.args_and_effects()).unwrap())
+    let (args, effects, result) = typ.args_and_effects();
+    let js_res = js_sys::Array::new();
+    for arg in args {
+        js_res.push(&to_js_type(arg));
+    }
+    Ok(js_res.into())
+}
+
+fn js_obj(items: Vec<(JsValue, JsValue)>) -> JsValue {
+    let res = js_sys::Array::new();
+    for (k, v) in items {
+        let r = js_sys::Array::new();
+        r.push(&k);
+        r.push(&v);
+        res.push(&r);
+    }
+    res.into()
+}
+
+fn to_js_type(typ: ABT<Type>) -> JsValue {
+    use Type::*;
+    match typ {
+        ABT::Tm(term) => match term {
+            Ann(inner, _) => to_js_type(*inner),
+            Forall(inner) => to_js_type(*inner),
+            IntroOuter(inner) => to_js_type(*inner),
+            App(one, two) => js_obj(vec![
+                ("type".into(), to_js_type(*one)),
+                ("arg".into(), to_js_type(*two)),
+            ]),
+            Ref(Reference::Builtin(text)) => JsValue::from(text),
+            Ref(Reference::DerivedId(Id(hash, _, _))) => {
+                if hash.0 == shared::convert::OPTION_HASH {
+                    JsValue::from("Option")
+                } else if hash.0 == shared::convert::UNIT_HASH {
+                    JsValue::NULL
+                } else if hash.0 == shared::convert::TUPLE_HASH {
+                    JsValue::from("Tuple")
+                } else {
+                    JsValue::from("UNKNOWN_CUSTOM")
+                }
+            }
+            _ => JsValue::from("UNKNOWN_TYPE"),
+        },
+        ABT::Cycle(inner) => to_js_type(*inner),
+        ABT::Abs(_, _, inner) => to_js_type(*inner),
+        _ => JsValue::from("UNKNOWN_ABT"),
+    }
 }
 
 #[wasm_bindgen]

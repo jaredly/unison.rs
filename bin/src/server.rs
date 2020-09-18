@@ -365,7 +365,6 @@ async fn serve_terms(
             if all_primitive {
                 Some((args, effects))
             } else {
-                println!("Not primitive: {:?}", args);
                 None
             },
         ));
