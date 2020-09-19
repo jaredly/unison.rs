@@ -54,21 +54,23 @@ const App = () => {
         if (!watchers.length) {
             return;
         }
+        setState((state) => ({ ...state, runtime: null }));
         const dataUrl = fetch(
-            `/build/${head}/${watchers.join(',')}`,
+            `/build/${head}/${watchers.map((m) => '.' + m).join(',')}`,
         ).then((r) => r.text());
         const namesUrl = fetch(
-            `/build/${head}/${watchers.join(',')}/names`,
+            `/build/${head}/${watchers.map((m) => '.' + m).join(',')}/names`,
         ).then((r) => r.json());
         loadRuntime(dataUrl, namesUrl).then((runtime) =>
             setState((state) => {
+                console.log('loaded new runtime');
                 if (state.head !== head) {
                     return state;
                 }
                 return { ...state, runtime };
             }),
         );
-    }, [state.head]);
+    }, [state.head, Object.keys(state.watchers).join(',')]);
 
     return (
         <div
@@ -80,15 +82,8 @@ const App = () => {
         >
             <Sidebar state={state} setState={setState} />
             <div>
-                {state.head}
-                <Watchers
-                    tree={state.tree}
-                    runtime={state.runtime}
-                    watchers={state.wathcers}
-                    setWatchers={(watchers) =>
-                        setState((state) => ({ ...state, watchers }))
-                    }
-                />
+                {state.head ? '#' + state.head.slice(0, 10) : null}
+                <Watchers key={state.head} state={state} setState={setState} />
             </div>
         </div>
     );

@@ -180,20 +180,25 @@ pub fn env_names(names: &Names<Hash>, runtime_env: &RuntimeEnv) -> Names<String>
     }
 }
 
+pub fn terms_to_env(
+    root: &std::path::Path,
+    hashes: Vec<Hash>,
+) -> std::io::Result<types::RuntimeEnv> {
+    let env = env::Env::init(&root);
+    let mut ir_env = ir::TranslationEnv::new(env);
+    for hash in hashes {
+        ir_env.load(&hash).unwrap();
+    }
+
+    walk_env(&mut ir_env.env);
+
+    Ok(ir_env.into())
+}
+
 pub fn term_to_env(root: &std::path::Path, hash: &str) -> std::io::Result<types::RuntimeEnv> {
     let env = env::Env::init(&root);
     let mut ir_env = ir::TranslationEnv::new(env);
     ir_env.load(&types::Hash::from_string(hash)).unwrap();
-
-    {
-        let mut walker = TypeWalker(&mut ir_env.env);
-        let ks: Vec<String> = walker.0.type_cache.keys().cloned().collect();
-        for k in ks {
-            use visitor::Accept;
-            let mut m = walker.0.load_type(&k);
-            m.accept(&mut walker);
-        }
-    }
 
     walk_env(&mut ir_env.env);
 

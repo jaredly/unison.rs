@@ -3,6 +3,11 @@
 import { jsx } from '@emotion/core';
 import * as React from 'react';
 
+const rm = (obj, k) => {
+    delete obj[k];
+    return obj;
+};
+
 const Term = ({ args, state, depth, path, type, canEval, setState }) => {
     const name = path.join('.');
     return (
@@ -12,14 +17,18 @@ const Term = ({ args, state, depth, path, type, canEval, setState }) => {
                     ? () =>
                           setState((state) => ({
                               ...state,
-                              watchers: {
-                                  ...state.watchers,
-                                  [name]: state.watchers[name]
-                                      ? null
-                                      : {
+                              runtime: null,
+                              watchers: state.watchers[name]
+                                  ? rm({ ...state.watchers }, name)
+                                  : {
+                                        ...state.watchers,
+                                        [name]: {
                                             args: canEval[0],
+                                            values: canEval[0].map(
+                                                () => undefined,
+                                            ),
                                         },
-                              },
+                                    },
                           }))
                     : null
             }

@@ -394,14 +394,16 @@ async fn serve_info(
 
 async fn serve_json(
     hash: String,
-    term: String,
+    terms: String,
     codebase: Arc<RwLock<crate::branch::Codebase>>,
 ) -> Result<impl warp::Reply, Infallible> {
     let mut codebase = codebase.write().await;
     codebase.set_head(hash).unwrap();
-    let hash = crate::pack::find_term(&mut codebase, &term);
-    let runtime_env =
-        crate::pack::term_to_env(codebase.root().as_path(), &hash.to_string()).unwrap();
+    let hashes: Vec<shared::types::Hash> = terms
+        .split(",")
+        .map(|term| crate::pack::find_term(&mut codebase, &term))
+        .collect();
+    let runtime_env = crate::pack::terms_to_env(codebase.root().as_path(), hashes).unwrap();
     Ok(serde_json::to_string_pretty(
         &crate::pack::env_names(&codebase.get_names(), &runtime_env).serialize(),
     )
@@ -411,14 +413,16 @@ async fn serve_json(
 use std::convert::Infallible;
 async fn serve_bin(
     hash: String,
-    term: String,
+    terms: String,
     codebase: Arc<RwLock<crate::branch::Codebase>>,
 ) -> Result<impl warp::Reply, Infallible> {
     let mut codebase = codebase.write().await;
     codebase.set_head(hash).unwrap();
-    let hash = crate::pack::find_term(&mut codebase, &term);
-    let runtime_env =
-        crate::pack::term_to_env(codebase.root().as_path(), &hash.to_string()).unwrap();
+    let hashes: Vec<shared::types::Hash> = terms
+        .split(",")
+        .map(|term| crate::pack::find_term(&mut codebase, &term))
+        .collect();
+    let runtime_env = crate::pack::terms_to_env(codebase.root().as_path(), hashes).unwrap();
 
     Ok(shared::pack(&runtime_env))
 }

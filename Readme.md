@@ -26,3 +26,11 @@ hmmm yeah the server could just "build on demand" probably?
 - recommend that people use unpkg, and type=module, right? seems reasonable.
 - and have a published wasm bundle, right? yeah somewhere
 - so user code could either be "nothing", and it uses a default index.html for playing around. or you point it to an html file, that fetches `/unison-bundle.bin` and `/unison-bundle.json`, and you're off to the races.
+
+## Todo for UI:
+
+- enter args, click "render"
+- some styling of the watchers section
+- a coherent color scheme
+- and that's probably it for the moment?
+- I do want to know why the random generation takes so darn long.

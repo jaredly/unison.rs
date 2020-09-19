@@ -97,6 +97,7 @@ export const load = async (dataPromise, namesPromise) => {
         info: (term) => jsBridge.info(id, getHash(term)),
         canRunSync: (term, handlers) => {
             const hash = getHash(term);
+            // const handlers = convert_handlers(handlers, hashesByName, names),
             return false; // TODO this should work
         },
         run: (term, args, handlers) => {
