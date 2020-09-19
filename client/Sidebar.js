@@ -77,7 +77,6 @@ const styles = {
 };
 
 const Branch = ({ state, ns, setState, depth }) => {
-    // const [isOpen, setOpen] = React.useState(false);
     const key = ns.length ? ns.join('.') : '';
     const isOpen = state.expanded[key];
     const setOpen = (open) =>
@@ -88,7 +87,11 @@ const Branch = ({ state, ns, setState, depth }) => {
 
     React.useEffect(() => {
         const head = state.head;
-        if (isOpen && !state.tree[key] && head) {
+        if (
+            isOpen &&
+            head &&
+            (!state.tree[key] || state.tree[key].head !== head)
+        ) {
             fetch(`/terms/${state.head}/${key}`)
                 .then((r) => r.json())
                 .then((data) => {
@@ -101,7 +104,7 @@ const Branch = ({ state, ns, setState, depth }) => {
                         console.log('yes please', key);
                         return {
                             ...state,
-                            tree: { ...state.tree, [key]: data },
+                            tree: { ...state.tree, [key]: { head, data } },
                         };
                     });
                 });
@@ -132,98 +135,101 @@ const Branch = ({ state, ns, setState, depth }) => {
                         }
                     }
                 >
-                    {state.tree[key] ? (
-                        <React.Fragment>
-                            {state.tree[key][0].length ? (
-                                <h4
-                                    css={[
-                                        styles.heading,
-                                        {
-                                            paddingLeft: 16 * (depth + 2),
-                                        },
-                                    ]}
-                                >
-                                    Namespaces
-                                </h4>
-                            ) : null}
-                            {state.tree[key][0]
-                                .filter((child) => child.trim())
-                                .sort()
-                                .map((child) => (
-                                    <Branch
-                                        depth={depth + 1}
-                                        key={child}
-                                        state={state}
-                                        ns={ns.concat([child])}
-                                        setState={setState}
-                                    />
-                                ))}
-                            {state.tree[key][1].length ? (
-                                <h4
-                                    css={[
-                                        styles.heading,
-                                        {
-                                            paddingLeft: 16 * (depth + 2),
-                                        },
-                                    ]}
-                                >
-                                    Terms
-                                </h4>
-                            ) : null}
-                            {state.tree[key][1].map(([name, type, canEval]) => (
-                                <Term
-                                    depth={depth + 1}
-                                    key={name}
-                                    state={state}
-                                    path={ns.concat([name])}
-                                    type={type}
-                                    setState={setState}
-                                    canEval={canEval}
-                                />
-                            ))}
-                            {state.tree[key][2].length ? (
-                                <h4
-                                    css={[
-                                        styles.heading,
-                                        {
-                                            paddingLeft: 16 * (depth + 2),
-                                        },
-                                    ]}
-                                >
-                                    Types
-                                </h4>
-                            ) : null}
-                            {state.tree[key][2].sort().map((child) => (
-                                <Type
-                                    key={child}
-                                    depth={depth + 1}
-                                    path={ns.concat([child])}
-                                />
-                            ))}
-                            {state.tree[key][3].length ? (
-                                <h4
-                                    css={[
-                                        styles.heading,
-                                        {
-                                            paddingLeft: 16 * (depth + 2),
-                                        },
-                                    ]}
-                                >
-                                    Constructors
-                                </h4>
-                            ) : null}
-                            {state.tree[key][3]
-                                .sort()
-                                .map(([name, hash, idx]) => (
+                    {
+                        state.tree[key] ? (
+                            <React.Fragment>
+                                {state.tree[key].data[0].length ? (
+                                    <h4
+                                        css={[
+                                            styles.heading,
+                                            {
+                                                paddingLeft: 16 * (depth + 2),
+                                            },
+                                        ]}
+                                    >
+                                        Namespaces
+                                    </h4>
+                                ) : null}
+                                {state.tree[key].data[0]
+                                    .filter((child) => child.trim())
+                                    .sort()
+                                    .map((child) => (
+                                        <Branch
+                                            depth={depth + 1}
+                                            key={child}
+                                            state={state}
+                                            ns={ns.concat([child])}
+                                            setState={setState}
+                                        />
+                                    ))}
+                                {state.tree[key].data[1].length ? (
+                                    <h4
+                                        css={[
+                                            styles.heading,
+                                            {
+                                                paddingLeft: 16 * (depth + 2),
+                                            },
+                                        ]}
+                                    >
+                                        Terms
+                                    </h4>
+                                ) : null}
+                                {state.tree[key].data[1].map(
+                                    ([name, type, canEval]) => (
+                                        <Term
+                                            depth={depth + 1}
+                                            key={name}
+                                            state={state}
+                                            path={ns.concat([name])}
+                                            type={type}
+                                            setState={setState}
+                                            canEval={canEval}
+                                        />
+                                    ),
+                                )}
+                                {state.tree[key].data[2].length ? (
+                                    <h4
+                                        css={[
+                                            styles.heading,
+                                            {
+                                                paddingLeft: 16 * (depth + 2),
+                                            },
+                                        ]}
+                                    >
+                                        Types
+                                    </h4>
+                                ) : null}
+                                {state.tree[key].data[2].sort().map((child) => (
                                     <Type
-                                        key={name}
+                                        key={child}
                                         depth={depth + 1}
-                                        path={ns.concat([name])}
+                                        path={ns.concat([child])}
                                     />
                                 ))}
-                        </React.Fragment>
-                    ) : null
-                    // 'Loading...'
+                                {state.tree[key].data[3].length ? (
+                                    <h4
+                                        css={[
+                                            styles.heading,
+                                            {
+                                                paddingLeft: 16 * (depth + 2),
+                                            },
+                                        ]}
+                                    >
+                                        Constructors
+                                    </h4>
+                                ) : null}
+                                {state.tree[key].data[3]
+                                    .sort()
+                                    .map(([name, hash, idx]) => (
+                                        <Type
+                                            key={name}
+                                            depth={depth + 1}
+                                            path={ns.concat([name])}
+                                        />
+                                    ))}
+                            </React.Fragment>
+                        ) : null
+                        // 'Loading...'
                     }
                 </div>
             ) : null}
