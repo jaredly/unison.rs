@@ -350,6 +350,7 @@ fn to_js_type(typ: ABT<Type>) -> JsValue {
         },
         ABT::Cycle(inner) => to_js_type(*inner),
         ABT::Abs(_, _, inner) => to_js_type(*inner),
+        ABT::Var(sym, _) if sym.text == "()" => JsValue::NULL,
         _ => JsValue::from("UNKNOWN_ABT"),
     }
 }

@@ -38,6 +38,7 @@ pub fn to_json_type(typ: ABT<Type>) -> serde_json::Value {
         },
         ABT::Cycle(inner) => to_json_type(*inner),
         ABT::Abs(_, _, inner) => to_json_type(*inner),
+        ABT::Var(sym, _) if sym.text == "()" => serde_json::Value::Null,
         _ => String("UNKNOWN_ABT".to_owned()),
     }
 }
@@ -97,6 +98,10 @@ where
                 "Text" => match arg.as_string() {
                     None => Err(format!("Expected a string, got {:?}", arg)),
                     Some(n) => Ok(Value::Text(n)),
+                },
+                "Char" => match arg.as_string() {
+                    None => Err(format!("Expected a string, got {:?}", arg)),
+                    Some(n) => Ok(Value::Char(n.chars().next().unwrap())),
                 },
                 _ => Err(format!("Unsupported builtin {}", name)),
             },

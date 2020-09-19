@@ -354,9 +354,9 @@ async fn serve_terms(
         // use crate::visitor::Accept;
         // typ.accept(&mut type_hashes);
 
-        let (args, effects, res) = typ.args_and_effects();
+        let (args, effects, _res) = typ.args_and_effects();
 
-        let all_primitive = args.iter().all(|m| m.is_primitive()) && res.is_primitive();
+        let all_primitive = args.iter().all(|m| m.is_primitive());
 
         use crate::printer::ToPretty;
         typed_terms.push((

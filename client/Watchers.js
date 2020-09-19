@@ -10,11 +10,12 @@ const rm = (obj, k) => {
 };
 
 const Arg = ({ arg, value, onChange }) => {
-    if (arg === 'Text') {
+    if (arg === 'Text' || arg === 'Char') {
         return (
             <input
                 value={value == null ? '' : value}
-                placeholder="Text"
+                placeholder={arg}
+                css={{ marginRight: 8, width: 60 }}
                 type="text"
                 onChange={(evt) => {
                     onChange(evt.target.value);
@@ -22,13 +23,26 @@ const Arg = ({ arg, value, onChange }) => {
             />
         );
     }
+    if (arg === 'Nat' || arg === 'Int' || arg === 'Float') {
+        return (
+            <input
+                value={value == null ? '' : value}
+                css={{ marginRight: 8, width: 40 }}
+                placeholder={arg}
+                type="number"
+                onChange={(evt) => {
+                    onChange(+evt.target.value);
+                }}
+            />
+        );
+    }
     return (
         <input
             value={value == null ? '' : value}
+            css={{ marginRight: 8, width: 100 }}
             placeholder={arg}
-            type="number"
             onChange={(evt) => {
-                onChange(+evt.target.value);
+                onChange(JSON.parse(evt.target.value));
             }}
         />
     );
@@ -92,13 +106,23 @@ const Watch = ({
         }
         console.log('running with', runtime.head);
         hasRun.current = true;
-        if (
-            config.args.length === 0 ||
-            runtime.canRunSync(name, handlers.current)
-        ) {
-            setResult(runtime.runSync(name, config.values, handlers.current));
-        } else {
-            runtime.run(name, config.values, handlers.current);
+        try {
+            if (
+                config.args.length === 0 ||
+                runtime.canRunSync(name, handlers.current)
+            ) {
+                setResult(
+                    runtime.runSync(name, config.values, handlers.current),
+                );
+            } else {
+                runtime.run(name, config.values, handlers.current);
+            }
+        } catch (err) {
+            console.log(err);
+            setResult(
+                'Failed to evaluate: ' +
+                    (typeof err === 'string' ? err : err.message),
+            );
         }
     }, [!!runtime, hash, canRun, handlers.current, config]);
     return (
@@ -127,8 +151,16 @@ const Watch = ({
                     </div>
                 ) : null}
             </div>
+            <div
+                css={{
+                    fontFamily: 'monospace',
+                    padding: '8px 0',
+                }}
+            >
+                {config.type}
+            </div>
             {argsToFill.length ? (
-                <div css={{ padding: '16px 0' }}>
+                <div css={{ padding: '8px 0' }}>
                     {argsToFill.map(([arg, i]) => (
                         <Arg
                             arg={arg}

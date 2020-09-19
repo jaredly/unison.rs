@@ -2,6 +2,7 @@
 /** @jsx jsx */
 import { jsx } from '@emotion/core';
 import * as React from 'react';
+import colors from './colors';
 
 const rm = (obj, k) => {
     delete obj[k];
@@ -25,6 +26,7 @@ const Term = ({ args, state, depth, path, type, canEval, setState }) => {
                                         [name]: {
                                             path,
                                             args: canEval[0],
+                                            type,
                                             values: canEval[0].map(
                                                 () => undefined,
                                             ),
@@ -38,10 +40,11 @@ const Term = ({ args, state, depth, path, type, canEval, setState }) => {
                 padding: '8px 16px',
                 paddingLeft: 16 * (depth + 1),
                 fontFamily: 'monospace',
-                color: canEval ? 'blue' : 'black',
+                color: canEval ? 'white' : colors.purpleText,
+                fontStyle: canEval ? '' : 'italic',
                 ':hover': canEval
                     ? {
-                          backgroundColor: '#efe',
+                          backgroundColor: colors.purpleHighlight,
                       }
                     : null,
             }}
@@ -119,8 +122,9 @@ const Branch = ({ state, ns, setState, depth }) => {
                     paddingLeft: 16 * (depth + 1),
                     fontSize: '80%',
                     fontWeight: 500,
+                    color: colors.orange,
                     ':hover': {
-                        backgroundColor: '#efe',
+                        backgroundColor: colors.purpleHighlight,
                     },
                 }}
                 onClick={() => setOpen(!isOpen)}
@@ -244,7 +248,8 @@ const Sidebar = ({ state, setState }) => {
                 width: 400,
                 flexShrink: 0,
                 overflow: 'auto',
-                backgroundColor: '#dcf2fd',
+                backgroundColor: colors.purple,
+                color: colors.purpleText,
             }}
         >
             <Branch depth={0} state={state} setState={setState} ns={[]} />
