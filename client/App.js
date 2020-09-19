@@ -86,7 +86,7 @@ const App = () => {
             <Sidebar state={state} setState={setState} />
             <div>
                 {state.head ? '#' + state.head.slice(0, 10) : null}
-                <Watchers key={state.head} state={state} setState={setState} />
+                <Watchers state={state} setState={setState} />
             </div>
         </div>
     );

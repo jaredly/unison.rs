@@ -9,7 +9,7 @@ const rm = (obj, k) => {
     return obj;
 };
 
-const Watch = ({ head, name, runtime, config, unWatch }) => {
+const Watch = ({ head, name, hash, runtime, config, unWatch }) => {
     const [result, setResult] = React.useState(null);
 
     const canRun =
@@ -27,9 +27,9 @@ const Watch = ({ head, name, runtime, config, unWatch }) => {
     }, [output.current, !!runtime, head]);
 
     const hasRun = React.useRef(false);
-    const oldHead = React.useRef(head);
-    if (oldHead.current !== head) {
-        oldHead.current = head;
+    const oldHash = React.useRef(hash);
+    if (oldHash.current !== hash) {
+        oldHash.current = hash;
         hasRun.current = false;
     }
 
@@ -54,7 +54,7 @@ const Watch = ({ head, name, runtime, config, unWatch }) => {
         } else {
             runtime.run(name, config.values, handlers.current);
         }
-    }, [!!runtime, canRun, handlers.current, config]);
+    }, [!!runtime, hash, canRun, handlers.current, config]);
     return (
         <div>
             {name}
@@ -78,6 +78,10 @@ const Watchers = ({ state, setState }) => {
                             head={state.head}
                             runtime={state.runtime}
                             config={state.watchers[key]}
+                            hash={findHash(
+                                state.tree,
+                                state.watchers[key].path,
+                            )}
                             unWatch={() =>
                                 setState((state) => ({
                                     ...state,
@@ -95,6 +99,22 @@ const Watchers = ({ state, setState }) => {
                 })}
         </div>
     );
+};
+
+const findHash = (tree, path) => {
+    const parent = path.slice(0, -1).join('.');
+    const last = path[path.length - 1];
+    if (!tree[parent]) {
+        console.log('no hash', tree, parent, path);
+        return null;
+    }
+    for (let child of tree[parent].data[1]) {
+        if (child[0] == last) {
+            return child[3];
+        }
+    }
+    console.log('no child', last, tree[parent].data[1]);
+    return null;
 };
 
 export default Watchers;

@@ -372,6 +372,7 @@ async fn serve_terms(
             } else {
                 None
             },
+            hash,
         ));
     }
 

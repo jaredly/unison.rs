@@ -251,7 +251,7 @@ pub fn load_main_branch(root: &std::path::Path) -> std::io::Result<Codebase> {
 }
 
 pub fn pack_term_json(
-    codebase: Codebase,
+    mut codebase: Codebase,
     root: &std::path::Path,
     hash: &str,
     out: &str,
@@ -260,8 +260,10 @@ pub fn pack_term_json(
 
     std::fs::write(
         out.to_owned() + ".names.json",
-        serde_json::to_string_pretty(&env_names(&codebase.get_names(), &runtime_env).serialize())
-            .unwrap(),
+        serde_json::to_string_pretty(
+            &env_names(&mut codebase.get_names(), &runtime_env).serialize(),
+        )
+        .unwrap(),
     )?;
 
     std::fs::write(
@@ -271,7 +273,7 @@ pub fn pack_term_json(
 }
 
 pub fn pack_term(
-    codebase: &Codebase,
+    codebase: &mut Codebase,
     root: &std::path::Path,
     hash: &str,
     out: &str,
@@ -372,14 +374,14 @@ pub fn pack(file: &String, outfile: &String) -> std::io::Result<()> {
 
     if path.exists() {
         let root = path.parent().unwrap().parent().unwrap();
-        let codebase = load_main_branch(root)?;
+        let mut codebase = load_main_branch(root)?;
         let hash = &path.file_name().unwrap().to_str().unwrap()[1..];
-        pack_term(&codebase, root, &hash, outfile)
+        pack_term(&mut codebase, root, &hash, outfile)
     } else {
         let root = default_root();
         let mut codebase = load_main_branch(root.as_path())?;
         let hash = find_term(&mut codebase, file);
-        pack_term(&codebase, root.as_path(), &hash.0, outfile)
+        pack_term(&mut codebase, root.as_path(), &hash.0, outfile)
     }
 }
 
@@ -395,7 +397,7 @@ pub fn pack_watch(term: &String, outfile: &String) -> std::io::Result<()> {
     println!("Initial build...");
     let mut codebase = load_main_branch(root.as_path())?;
     let hash = find_term(&mut codebase, term);
-    pack_term(&codebase, root.as_path(), &hash.0, outfile)?;
+    pack_term(&mut codebase, root.as_path(), &hash.0, outfile)?;
     println!("Finished! {:?}", now.elapsed());
 
     // Create a channel to receive the events.
@@ -422,7 +424,7 @@ pub fn pack_watch(term: &String, outfile: &String) -> std::io::Result<()> {
                     let now = std::time::Instant::now();
                     codebase.reload()?;
                     let hash = find_term(&mut codebase, term);
-                    pack_term(&codebase, root.as_path(), &hash.0, outfile)?;
+                    pack_term(&mut codebase, root.as_path(), &hash.0, outfile)?;
                     println!("Finished! {:?}", now.elapsed());
                 }
                 _ => (),

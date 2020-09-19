@@ -368,7 +368,7 @@ impl Codebase {
         Ok(())
     }
 
-    pub fn get_names(&self) -> crate::pack::Names<Hash> {
+    pub fn get_names(&mut self) -> crate::pack::Names<Hash> {
         let mut dest = Default::default();
         self.collect_names(&self.head.clone(), &vec![], &mut dest);
         dest
@@ -389,10 +389,15 @@ impl Codebase {
         }
     }
 
-    pub fn collect_names(&self, of: &str, path: &Vec<String>, dest: &mut crate::pack::Names<Hash>) {
-        let item = self.branches.get(of).unwrap();
+    pub fn collect_names(
+        &mut self,
+        of: &str,
+        path: &Vec<String>,
+        dest: &mut crate::pack::Names<Hash>,
+    ) {
+        let item = self.load(of).unwrap();
         item.collect_names(path, dest);
-        for (k, v) in &item.children {
+        for (k, v) in &item.children.clone() {
             let mut full = path.clone();
             full.push(k.text.clone());
             self.collect_names(&v.0, &full, dest);

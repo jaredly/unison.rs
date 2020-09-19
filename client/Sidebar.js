@@ -23,6 +23,7 @@ const Term = ({ args, state, depth, path, type, canEval, setState }) => {
                                   : {
                                         ...state.watchers,
                                         [name]: {
+                                            path,
                                             args: canEval[0],
                                             values: canEval[0].map(
                                                 () => undefined,
@@ -175,7 +176,7 @@ const Branch = ({ state, ns, setState, depth }) => {
                                     </h4>
                                 ) : null}
                                 {state.tree[key].data[1].map(
-                                    ([name, type, canEval]) => (
+                                    ([name, type, canEval, hash]) => (
                                         <Term
                                             depth={depth + 1}
                                             key={name}
