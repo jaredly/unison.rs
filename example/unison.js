@@ -21,8 +21,9 @@ const convert_handlers = (handlers, typeNameHashes, names) => {
     Object.keys(handlers).forEach((abilityName) => {
         const hash = typeNameHashes[abilityName];
         if (!hash) {
-            console.log(typeNameHashes);
-            throw new Error(`Hash not found for ability ${abilityName}`);
+            // console.log(typeNameHashes);
+            // throw new Error(`Hash not found for ability ${abilityName}`);
+            return; // not needed
         }
         if (!names[1][hash]) {
             throw new Error(
@@ -63,10 +64,10 @@ const convert_handlers = (handlers, typeNameHashes, names) => {
     return res;
 };
 
-export const fetch = (dataUrl) => {
+export const fetch = (dataUrl, namesUrl) => {
     return load(
         window.fetch(dataUrl).then((r) => r.text()),
-        window.fetch(dataUrl + '.json').then((r) => r.json()),
+        window.fetch(namesUrl).then((r) => r.json()),
     );
 };
 
@@ -79,31 +80,34 @@ const load = async (dataPromise, namesPromise) => {
     const hashesByName = hashesForConstrName(names);
     const hashesByTermName = hashesForTermName(names);
 
+    const getHash = (term) => {
+        const hash = hashesByTermName[term];
+        if (!hash) {
+            console.log(Object.keys(hashesByTermName));
+            throw new Error(`Term not found ${term}`);
+        }
+        return hash;
+    };
+
     return {
         enableLogging: (prefix) =>
             prefix
                 ? jsBridge.enable_logging_with_prefix(prefix)
                 : jsBridge.enable_logging(),
+        info: (term) => jsBridge.info(id, getHash(term)),
+        canRunSync: (term, handlers) => {
+            const hash = getHash(term);
+            return false; // TODO this should work
+        },
         run: (term, args, handlers) => {
-            const hash = hashesByTermName[term];
-            if (!hash) {
-                console.log(Object.keys(hashesByTermName));
-                throw new Error(`Term not found ${term}`);
-            }
+            const hash = getHash(term);
             const converted = convert_handlers(handlers, hashesByName, names);
-            // console.log('converted', handlers, hashesByName, names);
-            // console.log(converted);
             return jsBridge.run(id, hash, args, converted);
         },
         runSync: (term, args, handlers) => {
-            const hash = hashesByTermName[term];
-            if (!hash) {
-                console.log(Object.keys(hashesByTermName));
-                throw new Error(`Term not found ${term}`);
-            }
             return jsBridge.run_sync(
                 id,
-                hash,
+                getHash(term),
                 args,
                 convert_handlers(handlers, hashesByName, names),
             );
@@ -131,3 +135,5 @@ const load = async (dataPromise, namesPromise) => {
         },
     };
 };
+
+export default load;

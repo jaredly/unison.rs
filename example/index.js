@@ -1,13 +1,19 @@
 // What I imagine.
-import unison, { fetch } from './unison';
+import { fetch } from './unison';
 import makeHandlers from './handlers';
 
-fetch('./data/all.bin').then(
-    (runtime) => {
-        runtime.run('app_test.counter', [10], makeHandlers(runtime));
-    },
-    (err) => console.error(err),
-);
+window.loadUnison = fetch;
+window.makeDefaultHandlers = makeHandlers;
+
+// This is just to make webpack-dev-server refresh for me :D
+// import './data/counter_new.bin.json';
+
+// fetch('./data/counter_new.bin').then(
+//     (runtime) => {
+//         runtime.run('app_test.counter', [10], makeHandlers(runtime));
+//     },
+//     (err) => console.error(err),
+// );
 
 // TODO: this is super slow
 // fetch('./data/get_random_ints.bin').then(

@@ -100,7 +100,7 @@ pub fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
     let mut trace = shared::chrome_trace::Traces::new();
 
     let mut names = Default::default();
-    branch.get_names(&vec![], &mut names);
+    branch.get_flat_names(&vec![], &mut names);
     let mut ffi = ffi::RustFFI(names, vec![]);
 
     // for effect in effects {
@@ -171,7 +171,8 @@ pub fn run_term(
                     .get(&k.to_string())
                     .unwrap()
                     .0
-                    .to_pretty(80)
+                    // TODO maybe do names here? although having the hashes is maybe most helpful in this logging case
+                    .to_pretty(80, &Default::default())
                     .as_bytes(),
             )?;
             file.write_all(b"\n\n")?;
@@ -189,7 +190,7 @@ pub fn run_term(
 
     let mut trace = shared::chrome_trace::Traces::new();
     let names = Default::default();
-    // branch.get_names(&vec![], &mut names);
+    // branch.get_flat_names(&vec![], &mut names);
     let mut ffi = ffi::RustFFI(names, vec![]);
     let ret = shared::ir_runtime::eval(
         &runtime_env,

@@ -9,7 +9,7 @@ fn unit() -> Value {
     ), 0, 1)), 0)
 }
 
-pub struct RustFFI(pub crate::printer::Names, pub Vec<FullRequest>);
+pub struct RustFFI(pub crate::printer::FlatNames, pub Vec<FullRequest>);
 impl RustFFI {
     pub fn has_next_request(&self) -> bool {
         self.1.len() > 0

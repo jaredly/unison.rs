@@ -1,10 +1,16 @@
 use shared::types::*;
 
 pub trait Visitor {
-    fn visit_abt<Inner: Accept>(&mut self, abt: &mut ABT<Inner>) -> bool;
-    fn visit_term(&mut self, term: &mut Term) -> bool;
-    fn visit_type(&mut self, typ: &mut Type) -> bool;
-    fn post_abt<Inner: Accept>(&mut self, abt: &mut ABT<Inner>);
+    fn visit_abt<Inner: Accept>(&mut self, _abt: &mut ABT<Inner>) -> bool {
+        true
+    }
+    fn visit_term(&mut self, _term: &mut Term) -> bool {
+        true
+    }
+    fn visit_type(&mut self, _typ: &mut Type) -> bool {
+        true
+    }
+    fn post_abt<Inner: Accept>(&mut self, _abt: &mut ABT<Inner>) {}
 }
 
 pub trait Accept {
