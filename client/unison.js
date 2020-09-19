@@ -96,9 +96,13 @@ export const load = async (dataPromise, namesPromise) => {
                 : jsBridge.enable_logging(),
         info: (term) => jsBridge.info(id, getHash(term)),
         canRunSync: (term, handlers) => {
-            const hash = getHash(term);
-            // const handlers = convert_handlers(handlers, hashesByName, names),
-            return false; // TODO this should work
+            console.log('getting effects for', term);
+            const effects = jsBridge.effects(id, getHash(term));
+            console.log('ok checked effects', effects);
+            return convert_handlers(handlers, hashesByName, names).every(
+                // either it's sync, or unused
+                (handler) => handler[2] || !effects.contains(handler[0]),
+            );
         },
         run: (term, args, handlers) => {
             const hash = getHash(term);

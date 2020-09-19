@@ -293,6 +293,25 @@ pub fn info(env_id: usize, term: &str) -> Result<JsValue, JsValue> {
     Ok(js_res.into())
 }
 
+#[wasm_bindgen]
+pub fn effects(env_id: usize, term: &str) -> Result<JsValue, JsValue> {
+    let mut l = ENV.lock().unwrap();
+    let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
+
+    let (_, typ) = env.terms.get(&Hash::from_string(term)).unwrap();
+    let (_args, effects, _result) = typ.args_and_effects();
+    let js_res = js_sys::Array::new();
+    for effect in effects {
+        match effect.ref_name() {
+            Some(name) => {
+                js_res.push(&JsValue::from(effect.ref_name().unwrap()));
+            }
+            _ => (),
+        }
+    }
+    Ok(js_res.into())
+}
+
 fn js_obj(items: Vec<(JsValue, JsValue)>) -> JsValue {
     let res = js_sys::Array::new();
     for (k, v) in items {

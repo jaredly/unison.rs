@@ -378,6 +378,16 @@ impl ABT<Type> {
         }
     }
 
+    pub fn ref_name(&self) -> Option<String> {
+        use ABT::*;
+        match self {
+            Tm(term) => term.ref_name(),
+            Cycle(inner) => inner.ref_name(),
+            Abs(_, _, inner) => inner.ref_name(),
+            Var(_, _) => None,
+        }
+    }
+
     pub fn args_and_effects(&self) -> (Vec<ABT<Type>>, HashSet<ABT<Type>>, ABT<Type>) {
         use ABT::*;
         match self {

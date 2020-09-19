@@ -13,7 +13,8 @@ const Arg = ({ arg, value, onChange }) => {
     if (arg === 'Text') {
         return (
             <input
-                value={value}
+                value={value == null ? '' : value}
+                placeholder="Text"
                 type="text"
                 onChange={(evt) => {
                     onChange(evt.target.value);
@@ -23,7 +24,8 @@ const Arg = ({ arg, value, onChange }) => {
     }
     return (
         <input
-            value={value}
+            value={value == null ? '' : value}
+            placeholder={arg}
             type="number"
             onChange={(evt) => {
                 onChange(+evt.target.value);
