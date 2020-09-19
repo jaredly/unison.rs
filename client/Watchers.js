@@ -9,8 +9,52 @@ const rm = (obj, k) => {
     return obj;
 };
 
-const Watch = ({ head, name, hash, runtime, config, unWatch }) => {
+const Arg = ({ arg, value, onChange }) => {
+    if (arg === 'Text') {
+        return (
+            <input
+                value={value}
+                type="text"
+                onChange={(evt) => {
+                    onChange(evt.target.value);
+                }}
+            />
+        );
+    }
+    return (
+        <input
+            value={value}
+            type="number"
+            onChange={(evt) => {
+                onChange(+evt.target.value);
+            }}
+        />
+    );
+};
+
+const Watch = ({
+    head,
+    name,
+    hash,
+    runtime,
+    config,
+    unWatch,
+    updateValues,
+}) => {
     const [result, setResult] = React.useState(null);
+
+    const [tmpValues, setValues] = React.useState(config.values);
+    const pastValues = React.useRef(config.values);
+    React.useEffect(() => {
+        if (pastValues.current !== config.values) {
+            pastValues.current = config.values;
+            setValues(config.values);
+        }
+    }, [config.values]);
+
+    const argsToFill = config.args
+        .map((arg, i) => [arg, i])
+        .filter((a) => a[0] != null);
 
     const canRun =
         config.args.length == 0 ||
@@ -81,6 +125,33 @@ const Watch = ({ head, name, hash, runtime, config, unWatch }) => {
                     </div>
                 ) : null}
             </div>
+            {argsToFill.length ? (
+                <div css={{ padding: '16px 0' }}>
+                    {argsToFill.map(([arg, i]) => (
+                        <Arg
+                            arg={arg}
+                            key={i}
+                            value={tmpValues[i]}
+                            onChange={(value) => {
+                                const t = tmpValues.slice();
+                                t[i] = value;
+                                setValues(t);
+                            }}
+                        />
+                    ))}
+                    <button
+                        onClick={() => {
+                            if (output.current) {
+                                output.current.innerHTML = '';
+                            }
+                            hasRun.current = false;
+                            updateValues(tmpValues);
+                        }}
+                    >
+                        Apply
+                    </button>
+                </div>
+            ) : null}
             <div key={hash} ref={output} />
         </div>
     );
@@ -100,6 +171,20 @@ const Watchers = ({ state, setState }) => {
                             head={state.head}
                             runtime={state.runtime}
                             config={state.watchers[key]}
+                            updateValues={(values) => {
+                                setState((state) => {
+                                    return {
+                                        ...state,
+                                        watchers: {
+                                            ...state.watchers,
+                                            [key]: {
+                                                ...state.watchers[key],
+                                                values,
+                                            },
+                                        },
+                                    };
+                                });
+                            }}
                             hash={findHash(
                                 state.tree,
                                 state.watchers[key].path,

@@ -30,7 +30,8 @@ hmmm yeah the server could just "build on demand" probably?
 ## Todo for UI:
 
 - enter args, click "render"
-- some styling of the watchers section
+- [x] some styling of the watchers section
+- BUG if you delete a term that's being watched, everything dies
 - a coherent color scheme
 - and that's probably it for the moment?
 - I do want to know why the random generation takes so darn long.
