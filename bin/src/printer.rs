@@ -248,10 +248,22 @@ impl ToDoc for Type {
                 .append(RcDoc::text(" -> "))
                 .append(two.to_doc(names)),
             Ann(inner, _) => inner.to_doc(names),
+            // (match &**one {
+            //     ABT::Tm(Type::Ref(_)) => one.to_doc(names),
+            //     _ => RcDoc::text("(")
+            //         .append(one.to_doc(names))
+            //         .append(RcDoc::text(")")),
+            // })
             App(one, two) => one
                 .to_doc(names)
                 .append(RcDoc::text(" "))
-                .append(two.to_doc(names)),
+                .append(match &**two {
+                    // if it's simple, no parens needed
+                    ABT::Tm(Type::Ref(_)) => two.to_doc(names),
+                    _ => RcDoc::text("(")
+                        .append(two.to_doc(names))
+                        .append(RcDoc::text(")")),
+                }),
             Effect(effects, value) => RcDoc::text("{")
                 .append(effects.to_doc(names))
                 .append(RcDoc::text("}"))

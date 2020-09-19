@@ -146,7 +146,13 @@ const Watch = ({
                     {name}
                 </div>
                 {canRun && result != null ? (
-                    <div css={{ whiteSpace: 'pre', fontFamily: 'monospace' }}>
+                    <div
+                        css={{
+                            whiteSpace: 'pre',
+                            overflow: 'auto',
+                            fontFamily: 'monospace',
+                        }}
+                    >
                         {JSON.stringify(result)}
                     </div>
                 ) : null}
@@ -155,6 +161,7 @@ const Watch = ({
                 css={{
                     fontFamily: 'monospace',
                     padding: '8px 0',
+                    overflow: 'auto',
                 }}
             >
                 {config.type}
