@@ -278,11 +278,11 @@ async fn main() {
 
     let fs = warp::fs::dir(".");
 
-    let wasm_assets = warp::fs::dir("../client/dist");
-    let other_assets = warp::fs::dir("static");
+    // let wasm_assets = warp::fs::dir("../client/dist");
+    // let other_assets = warp::fs::dir("static");
 
-    // let wasm_assets = as_filter::<WasmPkg>();
-    // let other_assets = as_filter::<Asset>().or(index_filter::<Asset>());
+    let wasm_assets = as_filter::<WasmPkg>();
+    let other_assets = as_filter::<Asset>().or(index_filter::<Asset>());
 
     println!("Serving at http://127.0.0.1:3030");
     warp::serve(
@@ -302,13 +302,13 @@ async fn main() {
 // So, I should probably move to use these, but I want to
 // do a prod build, while also
 
-// #[derive(RustEmbed)]
-// #[folder = "static"]
-// struct Asset;
+#[derive(RustEmbed)]
+#[folder = "static"]
+struct Asset;
 
-// #[derive(RustEmbed)]
-// #[folder = "../client/dist"]
-// struct WasmPkg;
+#[derive(RustEmbed)]
+#[folder = "../client/dist"]
+struct WasmPkg;
 
 #[derive(Default)]
 struct TypeHashCollector(std::collections::HashSet<String>);
