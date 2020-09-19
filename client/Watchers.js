@@ -81,7 +81,7 @@ const Watch = ({ head, name, hash, runtime, config, unWatch }) => {
                     </div>
                 ) : null}
             </div>
-            <div ref={output} />
+            <div key={hash} ref={output} />
         </div>
     );
 };
