@@ -24,9 +24,14 @@ const Watch = ({ head, name, runtime, config, unWatch }) => {
         if (output.current && runtime) {
             handlers.current = makeHandlers(runtime, output.current);
         }
-    }, [output.current, !!runtime]);
+    }, [output.current, !!runtime, head]);
 
     const hasRun = React.useRef(false);
+    const oldHead = React.useRef(head);
+    if (oldHead.current !== head) {
+        oldHead.current = head;
+        hasRun.current = false;
+    }
 
     React.useEffect(() => {
         if (!canRun || !handlers.current || !runtime) {
@@ -36,8 +41,10 @@ const Watch = ({ head, name, runtime, config, unWatch }) => {
         // TODO: when updating config values, need to clear out hasRun.
         // maybe change the name to "needsRun"
         if (hasRun.current) {
+            console.log('skip run');
             return;
         }
+        console.log('running with', runtime.head);
         hasRun.current = true;
         if (
             config.args.length === 0 ||

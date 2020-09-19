@@ -31,6 +31,7 @@ const initialState = {
     head: null,
     runtime: null,
     tree: {},
+    expanded: { '': true },
 };
 
 const App = () => {
@@ -54,6 +55,7 @@ const App = () => {
         if (!watchers.length) {
             return;
         }
+        console.log('Setting runtime to null');
         setState((state) => ({ ...state, runtime: null }));
         const dataUrl = fetch(
             `/build/${head}/${watchers.map((m) => '.' + m).join(',')}`,
@@ -67,6 +69,7 @@ const App = () => {
                 if (state.head !== head) {
                     return state;
                 }
+                runtime.head = head;
                 return { ...state, runtime };
             }),
         );

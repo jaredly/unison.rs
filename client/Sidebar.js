@@ -51,13 +51,44 @@ const Term = ({ args, state, depth, path, type, canEval, setState }) => {
     );
 };
 
-const Branch = ({ state, ns, setState, depth }) => {
-    const [isOpen, setOpen] = React.useState(false);
+const Type = ({ path, depth }) => {
+    return (
+        <div>
+            <div
+                css={{
+                    padding: '8px 16px',
+                    paddingLeft: 16 * (depth + 1),
+                    fontFamily: 'monospace',
+                }}
+                onClick={() => setOpen(!isOpen)}
+            >
+                {path.join('.')}
+            </div>
+        </div>
+    );
+};
 
+const styles = {
+    heading: {
+        margin: 0,
+        padding: '8px 16px',
+        fontSize: '80%',
+    },
+};
+
+const Branch = ({ state, ns, setState, depth }) => {
+    // const [isOpen, setOpen] = React.useState(false);
     const key = ns.length ? ns.join('.') : '';
+    const isOpen = state.expanded[key];
+    const setOpen = (open) =>
+        setState((state) => ({
+            ...state,
+            expanded: { ...state.expanded, [key]: open },
+        }));
+
     React.useEffect(() => {
         const head = state.head;
-        if (isOpen && !state.tree[key]) {
+        if (isOpen && !state.tree[key] && head) {
             fetch(`/terms/${state.head}/${key}`)
                 .then((r) => r.json())
                 .then((data) => {
@@ -103,15 +134,42 @@ const Branch = ({ state, ns, setState, depth }) => {
                 >
                     {state.tree[key] ? (
                         <React.Fragment>
-                            {state.tree[key][0].map((child) => (
-                                <Branch
-                                    depth={depth + 1}
-                                    key={child}
-                                    state={state}
-                                    ns={ns.concat([child])}
-                                    setState={setState}
-                                />
-                            ))}
+                            {state.tree[key][0].length ? (
+                                <h4
+                                    css={[
+                                        styles.heading,
+                                        {
+                                            paddingLeft: 16 * (depth + 2),
+                                        },
+                                    ]}
+                                >
+                                    Namespaces
+                                </h4>
+                            ) : null}
+                            {state.tree[key][0]
+                                .filter((child) => child.trim())
+                                .sort()
+                                .map((child) => (
+                                    <Branch
+                                        depth={depth + 1}
+                                        key={child}
+                                        state={state}
+                                        ns={ns.concat([child])}
+                                        setState={setState}
+                                    />
+                                ))}
+                            {state.tree[key][1].length ? (
+                                <h4
+                                    css={[
+                                        styles.heading,
+                                        {
+                                            paddingLeft: 16 * (depth + 2),
+                                        },
+                                    ]}
+                                >
+                                    Terms
+                                </h4>
+                            ) : null}
                             {state.tree[key][1].map(([name, type, canEval]) => (
                                 <Term
                                     depth={depth + 1}
@@ -123,10 +181,50 @@ const Branch = ({ state, ns, setState, depth }) => {
                                     canEval={canEval}
                                 />
                             ))}
+                            {state.tree[key][2].length ? (
+                                <h4
+                                    css={[
+                                        styles.heading,
+                                        {
+                                            paddingLeft: 16 * (depth + 2),
+                                        },
+                                    ]}
+                                >
+                                    Types
+                                </h4>
+                            ) : null}
+                            {state.tree[key][2].sort().map((child) => (
+                                <Type
+                                    key={child}
+                                    depth={depth + 1}
+                                    path={ns.concat([child])}
+                                />
+                            ))}
+                            {state.tree[key][3].length ? (
+                                <h4
+                                    css={[
+                                        styles.heading,
+                                        {
+                                            paddingLeft: 16 * (depth + 2),
+                                        },
+                                    ]}
+                                >
+                                    Constructors
+                                </h4>
+                            ) : null}
+                            {state.tree[key][3]
+                                .sort()
+                                .map(([name, hash, idx]) => (
+                                    <Type
+                                        key={name}
+                                        depth={depth + 1}
+                                        path={ns.concat([name])}
+                                    />
+                                ))}
                         </React.Fragment>
-                    ) : (
-                        'Loading...'
-                    )}
+                    ) : null
+                    // 'Loading...'
+                    }
                 </div>
             ) : null}
         </div>
