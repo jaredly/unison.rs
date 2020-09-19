@@ -56,10 +56,32 @@ const Watch = ({ head, name, hash, runtime, config, unWatch }) => {
         }
     }, [!!runtime, hash, canRun, handlers.current, config]);
     return (
-        <div>
-            {name}
+        <div
+            css={{
+                padding: 16,
+                margin: 8,
+                boxShadow: '0 0 3px #ccc',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+            }}
+        >
+            <div css={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div
+                    css={{
+                        fontWeight: 500,
+                        marginRight: 16,
+                    }}
+                >
+                    {name}
+                </div>
+                {canRun && result != null ? (
+                    <div css={{ whiteSpace: 'pre', fontFamily: 'monospace' }}>
+                        {JSON.stringify(result)}
+                    </div>
+                ) : null}
+            </div>
             <div ref={output} />
-            {canRun ? <div>{JSON.stringify(result)}</div> : null}
         </div>
     );
 };
@@ -67,7 +89,7 @@ const Watch = ({ head, name, hash, runtime, config, unWatch }) => {
 const Watchers = ({ state, setState }) => {
     return (
         <div css={{ flex: 1, overflow: 'auto' }}>
-            <h3>Watchers</h3>
+            <h3 css={{ margin: 0, padding: 32 }}>Watchers</h3>
             {Object.keys(state.watchers)
                 .filter((k) => state.watchers[k])
                 .map((key) => {

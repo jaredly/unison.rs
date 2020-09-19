@@ -61,7 +61,6 @@ const Type = ({ path, depth }) => {
                     paddingLeft: 16 * (depth + 1),
                     fontFamily: 'monospace',
                 }}
-                onClick={() => setOpen(!isOpen)}
             >
                 {path.join('.')}
             </div>
