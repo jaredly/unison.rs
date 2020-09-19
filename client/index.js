@@ -1,9 +1,19 @@
 // What I imagine.
+import 'regenerator-runtime';
+import * as React from 'react';
 import { fetch } from './unison';
 import makeHandlers from './handlers';
 
-window.loadUnison = fetch;
-window.makeDefaultHandlers = makeHandlers;
+import { render } from 'react-dom';
+import App from './App';
+
+const root = document.createElement('div');
+document.body.appendChild(root);
+
+render(<App />, root);
+
+// window.loadUnison = fetch;
+// window.makeDefaultHandlers = makeHandlers;
 
 // This is just to make webpack-dev-server refresh for me :D
 // import './data/counter_new.bin.json';

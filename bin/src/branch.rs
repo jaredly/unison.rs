@@ -72,16 +72,32 @@ impl RawBranch {
         }
     }
 
-    pub fn get_names(&self) -> (Vec<(String, String)>, Vec<String>) {
+    pub fn get_names(
+        &self,
+    ) -> (
+        Vec<(String, String)>,
+        Vec<String>,
+        Vec<String>,
+        Vec<(String, String, usize)>,
+    ) {
         let mut terms = vec![];
+        let mut constrs = vec![];
         for (k, v) in self.terms.d1.iter() {
-            if let types::Referent::Ref(Reference::DerivedId(Id(hash, _, _))) = k {
-                terms.push((v.text.clone(), hash.to_string()));
+            match k {
+                types::Referent::Ref(Reference::DerivedId(Id(hash, _, _))) => {
+                    terms.push((v.text.clone(), hash.to_string()));
+                }
+                types::Referent::Con(Reference::DerivedId(Id(hash, _, _)), n, _) => {
+                    constrs.push((v.text.clone(), hash.to_string(), *n));
+                }
+                _ => (),
             }
         }
         (
             terms,
             self.children.keys().map(|k| k.text.clone()).collect(),
+            self.types.d1.values().map(|k| k.text.clone()).collect(),
+            constrs,
         )
     }
 
@@ -297,7 +313,12 @@ impl Codebase {
     pub fn terms_and_children(
         &mut self,
         of: &str,
-    ) -> std::io::Result<(Vec<(String, String)>, Vec<String>)> {
+    ) -> std::io::Result<(
+        Vec<(String, String)>,
+        Vec<String>,
+        Vec<String>,
+        Vec<(String, String, usize)>,
+    )> {
         self.load(of).map(|branch| branch.get_names())
     }
 

@@ -278,7 +278,7 @@ async fn main() {
 
     let fs = warp::fs::dir(".");
 
-    let wasm_assets = warp::fs::dir("../example/dist");
+    let wasm_assets = warp::fs::dir("../client/dist");
     let other_assets = warp::fs::dir("static");
 
     // let wasm_assets = as_filter::<WasmPkg>();
@@ -307,7 +307,7 @@ async fn main() {
 // struct Asset;
 
 // #[derive(RustEmbed)]
-// #[folder = "../example/dist"]
+// #[folder = "../client/dist"]
 // struct WasmPkg;
 
 #[derive(Default)]
@@ -345,7 +345,7 @@ async fn serve_terms(
 
     let flat_names: crate::printer::FlatNames = codebase.get_names().into();
 
-    let (terms, children) = codebase.terms_and_children(&ns).unwrap();
+    let (terms, children, types, constrs) = codebase.terms_and_children(&ns).unwrap();
     let mut env = crate::env::Env::init(codebase.root().as_path());
     let mut typed_terms = vec![];
     // let mut type_hashes = TypeHashCollector::default();
@@ -363,20 +363,19 @@ async fn serve_terms(
             name,
             typ.to_pretty(100, &flat_names),
             if all_primitive {
-                Some((args, effects))
+                Some((
+                    args.into_iter()
+                        .map(|m| shared::convert::to_json_type(m))
+                        .collect::<Vec<serde_json::Value>>(),
+                    effects,
+                ))
             } else {
                 None
             },
         ));
     }
 
-    // let mut type_names = std::collections::HashMap::new();
-    // for hash in type_hashes.0 {
-    //     type_names.insert(hash, vec![]);
-    // }
-    // codebase.collect_some_types(&codebase.head.clone(), &vec![], &mut type_names);
-
-    Ok(serde_json::to_string_pretty(&(children, typed_terms)).unwrap())
+    Ok(serde_json::to_string_pretty(&(children, typed_terms, types, constrs)).unwrap())
 }
 
 async fn serve_info(

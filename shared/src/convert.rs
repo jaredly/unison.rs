@@ -9,6 +9,39 @@ pub static OPTION_HASH: &'static str = "5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea
 pub const UNIT_HASH: &'static str = "568rsi7o3ghq8mmbea2sf8msdk20ohasob5s2rvjtqg2lr0vs39l1hm98urrjemsr3vo3fa52pibqu0maluq7g8sfg3h5f5re6vitj8";
 pub const TUPLE_HASH: &'static str = "onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0";
 
+pub fn to_json_type(typ: ABT<Type>) -> serde_json::Value {
+    use serde_json::Value::*;
+    use std::iter::FromIterator;
+    use Type::*;
+    match typ {
+        ABT::Tm(term) => match term {
+            Ann(inner, _) => to_json_type(*inner),
+            Forall(inner) => to_json_type(*inner),
+            IntroOuter(inner) => to_json_type(*inner),
+            App(one, two) => Object(serde_json::Map::from_iter(vec![
+                ("type".into(), to_json_type(*one)),
+                ("arg".into(), to_json_type(*two)),
+            ])),
+            Ref(Reference::Builtin(text)) => String(text.to_owned()),
+            Ref(Reference::DerivedId(Id(hash, _, _))) => {
+                if hash.0 == OPTION_HASH {
+                    String("Option".to_owned())
+                } else if hash.0 == UNIT_HASH {
+                    Null
+                } else if hash.0 == TUPLE_HASH {
+                    String("Tuple".to_owned())
+                } else {
+                    String("UNKNOWN_CUSTOM".to_owned())
+                }
+            }
+            _ => String("UNKNOWN_TYPE".to_owned()),
+        },
+        ABT::Cycle(inner) => to_json_type(*inner),
+        ABT::Abs(_, _, inner) => to_json_type(*inner),
+        _ => String("UNKNOWN_ABT".to_owned()),
+    }
+}
+
 pub trait ConvertibleArg<T: Sized> {
     fn as_f64(&self) -> Option<f64>;
     fn as_string(&self) -> Option<String>;

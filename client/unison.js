@@ -71,7 +71,7 @@ export const fetch = (dataUrl, namesUrl) => {
     );
 };
 
-const load = async (dataPromise, namesPromise) => {
+export const load = async (dataPromise, namesPromise) => {
     const jsBridge = await js;
     const data = await dataPromise;
     const names = await namesPromise;
@@ -135,5 +135,3 @@ const load = async (dataPromise, namesPromise) => {
         },
     };
 };
-
-export default load;

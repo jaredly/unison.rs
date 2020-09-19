@@ -375,7 +375,6 @@ impl ABT<Type> {
             Cycle(inner) => inner.is_primitive(),
             Abs(_, _, inner) => inner.is_primitive(),
             Var(Symbol { text, .. }, _) => text == "()",
-            _ => false,
         }
     }
 
