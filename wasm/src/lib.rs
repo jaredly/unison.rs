@@ -399,8 +399,8 @@ pub fn run(
         shared::state::build_effects_map(effects),
     );
     let mut trace = shared::chrome_trace::Traces::new();
-    let _ignored = state.run_to_end(&mut ffi, &mut trace);
-    Ok(JsValue::UNDEFINED)
+    let response = state.run_to_end(&mut ffi, &mut trace).unwrap();
+    Ok(JsValue::from_serde(&response).unwrap_or(JsValue::UNDEFINED))
 }
 
 #[wasm_bindgen]
