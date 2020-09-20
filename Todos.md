@@ -1,4 +1,3 @@
-
 ## Todo for UI:
 
 - BUG if you delete a term that's being watched, everything dies
