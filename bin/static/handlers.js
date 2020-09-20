@@ -4,7 +4,7 @@ window.makeAbilityHandlers = (runtime, root) => {
 
     const elements = [];
 
-    return {
+    const handlers = {
         handlers: {
             Time: {
                 currentTimeStampMs: () => ({ Nat: Date.now() }),
@@ -113,4 +113,5 @@ window.makeAbilityHandlers = (runtime, root) => {
             },
         },
     };
+    return handlers;
 };
