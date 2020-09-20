@@ -3,7 +3,7 @@ name: github release
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   check:
