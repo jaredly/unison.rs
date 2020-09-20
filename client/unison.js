@@ -29,7 +29,7 @@ const makeHandlerHashes = (handlers, typeNameHashes, names) => {
                 `No constructor data found for #${hash.slice(0, 10)}`,
             );
         }
-        res[abilityName] = {};
+        res[abilityName] = { hash, idxs: {} };
         Object.keys(handlers[abilityName]).forEach((constrName) => {
             const idx = Object.keys(names[1][hash]).find((idx) => {
                 if (
@@ -53,9 +53,13 @@ const makeHandlerHashes = (handlers, typeNameHashes, names) => {
                     )}`,
                 );
             }
-            res[abilityName][constrName] = [hash, +idx];
+            res[abilityName].idxs[constrName] = +idx;
         });
     });
+    console.log(
+        `Handler hashes generated (because they weren't provided with the handler functions)`,
+    );
+    console.log(res);
     return res;
 };
 
@@ -65,8 +69,9 @@ const convertHandlers = (handlers, handlerHashes) => {
         if (!handlerHashes[abilityName]) {
             return;
         }
+        const hash = handlerHashes[abilityName].hash;
         Object.keys(handlers[abilityName]).forEach((constrName) => {
-            const [hash, idx] = handlerHashes[abilityName][constrName];
+            const idx = handlerHashes[abilityName].idxs[constrName];
             const v = handlers[abilityName][constrName];
             if (v.type === 'full') {
                 res.push([hash, +idx, false, v.handler]);
@@ -80,8 +85,10 @@ const convertHandlers = (handlers, handlerHashes) => {
 
 const convert_handlers = (handlers, typeNameHashes, names) =>
     convertHandlers(
-        handlers,
-        makeHandlerHashes(handlers, typeNameHashes, names),
+        handlers.handlers,
+        handlers.hashes
+            ? handlers.hashes
+            : makeHandlerHashes(handlers.handlers, typeNameHashes, names),
     );
 
 // const convert_handlers = (handlers, typeNameHashes, names) => {

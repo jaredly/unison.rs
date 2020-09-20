@@ -2,7 +2,6 @@
 /** @jsx jsx */
 import { jsx } from '@emotion/core';
 import * as React from 'react';
-import makeHandlers from './handlers';
 
 const rm = (obj, k) => {
     delete obj[k];
@@ -82,7 +81,10 @@ const Watch = ({
     const handlers = React.useRef(null);
     React.useEffect(() => {
         if (output.current && runtime) {
-            handlers.current = makeHandlers(runtime, output.current);
+            handlers.current = window.makeAbilityHandlers(
+                runtime,
+                output.current,
+            );
         }
     }, [output.current, !!runtime, head]);
 

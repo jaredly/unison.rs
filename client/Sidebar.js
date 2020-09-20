@@ -9,6 +9,8 @@ const rm = (obj, k) => {
     return obj;
 };
 
+const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 const Term = ({ args, state, depth, path, type, canEval, setState }) => {
     const name = path.join('.');
     return (
@@ -178,8 +180,9 @@ const Branch = ({ state, ns, setState, depth }) => {
                                         Terms
                                     </h4>
                                 ) : null}
-                                {state.tree[key].data[1].map(
-                                    ([name, type, canEval, hash]) => (
+                                {state.tree[key].data[1]
+                                    .sort((a, b) => cmp(a[0], b[0]))
+                                    .map(([name, type, canEval, hash]) => (
                                         <Term
                                             depth={depth + 1}
                                             key={name}
@@ -189,8 +192,7 @@ const Branch = ({ state, ns, setState, depth }) => {
                                             setState={setState}
                                             canEval={canEval}
                                         />
-                                    ),
-                                )}
+                                    ))}
                                 {state.tree[key].data[2].length ? (
                                     <h4
                                         css={[
