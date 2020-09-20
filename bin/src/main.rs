@@ -19,19 +19,45 @@ mod server;
 mod unique;
 mod visitor;
 
+fn help() {
+    println!(
+        r#"Unison.rs - a wasm runtime and development environment for unison
+
+Usage:
+- unison.rs serve                     : run the development environment. view it at http://127.0.0.1:3030
+- unison.rs serve path/to/codebase    : specify the codebase root (the default is ~/.unison/v1)
+- unison.rs serve --override some/dir : provide an override directory for serving custom javascript files
+"#
+    );
+}
+
 fn main() -> std::io::Result<()> {
     env_logger::init();
-    println!("Hello, world!");
     let mut args = std::env::args().collect::<Vec<String>>();
     args.remove(0);
     if args.len() == 0 {
-        println!("Commands: test, pack, pack-all, run, test-all");
+        help();
         Ok(())
     } else {
         let cmd = args.remove(0);
         match (cmd.as_str(), args.as_slice()) {
+            ("--help", []) => {
+                help();
+                Ok(())
+            }
             ("test", [path]) => run::run_test(path),
-            ("serve", []) => server::serve(),
+            ("serve", []) => server::serve(crate::pack::default_root(), None),
+            ("serve", [overridez, op]) if overridez == "--override" => {
+                server::serve(crate::pack::default_root(), Some(op.to_owned()))
+            }
+            ("serve", [root]) => server::serve(std::path::PathBuf::from(root), None),
+            // lol maybe I should get real arg parsing
+            ("serve", [root, overridez, op]) if overridez == "--override" => {
+                server::serve(std::path::PathBuf::from(root), Some(op.to_owned()))
+            }
+            ("serve", [overridez, op, root]) if overridez == "--override" => {
+                server::serve(std::path::PathBuf::from(root), Some(op.to_owned()))
+            }
             ("pack-watch", [path, output]) => pack::pack_watch(path, output),
             ("pack", [path, output]) => pack::pack(path, output),
             ("pack-json", [path, output]) => pack::pack_json(path, output),
@@ -40,7 +66,8 @@ fn main() -> std::io::Result<()> {
             // ("test-all", [path]) => run_all_tests(path),
             ("run", args) => run::run_cli_term(&args[0], &args[1..]),
             _ => {
-                println!("Unknown command");
+                println!("Unknown invocation.");
+                help();
                 Ok(())
             }
         }

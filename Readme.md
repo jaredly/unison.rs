@@ -2,6 +2,14 @@
 
 An experimental runtime for unison code, written in rust, compiled to wasm for use in the browser.
 
+## Usage:
+
+- download the release binary
+- run it! doesn't matter where.
+
+
+
+
 ## "Counter" interactive web example:
 
 - in ucm, run `pull https://github.com/jaredly/unison-web-example .app_test`

@@ -1,4 +1,5 @@
-export default (runtime) => {
+window.abilityHandlerHashes = null;
+window.abilityHandlers = (runtime) => {
     const mvars = [];
 
     const elements = [];

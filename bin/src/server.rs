@@ -147,7 +147,7 @@ fn mime_for_ext(f: &str) -> &'static str {
     }
 }
 
-async fn main() {
+async fn main(codebase_root: std::path::PathBuf, override_dir: Option<String>) {
     let pool_ref = PoolRef::default();
     let pool_for_head_message = pool_ref.clone();
 
@@ -174,7 +174,7 @@ async fn main() {
         }
     });
 
-    let root = crate::pack::default_root();
+    // let root = crate::pack::default_root();
 
     // assigning here so it doesn't get dropped
     let _watcher = {
@@ -189,7 +189,7 @@ async fn main() {
         // below will be monitored for changes.
         watcher
             .watch(
-                crate::pack::head_dir(root.as_path()),
+                crate::pack::head_dir(codebase_root.as_path()),
                 RecursiveMode::Recursive,
             )
             .expect("Can't watch");
@@ -217,7 +217,7 @@ async fn main() {
     // And then it requests that hash (at `/build/:hash`)
     // And then we build-on-demand.
     let codebase_ref = Arc::new(RwLock::new(
-        crate::pack::load_main_branch(root.as_path()).unwrap(),
+        crate::pack::load_main_branch(codebase_root.as_path()).unwrap(),
     ));
     let codebase_for_ws = codebase_ref.clone();
     let codebase_for_warp = warp::any().map(move || codebase_ref.clone());
@@ -276,27 +276,30 @@ async fn main() {
             ws.on_upgrade(|websocket: warp::filters::ws::WebSocket| add(pool, websocket, codebase))
         });
 
-    let fs = warp::fs::dir(".");
+    let wasm_assets = as_filter::<WasmPkg>();
+    let other_assets = as_filter::<Asset>().or(index_filter::<Asset>());
 
     // let wasm_assets = warp::fs::dir("../client/dist");
     // let other_assets = warp::fs::dir("static");
 
-    let wasm_assets = as_filter::<WasmPkg>();
-    let other_assets = as_filter::<Asset>().or(index_filter::<Asset>());
+    let handler = ws
+        .or(wasm_assets)
+        .or(other_assets)
+        .or(bin)
+        .or(json)
+        .or(terms)
+        .or(root_terms)
+        .or(info);
 
     println!("Serving at http://127.0.0.1:3030");
-    warp::serve(
-        ws.or(fs)
-            .or(wasm_assets)
-            .or(other_assets)
-            .or(bin)
-            .or(json)
-            .or(terms)
-            .or(root_terms)
-            .or(info),
-    )
-    .run(([127, 0, 0, 1], 3030))
-    .await
+    // If specified, serve files from the override_dir first (for developing the client code, or providing custom handlers)
+    if let Some(override_dir) = override_dir {
+        warp::serve(warp::fs::dir(override_dir).or(handler))
+            .run(([127, 0, 0, 1], 3030))
+            .await
+    } else {
+        warp::serve(handler).run(([127, 0, 0, 1], 3030)).await
+    }
 }
 
 // So, I should probably move to use these, but I want to
@@ -428,8 +431,11 @@ async fn serve_bin(
     Ok(shared::pack(&runtime_env))
 }
 
-pub fn serve() -> std::io::Result<()> {
+pub fn serve(
+    codebase_root: std::path::PathBuf,
+    override_dir: Option<String>,
+) -> std::io::Result<()> {
     let mut rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(main());
+    rt.block_on(main(codebase_root, override_dir));
     Ok(())
 }

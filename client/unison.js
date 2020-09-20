@@ -1,4 +1,5 @@
 const js = import('./node_modules/unison_wasm/unison_wasm.js');
+console.log('ok');
 
 const hashesForConstrName = (names) => {
     const hashesByName = {};
@@ -16,22 +17,20 @@ const hashesForTermName = (names) => {
     return hashesByName;
 };
 
-const convert_handlers = (handlers, typeNameHashes, names) => {
-    const res = [];
+const makeHandlerHashes = (handlers, typeNameHashes, names) => {
+    const res = {};
     Object.keys(handlers).forEach((abilityName) => {
         const hash = typeNameHashes[abilityName];
         if (!hash) {
-            // console.log(typeNameHashes);
-            // throw new Error(`Hash not found for ability ${abilityName}`);
-            return; // not needed
+            return;
         }
         if (!names[1][hash]) {
             throw new Error(
                 `No constructor data found for #${hash.slice(0, 10)}`,
             );
         }
+        res[abilityName] = {};
         Object.keys(handlers[abilityName]).forEach((constrName) => {
-            const v = handlers[abilityName][constrName];
             const idx = Object.keys(names[1][hash]).find((idx) => {
                 if (
                     names[1][hash][idx].some(
@@ -54,6 +53,21 @@ const convert_handlers = (handlers, typeNameHashes, names) => {
                     )}`,
                 );
             }
+            res[abilityName][constrName] = [hash, +idx];
+        });
+    });
+    return res;
+};
+
+const convertHandlers = (handlers, handlerHashes) => {
+    const res = [];
+    Object.keys(handlers).forEach((abilityName) => {
+        if (!handlerHashes[abilityName]) {
+            return;
+        }
+        Object.keys(handlers[abilityName]).forEach((constrName) => {
+            const [hash, idx] = handlerHashes[abilityName][constrName];
+            const v = handlers[abilityName][constrName];
             if (v.type === 'full') {
                 res.push([hash, +idx, false, v.handler]);
             } else {
@@ -63,6 +77,60 @@ const convert_handlers = (handlers, typeNameHashes, names) => {
     });
     return res;
 };
+
+const convert_handlers = (handlers, typeNameHashes, names) =>
+    convertHandlers(
+        handlers,
+        makeHandlerHashes(handlers, typeNameHashes, names),
+    );
+
+// const convert_handlers = (handlers, typeNameHashes, names) => {
+//     const res = [];
+//     Object.keys(handlers).forEach((abilityName) => {
+//         const hash = typeNameHashes[abilityName];
+//         if (!hash) {
+//             // console.log(typeNameHashes);
+//             // throw new Error(`Hash not found for ability ${abilityName}`);
+//             return; // not needed
+//         }
+//         if (!names[1][hash]) {
+//             throw new Error(
+//                 `No constructor data found for #${hash.slice(0, 10)}`,
+//             );
+//         }
+//         Object.keys(handlers[abilityName]).forEach((constrName) => {
+//             const v = handlers[abilityName][constrName];
+//             const idx = Object.keys(names[1][hash]).find((idx) => {
+//                 if (
+//                     names[1][hash][idx].some(
+//                         (k) => k[k.length - 1] === constrName,
+//                     )
+//                 ) {
+//                     return true;
+//                 }
+//             });
+//             if (idx == null) {
+//                 const allNames = [];
+//                 Object.keys(names[1][hash]).forEach((idx) =>
+//                     names[1][hash][idx].forEach((name) =>
+//                         allNames.push(name.join('.')),
+//                     ),
+//                 );
+//                 throw new Error(
+//                     `Constructor not found for ability ${abilityName} : ${constrName} - found ${allNames.join(
+//                         ', ',
+//                     )}`,
+//                 );
+//             }
+//             if (v.type === 'full') {
+//                 res.push([hash, +idx, false, v.handler]);
+//             } else {
+//                 res.push([hash, +idx, true, v]);
+//             }
+//         });
+//     });
+//     return res;
+// };
 
 export const fetch = (dataUrl, namesUrl) => {
     return load(
