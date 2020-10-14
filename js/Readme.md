@@ -18,3 +18,8 @@ AUDIT
 Once it's working, trying changing some `clone`s back to `slice`s
 
 NEXT MOVE: import runtime_tests.json and run them! in nodejs folks. Maybe I'll want webpack doing the deal?
+- cool parcel is working fine.
+- to run stuff in node, first do
+  - `cargo run --release -- pack-all-json ~/.unison/v1/terms runtime_tests ../runtime_tests.json`
+  - `yarn run node` (this will be a watcher, rebuilding on changes)
+  - `node dist/node.js`

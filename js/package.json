@@ -1,12 +1,13 @@
 {
-  "scripts": {
-    "start": "parcel index.html"
-  },
-  "dependencies": {
-    "@birchill/json-equalish": "^1.1.0",
-    "clone-deep": "^4.0.1",
-    "parcel": "^1.12.4",
-    "react": "^16.13.1",
-    "react-dom": "^16.13.1"
-  }
+    "scripts": {
+        "start": "parcel index.html",
+        "node": "parcel --target node node.js"
+    },
+    "dependencies": {
+        "@birchill/json-equalish": "^1.1.0",
+        "clone-deep": "^4.0.1",
+        "parcel": "^1.12.4",
+        "react": "^16.13.1",
+        "react-dom": "^16.13.1"
+    }
 }

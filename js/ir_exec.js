@@ -276,7 +276,7 @@ const call = {
         bindings = bindings.map((b) => [...b]);
         for (let binding of bindings) {
             // TODO maybe make this non-mutating? then can just "slice"
-            if (binding[2].CycleBlank) {
+            if (binding[2].CycleBlank != null) {
                 const u = binding[2].CycleBlank;
                 const [k, uses, fnid, sub_bindings] = mutuals.find(
                     (m) => m[0].unique === u,

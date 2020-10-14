@@ -231,6 +231,20 @@ pub fn run_term(
     Ok(ret)
 }
 
+// pub fn runtime_tests(root: &str) -> std::io::Result<()> {
+//     let root = std::path::PathBuf::from(root);
+//     println!("Running all tests I can find");
+//     // let paths = path_with(&root, "paths");
+
+//     let mut all_terms = std::collections::HashMap::new();
+
+//     let mut codebase = crate::branch::Codebase::new(root.to_owned())?;
+//     codebase.load_all()?;
+
+//     let mut branch = Branch::load(&paths, get_head(&paths)?)?;
+//     branch.load_children(&paths, true)?;
+// }
+
 pub fn run_test(root: &str) -> std::io::Result<()> {
     let root = std::path::PathBuf::from(root);
     println!("Running all tests I can find");
