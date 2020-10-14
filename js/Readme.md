@@ -16,3 +16,5 @@ AUDIT
 
 
 Once it's working, trying changing some `clone`s back to `slice`s
+
+NEXT MOVE: import runtime_tests.json and run them! in nodejs folks. Maybe I'll want webpack doing the deal?

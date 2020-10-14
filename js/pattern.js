@@ -26,7 +26,7 @@ export const patternMatch = (pattern, term) => {
         return pattern[pt] === term[vt] ? [] : null;
     }
     const bothKey = `${pt}:${vt}`;
-    // console.log('bk', bothKey);
+    // console.log('bk', bothKey, pattern, term);
     if (matchers[bothKey]) {
         return matchers[bothKey](pattern[pt], term[vt]);
     }
@@ -86,19 +86,25 @@ const matchers = {
     'SequenceOp:Sequence': ([one, op, two], contents) => {
         if (op === 'Cons') {
             if (contents.length > 0) {
+                // console.log('First', one, contents[0]);
                 const res = patternMatch(one, contents[0]);
                 if (res != null) {
-                    const r2 = patternMatch(two, contents.slice(1));
+                    // console.log('Rest', two, contents.slice(1));
+                    const r2 = patternMatch(two, {
+                        Sequence: contents.slice(1),
+                    });
                     if (r2 != null) {
-                        res.concat(...r2);
-                        return res;
+                        // console.log('good', res, r2);
+                        return res.concat(r2);
                     }
                 }
             }
             return null;
         } else if (op === 'Snoc') {
             if (contents.length > 0) {
-                const res = patternMatch(one, contents.slice(0, -1));
+                const res = patternMatch(one, {
+                    Sequence: contents.slice(0, -1),
+                });
                 if (res != null) {
                     const r2 = patternMatch(two, contents[contents.length - 1]);
                     if (r2 != null) {
