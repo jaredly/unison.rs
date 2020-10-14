@@ -132,11 +132,12 @@ const handlers = {
         state.idx += 1;
     },
     Call: (_, state) => {
-        // console.log('Call!');
         let arg = state.stack.pop();
         let f = state.stack.pop();
+        // console.log('Call!');
         // console.log(f, arg);
         const typ = key(f);
+        /* istanbul ignore next */
         if (!call[typ]) {
             console.log('Bad call', typ, f, arg);
         }
@@ -248,8 +249,8 @@ const handlers = {
 
 export const eval_ir = (cmd, state) => {
     const tag = key(cmd);
+    /* istanbul ignore next */
     if (!handlers[tag]) {
-        /* istanbul ignore next */
         throw new Error(`no handler for ${tag}`);
     }
     return handlers[tag](cmd[tag], state);
@@ -371,7 +372,7 @@ const singleArgBuiltins = {
     'Int.toText': (i) => {
         const v = expectInt(i);
         return {
-            Text: (v >= -0 ? '+' : '-') + v.toString(),
+            Text: (v >= -0 ? '+' : '') + v.toString(),
         };
     },
     'Int.complement': (i) => ({ Int: complement(expectInt(i)) }),

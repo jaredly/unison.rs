@@ -109,6 +109,7 @@ export class Stack {
             );
         }
         const prevId = this._frames.length ? this._frames[0].trace_id : null;
+        /* istanbul ignore next */
         const tid = this.trace ? this.trace.length : null;
         this._frames.unshift(newFrame(source, return_index, tid));
         /* istanbul ignore next */
@@ -180,6 +181,7 @@ export class Stack {
         const old_tid = this._frames[0].trace_id;
         const frames = [];
         while (this._frames[0].handler == null) {
+            /* istanbul ignore next */
             if (this.trace) {
                 this.trace[this._frames[0].trace_id].events.push('Pause');
             }

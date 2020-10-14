@@ -17,13 +17,18 @@ AUDIT
 
 Once it's working, trying changing some `clone`s back to `slice`s
 
-NEXT MOVE: import runtime_tests.json and run them! in nodejs folks. Maybe I'll want webpack doing the deal?
+import runtime_tests.json and run them! in nodejs folks. Maybe I'll want webpack doing the deal?
 - cool parcel is working fine.
 - to run stuff in node, first do
-  - `cargo run --release -- pack-all-json ~/.unison/v1/terms runtime_tests ../runtime_tests.json`
-  - `yarn run node` (this will be a watcher, rebuilding on changes)
-  - `node dist/node.js`
+  - `cargo run --release -- pack-all-json-watch ./data/runtime_tests.json runtime_tests ffi_tests`
+  - `yarn jest --coverage`
 
+FFI FOLKS:
+ok so things we need to port over from wasm-land include:
+- providing FFI (locked to hashes, lets not mess around)
+- providing arguments
+  - this means we need to be able to check types
+  - also the dance with concretizing the types of abilities, it would be nice if that were fixed folks
 
 Tests to make:
 - abilities with a deep stack

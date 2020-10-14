@@ -150,12 +150,10 @@ export class State {
                 throw new Error('Stack frame already has a handler');
             }
             this.stack.currentFrame().handler = mark_idx;
-            // const ln = this.stack.frames.length;
             this.stack.clone_frame(mark_idx);
             this.stack.currentFrame().handler = null;
         },
         Continue: ([kidx, frames, arg]) => {
-            // TODO faster please
             this.stack.resumeContinuation(frames, this.idx);
             this.idx = kidx;
             this.stack.push(arg);

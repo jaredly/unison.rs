@@ -291,21 +291,23 @@ pub fn pack_term(codebase: &mut Codebase, hash: &str, out: &str) -> std::io::Res
 
 fn pack_all_json_inner(
     codebase: &mut Codebase,
-    ns: &String,
     outfile: &String,
+    ns: &[String],
 ) -> std::io::Result<()> {
     let mut all_terms = std::collections::HashMap::new();
 
-    let ns = if ns == "" || ns == "." {
-        codebase.head.clone()
-    } else {
-        codebase
-            .find_ns(ns.split(".").collect::<Vec<&str>>().as_slice())
-            .unwrap()
-            .0
-    };
+    for ns in ns {
+        let ns = if ns == &"" || ns == &"." {
+            codebase.head.clone()
+        } else {
+            codebase
+                .find_ns(ns.split(".").collect::<Vec<&str>>().as_slice())
+                .unwrap()
+                .0
+        };
 
-    codebase.collect_terms(&ns, &vec![], &mut all_terms);
+        codebase.collect_terms(&ns, &vec![], &mut all_terms);
+    }
 
     let env = env::Env::init(codebase.root().as_path());
     let mut ir_env = ir::TranslationEnv::new(env);
@@ -338,7 +340,7 @@ fn pack_all_json_inner(
     Ok(())
 }
 
-pub fn pack_all_json(file: &String, ns: &String, outfile: &String) -> std::io::Result<()> {
+pub fn pack_all_json(file: &String, ns: &[String], outfile: &String) -> std::io::Result<()> {
     let terms_path = std::path::PathBuf::from(file);
 
     println!("Packing all the terms I can find");
@@ -346,14 +348,14 @@ pub fn pack_all_json(file: &String, ns: &String, outfile: &String) -> std::io::R
     let mut codebase = Codebase::new(root.to_owned())?;
     codebase.load_all()?;
 
-    pack_all_json_inner(&mut codebase, ns, outfile)
+    pack_all_json_inner(&mut codebase, outfile, ns)
 }
 
-pub fn pack_all_json_watch(ns: &String, outfile: &String) -> std::io::Result<()> {
+pub fn pack_all_json_watch(ns: &[String], outfile: &String) -> std::io::Result<()> {
     println!("Packing all the terms I can find");
     watch(move |codebase| {
         codebase.load_all()?;
-        pack_all_json_inner(codebase, ns, outfile)
+        pack_all_json_inner(codebase, outfile, ns)
     })
 }
 
