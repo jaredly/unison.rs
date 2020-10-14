@@ -38,7 +38,7 @@ Promise.all([data, names, trace]).then(([data, names, trace]) => {
 
     try {
         const start = Date.now();
-        const res = eval_value(env, hash);
+        const res = eval_value(env, hash, {});
         console.log(`${Date.now() - start}ms`);
         console.log('Result:', JSON.stringify(res));
     } catch (err) {

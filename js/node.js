@@ -10,7 +10,11 @@ import jsonEqual from '@birchill/json-equalish';
 import { diff } from './diff';
 // window.diff = diff;
 
-const [_, __, arg] = process.argv;
+const [_, __, arg, ...debugs] = process.argv;
+const debug = {};
+debugs.forEach((d) => (debug[d] = true));
+
+console.log(debug);
 
 const data = import('../runtime_tests.json');
 const names = import('../runtime_tests.json.names.json');
@@ -35,8 +39,8 @@ const run = (data, names) => {
         if (arg != null && name !== arg) {
             continue;
         }
-        console.log('Running', name);
-        const res = eval_value(env, hash);
+        console.log('Running', name, hash.slice(0, 10));
+        const res = eval_value(env, hash, debug);
         if (res.Boolean !== true) {
             console.log(
                 chalk.red(

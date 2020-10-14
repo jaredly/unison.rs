@@ -335,6 +335,10 @@ pub fn pack_all_json(file: &String, ns: &String, outfile: &String) -> std::io::R
 
     let runtime_env: shared::types::RuntimeEnv = ir_env.into();
 
+    // for (k, v) in runtime_env.terms.iter() {
+    //     println!("Packing {:?} : {:?}", k, v);
+    // }
+
     std::fs::write(
         outfile.to_owned() + ".names.json",
         serde_json::to_string_pretty(&codebase.get_names().serialize()).unwrap(),

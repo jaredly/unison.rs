@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 serde = { version="", features = ["rc"] }
-serde_json = ""
+serde_json = {version="", features=["float_roundtrip"]}
 serde_derive = ""
 bincode = ""
 byteorder = ""

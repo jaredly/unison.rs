@@ -5,8 +5,8 @@ import { Stack } from './stack';
 import { eval_ir } from './ir_exec';
 import { pretty_print } from './pretty_print';
 
-export const eval_value = (env, hash) => {
-    const state = new State(env, hash);
+export const eval_value = (env, hash, debug = {}) => {
+    const state = new State(env, hash, debug);
     // window.trace = state.stack.trace;
     return state.run_to_end();
 };
@@ -38,7 +38,7 @@ export class RuntimeEnv {
 }
 
 export class State {
-    constructor(env, hash) {
+    constructor(env, hash, debug = {}) {
         // find by prefix
         if (!env.terms[hash]) {
             for (let k of Object.keys(env.terms)) {
@@ -51,6 +51,7 @@ export class State {
                 throw new Error(`Hash not found ${hash}`);
             }
         }
+        this.debug = debug;
         this.trace = {};
         this.cmds = env.terms[hash][0];
         this.idx = 0;

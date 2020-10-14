@@ -117,7 +117,8 @@ impl FromBuffer for u8 {
 impl FromBuffer for i64 {
     fn get(buf: &mut Buffer) -> Self {
         let data = buf.get_n(8);
-        return BigEndian::read_u64(&data) as i64;
+        let value = BigEndian::read_u64(&data);
+        return value as i64;
     }
 }
 
@@ -131,7 +132,8 @@ impl FromBuffer for u64 {
 impl FromBuffer for f64 {
     fn get(buf: &mut Buffer) -> Self {
         let data = buf.get_n(8);
-        return BigEndian::read_u64(&data) as f64;
+        use std::convert::TryInto;
+        return f64::from_be_bytes(data.try_into().unwrap());
     }
 }
 

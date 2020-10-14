@@ -38,6 +38,27 @@ const handlers = {
         return 'HandlePure';
     },
     Value: (term, state) => {
+        if (state.debug.values) {
+            console.log('push value', term);
+        }
+        if (term.Nat != null && term.Nat > Number.MAX_SAFE_INTEGER) {
+            console.log(
+                'Warning! Nat used that is larger than the max safe integer in js. Clamping.',
+            );
+            term = { Nat: Number.MAX_SAFE_INTEGER };
+        }
+        if (term.Int != null && term.Int > Number.MAX_SAFE_INTEGER) {
+            console.log(
+                'Warning! Int used that is larger than the max safe integer in js. Clamping.',
+            );
+            term = { Int: Number.MAX_SAFE_INTEGER };
+        }
+        if (term.Int != null && term.Int < Number.MIN_SAFE_INTEGER) {
+            console.log(
+                'Warning! Int used that is smaller than the min safe integer in js. Clamping.',
+            );
+            term = { Int: Number.MIN_SAFE_INTEGER };
+        }
         if (term.Request) {
             const [a, b] = term.Request;
             state.idx += 1;
@@ -167,11 +188,15 @@ const handlers = {
     },
     PatternMatch: ([pattern, has_where], state) => {
         const value = state.stack.peek();
-        // console.log(`MATCH`);
-        // console.log(pattern);
-        // console.log(value);
+        if (state.debug.match) {
+            console.log(`MATCH`);
+            console.log(pattern);
+            console.log(value);
+        }
         const bindings = patternMatch(pattern, value);
-        // console.log('RESULT', bindings);
+        if (state.debug.match) {
+            console.log('RESULT', bindings);
+        }
         if (!bindings) {
             state.stack.push({ Boolean: false });
         } else {
@@ -328,7 +353,7 @@ const singleArgBuiltins = {
     'Int.isOdd': (i) => ({ Boolean: expectInt(i) % 2 == 1 }),
     'Int.toText': (i) => ({ Text: expectInt(i).toString() }),
     'Int.complement': (i) => ({ Int: !expectInt(i) }), // STOPSHIP bit complement
-    'Nat.increment': (i) => ({ Nat: expectNat(i) + 1 }),
+    'Nat.increment': (i) => ({ Nat: expectNat(i) + 1 }), // STOPSHIP fix overflow
     'Nat.isEven': (i) => ({ Boolean: expectNat(i) % 2 == 0 }),
     'Nat.isOdd': (i) => ({ Boolean: expectNat(i) % 2 == 1 }),
     'Nat.toInt': (i) => ({ Int: expectNat(i) }),
@@ -349,7 +374,11 @@ const singleArgBuiltins = {
 
 const callSingleArgBuiltin = (builtin, arg, state) => {
     if (singleArgBuiltins[builtin]) {
-        state.stack.push(singleArgBuiltins[builtin](arg));
+        const result = singleArgBuiltins[builtin](arg);
+        if (state.debug.builtins || state.debug[builtin]) {
+            console.log(builtin, arg, result);
+        }
+        state.stack.push(result);
     } else {
         state.stack.push({ PartialNativeApp: [builtin, [arg]] });
     }
@@ -358,7 +387,12 @@ const callSingleArgBuiltin = (builtin, arg, state) => {
 
 const callMultiArgBuiltin = (builtin, args, arg, state) => {
     if (multiArgBuiltins[builtin]) {
-        state.stack.push(multiArgBuiltins[builtin](...args.concat([arg])));
+        args = args.concat([arg]);
+        const result = multiArgBuiltins[builtin](...args);
+        if (state.debug.builtins || state.debug[builtin]) {
+            console.log(builtin, args, result);
+        }
+        state.stack.push(result);
         state.idx += 1;
     } else {
         throw new Error(`Unexpected builtin ${builtin}`);
@@ -368,7 +402,7 @@ const callMultiArgBuiltin = (builtin, args, arg, state) => {
 const wrapping_sub = (a, b) => {
     const c = a - Number.MIN_SAFE_INTEGER;
     if (c < b) {
-        return Number.MAX_SAFE_INTEGER - (b - c);
+        return Number.MAX_SAFE_INTEGER - (b - c - 1);
     }
     return a - b;
 };
@@ -376,6 +410,13 @@ const wrapping_add = (a, b) => {
     let d = Number.MAX_SAFE_INTEGER - a;
     if (d < b) {
         return Number.MIN_SAFE_INTEGER + (b - d);
+    }
+    return a + b;
+};
+const wrappingNatAdd = (a, b) => {
+    let d = Number.MAX_SAFE_INTEGER - a;
+    if (d < b) {
+        return a - Number.MAX_SAFE_INTEGER + b - 1;
     }
     return a + b;
 };
@@ -409,7 +450,7 @@ const multiArgBuiltins = {
     }),
 
     'Nat.+': (a, b) => ({
-        Nat: expectNat(a) + expectNat(b),
+        Nat: wrappingNatAdd(expectNat(a), expectNat(b)),
     }),
 
     'Nat.*': (a, b) => ({ Nat: expectNat(a) * expectNat(b) }),
@@ -433,7 +474,13 @@ const multiArgBuiltins = {
         Nat: expectNat(a) >> expectNat(b),
     }),
 
+    'Nat.sub': (a, b) => ({
+        Int: expectNat(a) - expectNat(b),
+    }),
+
     'Nat.drop': (a, b) => {
+        a = expectNat(a);
+        b = expectNat(b);
         if (b >= a) {
             return { Nat: 0 };
         } else {
