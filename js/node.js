@@ -2,13 +2,7 @@
 // const names = import('./data/all.json.names.json');
 
 import { RuntimeEnv, State, eval_value } from './ir_runtime';
-import Trace from './Trace';
 import chalk from 'chalk';
-
-import jsonEqual from '@birchill/json-equalish';
-// window.jsonEqual = jsonEqual;
-import { diff } from './diff';
-// window.diff = diff;
 
 const [_, __, arg, ...debugs] = process.argv;
 const debug = {};

@@ -62,6 +62,7 @@ export class State {
         this.stack = new Stack({ Value: hash });
     }
 
+    /* istanbul ignore next */
     pretty_print(value) {
         return pretty_print(this.env.names, value);
     }
@@ -89,6 +90,7 @@ export class State {
             const cmd = this.cmds[this.idx];
             const tid = this.stack.currentFrame().trace_id;
             let eidx = null;
+            /* istanbul ignore next */
             if (this.stack.trace) {
                 this.stack.trace[tid].events.push({
                     IR: [idx, cmd],
@@ -104,6 +106,7 @@ export class State {
             const ret = eval_ir(cmd, this);
             // this.stack.trace[tid].events[eidx].end = Date.now();
             if (ret) {
+                /* istanbul ignore next */
                 if (this.stack.trace) {
                     this.stack.trace[
                         this.stack.currentFrame().trace_id

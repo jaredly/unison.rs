@@ -361,19 +361,34 @@ const expectFloat = (v) => {
     throw new Error('Not a float: ' + JSON.stringify(v));
 };
 
+const complement = (i) => (i >= 0 ? -i - 1 : -i - 1);
+
 const singleArgBuiltins = {
     'Int.increment': (v) => ({ Int: expectInt(v) + 1 }),
     'Int.negate': (i) => ({ Int: -expectInt(i) }),
     'Int.isEven': (i) => ({ Boolean: expectInt(i) % 2 == 0 }),
     'Int.isOdd': (i) => ({ Boolean: expectInt(i) % 2 == 1 }),
-    'Int.toText': (i) => ({ Text: expectInt(i).toString() }),
-    'Int.complement': (i) => ({ Int: !expectInt(i) }), // STOPSHIP bit complement
-    'Nat.increment': (i) => ({ Nat: expectNat(i) + 1 }), // STOPSHIP fix overflow
+    'Int.toText': (i) => {
+        const v = expectInt(i);
+        return {
+            Text: (v >= -0 ? '+' : '-') + v.toString(),
+        };
+    },
+    'Int.complement': (i) => ({ Int: complement(expectInt(i)) }),
+    'Nat.increment': (i) => {
+        const v = expectNat(i);
+        return { Nat: v >= Number.MAX_SAFE_INTEGER ? 0 : v + 1 };
+    },
     'Nat.isEven': (i) => ({ Boolean: expectNat(i) % 2 == 0 }),
     'Nat.isOdd': (i) => ({ Boolean: expectNat(i) % 2 == 1 }),
     'Nat.toInt': (i) => ({ Int: expectNat(i) }),
     'Nat.toText': (i) => ({ Text: expectNat(i).toString() }),
-    'Nat.complement': (i) => ({ Nat: !expectNat(i) }),
+    /* istanbul ignore next */
+    'Nat.complement': (i) => {
+        throw new Error(
+            `Twos-complement of u64s doesn't make sense in javascript.`,
+        );
+    },
     'Boolean.not': (i) => ({ Boolean: !expectBool(i) }),
     'List.size': (s) => ({ Nat: expectList(s).length }),
     'Text.size': (t) => ({ Nat: expectText(t).length }),
@@ -381,7 +396,9 @@ const singleArgBuiltins = {
         Sequence: expectText(t.split('').map((c) => ({ Char: c }))),
     }),
     'Text.fromCharList': (l) => ({ Text: l.map((c) => c.Char).join('') }),
+    /* istanbul ignore next */
     'Bytes.size': (t) => ({ Nat: expectBytes(t).length }),
+    /* istanbul ignore next */
     'Bytes.toList': (t) => ({
         Sequence: expectBytes(t).map((t) => ({ Nat: t })),
     }),
@@ -472,7 +489,7 @@ const multiArgBuiltins = {
     }),
 
     'Nat.*': (a, b) => ({ Nat: expectNat(a) * expectNat(b) }),
-    'Nat./': (a, b) => ({ Nat: expectNat(a) / expectNat(b) }),
+    'Nat./': (a, b) => ({ Nat: (expectNat(a) / expectNat(b)) | 0 }),
     'Nat.>': (a, b) => ({ Boolean: expectNat(a) > expectNat(b) }),
     'Nat.>=': (a, b) => ({ Boolean: expectNat(a) >= expectNat(b) }),
     'Nat.<': (a, b) => ({ Boolean: expectNat(a) < expectNat(b) }),
@@ -546,7 +563,7 @@ const multiArgBuiltins = {
         Text: expectText(b).slice(0, expectNat(a)),
     }),
     'Text.drop': (a, b) => ({
-        Text: expectText(b).slice(expectNat(b)),
+        Text: expectText(b).slice(expectNat(a)),
     }),
     // , mk2 "Text.take" atn att (pure . T) (Text.take . fromIntegral)
     // , mk2 "Text.drop" atn att (pure . T) (Text.drop . fromIntegral)

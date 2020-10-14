@@ -26,7 +26,7 @@ export const patternMatch = (pattern, term) => {
         return pattern[pt] === term[vt] ? [] : null;
     }
     const bothKey = `${pt}:${vt}`;
-    console.log('bk', bothKey, pattern, term);
+    // console.log('bk', bothKey, pattern, term);
     if (matchers[bothKey]) {
         return matchers[bothKey](pattern[pt], term[vt]);
     }
@@ -58,8 +58,8 @@ const matchers = {
                 tkont = tkont.slice(0, current_idx + 1).map((t) => ({ ...t }));
                 tkont[current_idx].handler = null;
                 all.push({ Continuation: [tidx, tkont] });
-                /* istanbul ignore next */
             } else if (kk !== 'Unbound') {
+                /* istanbul ignore next */
                 throw new Error('Unable to match on a continuation');
             }
             return all;
@@ -87,10 +87,10 @@ const matchers = {
     'SequenceOp:Sequence': ([one, op, two], contents) => {
         if (op === 'Cons') {
             if (contents.length > 0) {
-                console.log('First', one, contents[0]);
+                // console.log('First', one, contents[0]);
                 const res = patternMatch(one, contents[0]);
                 if (res != null) {
-                    console.log('Rest', two, contents.slice(1));
+                    // console.log('Rest', two, contents.slice(1));
                     const r2 = patternMatch(two, {
                         Sequence: contents.slice(1),
                     });

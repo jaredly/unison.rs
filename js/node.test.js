@@ -12,6 +12,9 @@ const names = JSON.parse(
 );
 
 const debug = {};
+if (process.env.DEBUG) {
+    process.env.DEBUG.split(',').forEach((n) => (debug[n] = true));
+}
 
 const env = new RuntimeEnv(data, names);
 
