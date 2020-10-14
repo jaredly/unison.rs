@@ -82,6 +82,7 @@ pub fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> 
     let mut hashes: Vec<&Hash> = all_terms.values().collect();
     hashes.sort();
     for hash in hashes {
+        println!("Loading {:?}", hash);
         let _ = ir_env.load(hash);
     }
 
@@ -291,7 +292,7 @@ pub fn pack_term(
     Ok(())
 }
 
-pub fn pack_all_json(file: &String, outfile: &String) -> std::io::Result<()> {
+pub fn pack_all_json(file: &String, ns: &String, outfile: &String) -> std::io::Result<()> {
     let terms_path = std::path::PathBuf::from(file);
 
     println!("Packing all the terms I can find");
@@ -300,14 +301,25 @@ pub fn pack_all_json(file: &String, outfile: &String) -> std::io::Result<()> {
     codebase.load_all()?;
 
     let mut all_terms = std::collections::HashMap::new();
-    codebase.collect_terms(&codebase.head.clone(), &vec![], &mut all_terms);
+
+    // let head = codebase.head.clone();
+    // if ns != "." {
+    // }
+    let ns = if ns == "" || ns == "." {
+        codebase.head.clone()
+    } else {
+        codebase
+            .find_ns(ns.split(".").collect::<Vec<&str>>().as_slice())
+            .unwrap()
+            .0
+    };
+
+    codebase.collect_terms(&ns, &vec![], &mut all_terms);
 
     let env = env::Env::init(root);
     let mut ir_env = ir::TranslationEnv::new(env);
 
-    let mut hashes: Vec<&Hash> = all_terms.values().collect();
-    hashes.sort();
-    for hash in hashes {
+    for hash in all_terms.values() {
         let _ = ir_env.load(hash);
     }
 

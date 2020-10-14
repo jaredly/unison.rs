@@ -13,3 +13,10 @@ An experimental runtime for unison code, written in rust, compiled to wasm for u
 - see that it's interactive!
 - `cd example` and `edit counter` - in the scratch file, change `"Hello unison"` to something else
 - save the scratch file, run `update` in unison, and see that the watcher auto-updates in your browser!
+
+## Ok what's the plan?
+- I want to have a bunch of test cases
+- and then ... make sure they run in js?
+- so I'll want a way to spin up node, right?
+- yeah shouldn't be hard.
+- so ... what I'll do is run the tests

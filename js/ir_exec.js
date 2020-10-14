@@ -300,6 +300,20 @@ const expectNat = (v) => {
     throw new Error('Not a nat: ' + JSON.stringify(v));
 };
 
+const expectBool = (v) => {
+    if ('Boolean' in v) {
+        return v.Boolean;
+    }
+    throw new Error('Not a boolean: ' + JSON.stringify(v));
+};
+
+const expectText = (v) => {
+    if ('Text' in v) {
+        return v.Text;
+    }
+    throw new Error('Not a text: ' + JSON.stringify(v));
+};
+
 const expectFloat = (v) => {
     if ('Float' in v) {
         return v.Float;

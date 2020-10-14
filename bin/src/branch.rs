@@ -411,6 +411,7 @@ impl Codebase {
         dest: &mut std::collections::HashMap<Vec<String>, types::Hash>,
     ) {
         let item = self.branches.get(of).unwrap();
+        item.collect_terms(path, dest);
         let mut children: Vec<(&NameSegment, &Hash)> = item.children.iter().collect();
         children.sort_by(|(a, _), (b, _)| NameSegment::cmp(a, b));
         for (k, v) in children {

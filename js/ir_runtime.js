@@ -7,7 +7,7 @@ import { pretty_print } from './pretty_print';
 
 export const eval_value = (env, hash) => {
     const state = new State(env, hash);
-    window.trace = state.stack.trace;
+    // window.trace = state.stack.trace;
     return state.run_to_end();
 };
 

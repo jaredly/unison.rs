@@ -342,7 +342,7 @@ async fn serve_terms(
     } else {
         codebase
             .find_ns(ns.split(".").collect::<Vec<&str>>().as_slice())
-            .unwrap()
+            .expect("Unable to find ns")
             .0
     };
 

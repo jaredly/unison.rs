@@ -61,7 +61,7 @@ fn main() -> std::io::Result<()> {
             ("pack-watch", [path, output]) => pack::pack_watch(path, output),
             ("pack", [path, output]) => pack::pack(path, output),
             ("pack-json", [path, output]) => pack::pack_json(path, output),
-            ("pack-all-json", [path, output]) => pack::pack_all_json(path, output),
+            ("pack-all-json", [path, ns, output]) => pack::pack_all_json(path, ns, output),
             ("pack-all", [path, output]) => pack::pack_all(&std::path::PathBuf::from(path), output),
             // ("test-all", [path]) => run_all_tests(path),
             ("run", args) => run::run_cli_term(&args[0], &args[1..]),
