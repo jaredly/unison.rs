@@ -30,6 +30,7 @@ export class RuntimeEnv {
         if (source.Value) {
             if (this.terms[source.Value]) return this.terms[source.Value][0];
         }
+        /* istanbul ignore next */
         if (!this.anon_fns[source.Fn[0]]) {
             throw new Error(`No function: ${JSON.stringify(source)}`);
         }
@@ -40,6 +41,7 @@ export class RuntimeEnv {
 export class State {
     constructor(env, hash, debug = {}) {
         // find by prefix
+        /* istanbul ignore next */
         if (!env.terms[hash]) {
             for (let k of Object.keys(env.terms)) {
                 if (k.startsWith(hash)) {
@@ -47,6 +49,7 @@ export class State {
                     break;
                 }
             }
+            /* istanbul ignore next */
             if (!env.terms[hash]) {
                 throw new Error(`Hash not found ${hash}`);
             }
@@ -127,6 +130,7 @@ export class State {
 
     handle_ret(ret) {
         const typ = typeof ret === 'string' ? ret : Object.keys(ret)[0];
+        /* istanbul ignore next */
         if (this.rets[typ] == null) {
             throw new Error(
                 `Cannot handle ret ${JSON.stringify(ret)} : ${typ}`,
@@ -138,6 +142,7 @@ export class State {
     rets = {
         Handle: (mark_idx) => {
             this.idx += 1;
+            /* istanbul ignore next */
             if (this.stack.currentFrame().handler) {
                 throw new Error('Stack frame already has a handler');
             }

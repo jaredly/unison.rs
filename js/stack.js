@@ -14,6 +14,7 @@ const symEq = (a, b) => {
     return a.unique === b.unique;
 };
 
+/* istanbul ignore next */
 const showSource = (source) => {
     if (source.Fn) {
         const [fnid, hash] = source.Fn;
@@ -66,6 +67,7 @@ export class Stack {
         frames = frames.map((f) => ({ ...f }));
         const last = frames.length - 1;
         frames[last].return_index = returnIdx;
+        /* istanbul ignore next */
         if (this.trace) {
             frames.forEach((f) => {
                 const prev = f.trace_id;
@@ -85,6 +87,7 @@ export class Stack {
 
     get_vbl(sym, usage) {
         const idx = this._frames[0].bindings.findIndex((b) => symEq(b[0], sym));
+        /* istanbul ignore next */
         if (idx === -1) {
             throw new Error('sym not found');
         }
@@ -97,6 +100,7 @@ export class Stack {
     }
 
     new_frame(return_index, source) {
+        /* istanbul ignore next */
         if (DEBUG) {
             console.log(
                 `->> ${this._frames.length} New Frame : `,
@@ -107,6 +111,7 @@ export class Stack {
         const prevId = this._frames.length ? this._frames[0].trace_id : null;
         const tid = this.trace ? this.trace.length : null;
         this._frames.unshift(newFrame(source, return_index, tid));
+        /* istanbul ignore next */
         if (this.trace) {
             this.trace[this._frames[0].trace_id] = {
                 start: Date.now(),
@@ -124,12 +129,14 @@ export class Stack {
     }
 
     clone_frame(return_index) {
+        /* istanbul ignore next */
         if (DEBUG) {
             console.log('->> Clone Frame');
         }
         const old_tid = this._frames[0].trace_id;
         this._frames.unshift(clone(this._frames[0]));
         this._frames[0].return_index = return_index;
+        /* istanbul ignore next */
         if (this.trace) {
             this._frames[0].trace_id = this.trace.length;
             this.trace[this._frames[0].trace_id] = {
@@ -154,10 +161,12 @@ export class Stack {
         // Add an event to all the frames being like "resuming"?
         this._frames = clone(frames.slice(new_idx));
         let idx = this._frames[0].handler;
+        /* istanbul ignore next */
         if (idx == null) {
             throw new Error('no handler');
         }
         this._frames[0].handler = null;
+        /* istanbul ignore next */
         if (this.trace) {
             this.trace[this._frames[0].trace_id].events.push('HandleAgain');
             this.trace[old_tid].events.push({
@@ -182,10 +191,12 @@ export class Stack {
         const current_idx = frames.length - 1;
         frames.push(...clone(this._frames));
         const idx = this._frames[0].handler;
+        /* istanbul ignore next */
         if (idx == null) {
             throw new Error('no handler');
         }
         this._frames[0].handler = null;
+        /* istanbul ignore next */
         if (this.trace) {
             this.trace[this._frames[0].trace_id].events.push('Handle');
             this.trace[old_tid].events.push({
@@ -198,6 +209,7 @@ export class Stack {
     pop_frame() {
         const idx = this._frames[0].return_index;
         const value = this.pop();
+        /* istanbul ignore next */
         if (DEBUG) {
             console.log(
                 `<<- ${this._frames.length} Pop Frame : ${idx} - ${showSource(
@@ -206,9 +218,11 @@ export class Stack {
                 value,
             );
         }
+        /* istanbul ignore next */
         if (value == null) {
             throw new Error('no return value');
         }
+        /* istanbul ignore next */
         if (this.trace) {
             this.trace[this._frames[0].trace_id].end = Date.now();
         }
@@ -218,11 +232,13 @@ export class Stack {
 
     push(t) {
         this._frames[0].stack.push(t);
+        /* istanbul ignore next */
         if (this.trace) {
             this.trace[this._frames[0].trace_id].events.push({
                 Push: clone(t),
             });
         }
+        /* istanbul ignore next */
         if (DEBUG) {
             console.log(
                 'push to stack',
@@ -236,14 +252,17 @@ export class Stack {
     pop() {
         const t = this._frames[0].stack.pop();
         // TODO do I need the value here? not really
+        /* istanbul ignore next */
         if (this.trace) {
             this.trace[this._frames[0].trace_id].events.push({
                 Pop: clone(t),
             });
         }
+        /* istanbul ignore next */
         if (DEBUG) {
             console.log('pop from stack', t);
         }
+        /* istanbul ignore next */
         if (t == null) {
             console.log(this._frames);
             throw new Error(`Popping from the stack, but nothing is there`);
@@ -261,11 +280,13 @@ export class Stack {
 
     pop_to_mark() {
         const mark = this._frames[0].marks.pop();
+        /* istanbul ignore next */
         if (this.trace) {
             this.trace[this._frames[0].trace_id].events.push({
                 PopToMark: mark,
             });
         }
+        /* istanbul ignore next */
         if (mark == null) {
             throw new Error('pop to mark');
         }
@@ -286,6 +307,7 @@ export class Stack {
     pop_up() {
         const ln = this._frames[0].stack.length;
         this._frames[0].stack.splice(ln - 2, 1);
+        /* istanbul ignore next */
         if (this.trace) {
             this.trace[this._frames[0].trace_id].events.push('PopUp');
         }

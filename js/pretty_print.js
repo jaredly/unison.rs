@@ -1,70 +1,4 @@
-let x = {
-    PartialConstructor: [
-        {
-            DerivedId: [
-                'onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0',
-                0,
-                1,
-            ],
-        },
-        0,
-        [
-            {
-                PartialConstructor: [
-                    {
-                        DerivedId: [
-                            'd97e0jhkmdospt1d5n3pdrl78ufb3m32hr06uhijaq8s2vdhmaehr7rv0fsm8b3p469cru224jqs46vlqesbaf5a41vlstv87gempqo',
-                            0,
-                            1,
-                        ],
-                    },
-                    0,
-                    [{ Nat: 1 }],
-                ],
-            },
-            {
-                PartialConstructor: [
-                    {
-                        DerivedId: [
-                            'onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0',
-                            0,
-                            1,
-                        ],
-                    },
-                    0,
-                    [
-                        {
-                            PartialConstructor: [
-                                {
-                                    DerivedId: [
-                                        'd97e0jhkmdospt1d5n3pdrl78ufb3m32hr06uhijaq8s2vdhmaehr7rv0fsm8b3p469cru224jqs46vlqesbaf5a41vlstv87gempqo',
-                                        0,
-                                        1,
-                                    ],
-                                },
-                                0,
-                                [{ Nat: 0 }],
-                            ],
-                        },
-                        {
-                            Constructor: [
-                                {
-                                    DerivedId: [
-                                        '568rsi7o3ghq8mmbea2sf8msdk20ohasob5s2rvjtqg2lr0vs39l1hm98urrjemsr3vo3fa52pibqu0maluq7g8sfg3h5f5re6vitj8',
-                                        0,
-                                        1,
-                                    ],
-                                },
-                                0,
-                            ],
-                        },
-                    ],
-                ],
-            },
-        ],
-    ],
-};
-
+/* istanbul ignore file */
 const key = (x) => (typeof x === 'string' ? x : Object.keys(x)[0]);
 
 const lookup_name = ([_, constructors, __], hash, n) => {
@@ -125,17 +59,7 @@ export const pretty_print = (names, value) => {
                         : values.map((v) => pretty_print(names, v)),
             };
         } else if (rt === 'Builtin') {
-            // if (ref[rt] === 'Sequence') {
-            //     return values.map((v) => pretty_print(names, v));
-            // } else if (
-            //     ref[rt] === 'Nat' ||
-            //     ref[rt] === 'Int' ||
-            //     ref[rt] === 'Float'
-            // ) {
-            //     return values[0];
-            // } else {
             return { [ref[rt]]: values.map((v) => pretty_print(names, v)) };
-            // }
         }
     }
     return value;

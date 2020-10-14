@@ -46,6 +46,7 @@ fn main() -> std::io::Result<()> {
                 Ok(())
             }
             ("test", [path]) => run::run_test(path),
+            // ("runtime_tests", [path]) => run::runtime_tests(path),
             ("serve", []) => server::serve(crate::pack::default_root(), None),
             ("serve", [overridez, op]) if overridez == "--override" => {
                 server::serve(crate::pack::default_root(), Some(op.to_owned()))
@@ -62,6 +63,7 @@ fn main() -> std::io::Result<()> {
             ("pack", [path, output]) => pack::pack(path, output),
             ("pack-json", [path, output]) => pack::pack_json(path, output),
             ("pack-all-json", [path, ns, output]) => pack::pack_all_json(path, ns, output),
+            ("pack-all-json-watch", [ns, output]) => pack::pack_all_json_watch(ns, output),
             ("pack-all", [path, output]) => pack::pack_all(&std::path::PathBuf::from(path), output),
             // ("test-all", [path]) => run_all_tests(path),
             ("run", args) => run::run_cli_term(&args[0], &args[1..]),

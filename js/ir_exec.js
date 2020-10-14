@@ -38,6 +38,7 @@ const handlers = {
         return 'HandlePure';
     },
     Value: (term, state) => {
+        /* istanbul ignore next */
         if (state.debug.values) {
             console.log('push value', term);
         }
@@ -164,6 +165,7 @@ const handlers = {
         } else if (v.Boolean === false) {
             state.idx = mark;
         } else {
+            /* istanbul ignore next */
             throw new Error(`If not on a bool ${v}`);
         }
     },
@@ -175,6 +177,7 @@ const handlers = {
             state.idx = mark;
             state.stack.pop_to_mark();
         } else {
+            /* istanbul ignore next */
             throw new Error(`If not on a bool ${v}`);
         }
     },
@@ -188,12 +191,14 @@ const handlers = {
     },
     PatternMatch: ([pattern, has_where], state) => {
         const value = state.stack.peek();
+        /* istanbul ignore next */
         if (state.debug.match) {
             console.log(`MATCH`);
             console.log(pattern);
             console.log(value);
         }
         const bindings = patternMatch(pattern, value);
+        /* istanbul ignore next */
         if (state.debug.match) {
             console.log('RESULT', bindings);
         }
@@ -229,7 +234,9 @@ const handlers = {
                 ReRequest: [req, i, args, back_idx, frames, current_idx],
             };
         } else {
+            /* istanbul ignore next */
             console.log(state.pretty_print(value));
+            /* istanbul ignore next */
             throw new Error(`Pattern match fail ${JSON.stringify(value)}`);
         }
     },
@@ -242,6 +249,7 @@ const handlers = {
 export const eval_ir = (cmd, state) => {
     const tag = key(cmd);
     if (!handlers[tag]) {
+        /* istanbul ignore next */
         throw new Error(`no handler for ${tag}`);
     }
     return handlers[tag](cmd[tag], state);
@@ -296,6 +304,7 @@ const call = {
         if (inner.Builtin) {
             return callSingleArgBuiltin(inner.Builtin, arg, state);
         } else {
+            /* istanbul ignore next */
             throw new Error('not yet');
         }
     },
@@ -308,6 +317,7 @@ const expectList = (v) => {
     if ('Sequence' in v) {
         return v.Sequence;
     }
+    /* istanbul ignore next */
     throw new Error('Not a list: ' + JSON.stringify(v));
 };
 
@@ -315,6 +325,7 @@ const expectInt = (v) => {
     if ('Int' in v) {
         return v.Int;
     }
+    /* istanbul ignore next */
     throw new Error('Not an int: ' + JSON.stringify(v));
 };
 
@@ -322,6 +333,7 @@ const expectNat = (v) => {
     if ('Nat' in v) {
         return v.Nat;
     }
+    /* istanbul ignore next */
     throw new Error('Not a nat: ' + JSON.stringify(v));
 };
 
@@ -329,6 +341,7 @@ const expectBool = (v) => {
     if ('Boolean' in v) {
         return v.Boolean;
     }
+    /* istanbul ignore next */
     throw new Error('Not a boolean: ' + JSON.stringify(v));
 };
 
@@ -336,6 +349,7 @@ const expectText = (v) => {
     if ('Text' in v) {
         return v.Text;
     }
+    /* istanbul ignore next */
     throw new Error('Not a text: ' + JSON.stringify(v));
 };
 
@@ -343,6 +357,7 @@ const expectFloat = (v) => {
     if ('Float' in v) {
         return v.Float;
     }
+    /* istanbul ignore next */
     throw new Error('Not a float: ' + JSON.stringify(v));
 };
 
@@ -375,6 +390,7 @@ const singleArgBuiltins = {
 const callSingleArgBuiltin = (builtin, arg, state) => {
     if (singleArgBuiltins[builtin]) {
         const result = singleArgBuiltins[builtin](arg);
+        /* istanbul ignore next */
         if (state.debug.builtins || state.debug[builtin]) {
             console.log(builtin, arg, result);
         }
@@ -389,12 +405,14 @@ const callMultiArgBuiltin = (builtin, args, arg, state) => {
     if (multiArgBuiltins[builtin]) {
         args = args.concat([arg]);
         const result = multiArgBuiltins[builtin](...args);
+        /* istanbul ignore next */
         if (state.debug.builtins || state.debug[builtin]) {
             console.log(builtin, args, result);
         }
         state.stack.push(result);
         state.idx += 1;
     } else {
+        /* istanbul ignore next */
         throw new Error(`Unexpected builtin ${builtin}`);
     }
 };

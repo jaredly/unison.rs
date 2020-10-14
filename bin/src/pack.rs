@@ -273,13 +273,8 @@ pub fn pack_term_json(
     )
 }
 
-pub fn pack_term(
-    codebase: &mut Codebase,
-    root: &std::path::Path,
-    hash: &str,
-    out: &str,
-) -> std::io::Result<()> {
-    let runtime_env = term_to_env(root, hash)?;
+pub fn pack_term(codebase: &mut Codebase, hash: &str, out: &str) -> std::io::Result<()> {
+    let runtime_env = term_to_env(codebase.root().as_path(), hash)?;
 
     std::fs::write(
         out.to_owned() + ".json",
@@ -292,19 +287,15 @@ pub fn pack_term(
     Ok(())
 }
 
-pub fn pack_all_json(file: &String, ns: &String, outfile: &String) -> std::io::Result<()> {
-    let terms_path = std::path::PathBuf::from(file);
+// fn pack_json
 
-    println!("Packing all the terms I can find");
-    let root = terms_path.parent().unwrap();
-    let mut codebase = Codebase::new(root.to_owned())?;
-    codebase.load_all()?;
-
+fn pack_all_json_inner(
+    codebase: &mut Codebase,
+    ns: &String,
+    outfile: &String,
+) -> std::io::Result<()> {
     let mut all_terms = std::collections::HashMap::new();
 
-    // let head = codebase.head.clone();
-    // if ns != "." {
-    // }
     let ns = if ns == "" || ns == "." {
         codebase.head.clone()
     } else {
@@ -316,7 +307,7 @@ pub fn pack_all_json(file: &String, ns: &String, outfile: &String) -> std::io::R
 
     codebase.collect_terms(&ns, &vec![], &mut all_terms);
 
-    let env = env::Env::init(root);
+    let env = env::Env::init(codebase.root().as_path());
     let mut ir_env = ir::TranslationEnv::new(env);
 
     for hash in all_terms.values() {
@@ -335,10 +326,6 @@ pub fn pack_all_json(file: &String, ns: &String, outfile: &String) -> std::io::R
 
     let runtime_env: shared::types::RuntimeEnv = ir_env.into();
 
-    // for (k, v) in runtime_env.terms.iter() {
-    //     println!("Packing {:?} : {:?}", k, v);
-    // }
-
     std::fs::write(
         outfile.to_owned() + ".names.json",
         serde_json::to_string_pretty(&codebase.get_names().serialize()).unwrap(),
@@ -349,6 +336,25 @@ pub fn pack_all_json(file: &String, ns: &String, outfile: &String) -> std::io::R
     )?;
 
     Ok(())
+}
+
+pub fn pack_all_json(file: &String, ns: &String, outfile: &String) -> std::io::Result<()> {
+    let terms_path = std::path::PathBuf::from(file);
+
+    println!("Packing all the terms I can find");
+    let root = terms_path.parent().unwrap();
+    let mut codebase = Codebase::new(root.to_owned())?;
+    codebase.load_all()?;
+
+    pack_all_json_inner(&mut codebase, ns, outfile)
+}
+
+pub fn pack_all_json_watch(ns: &String, outfile: &String) -> std::io::Result<()> {
+    println!("Packing all the terms I can find");
+    watch(move |codebase| {
+        codebase.load_all()?;
+        pack_all_json_inner(codebase, ns, outfile)
+    })
 }
 
 pub fn default_root() -> std::path::PathBuf {
@@ -392,16 +398,23 @@ pub fn pack(file: &String, outfile: &String) -> std::io::Result<()> {
         let root = path.parent().unwrap().parent().unwrap();
         let mut codebase = load_main_branch(root)?;
         let hash = &path.file_name().unwrap().to_str().unwrap()[1..];
-        pack_term(&mut codebase, root, &hash, outfile)
+        pack_term(&mut codebase, &hash, outfile)
     } else {
         let root = default_root();
         let mut codebase = load_main_branch(root.as_path())?;
         let hash = find_term(&mut codebase, file);
-        pack_term(&mut codebase, root.as_path(), &hash.0, outfile)
+        pack_term(&mut codebase, &hash.0, outfile)
     }
 }
 
 pub fn pack_watch(term: &String, outfile: &String) -> std::io::Result<()> {
+    watch(move |codebase| {
+        let hash = find_term(codebase, term);
+        pack_term(codebase, &hash.0, outfile)
+    })
+}
+
+fn watch<F: Fn(&mut Codebase) -> std::io::Result<()>>(run: F) -> std::io::Result<()> {
     use notify::{RecommendedWatcher, RecursiveMode, Watcher};
     use std::sync::mpsc::channel;
     use std::time::Duration;
@@ -412,26 +425,17 @@ pub fn pack_watch(term: &String, outfile: &String) -> std::io::Result<()> {
     let now = std::time::Instant::now();
     println!("Initial build...");
     let mut codebase = load_main_branch(root.as_path())?;
-    let hash = find_term(&mut codebase, term);
-    pack_term(&mut codebase, root.as_path(), &hash.0, outfile)?;
+    run(&mut codebase)?;
     println!("Finished! {:?}", now.elapsed());
 
     // Create a channel to receive the events.
     let (tx, rx) = channel();
-
-    // Automatically select the best implementation for your platform.
-    // You can also access each implementation directly e.g. INotifyWatcher.
     let mut watcher: RecommendedWatcher =
         Watcher::new(tx, Duration::from_millis(200)).expect("Can't make watcher");
-
-    // Add a path to be watched. All files and directories at that path and
-    // below will be monitored for changes.
     watcher
         .watch(head_dir(root.as_path()), RecursiveMode::Recursive)
         .expect("Can't watch");
 
-    // This is a simple loop, but you may want to use more complex logic here,
-    // for example to handle I/O.
     loop {
         match rx.recv() {
             Ok(event) => match event {
@@ -439,8 +443,7 @@ pub fn pack_watch(term: &String, outfile: &String) -> std::io::Result<()> {
                     println!("Rebuilding...");
                     let now = std::time::Instant::now();
                     codebase.reload()?;
-                    let hash = find_term(&mut codebase, term);
-                    pack_term(&mut codebase, root.as_path(), &hash.0, outfile)?;
+                    run(&mut codebase)?;
                     println!("Finished! {:?}", now.elapsed());
                 }
                 _ => (),

@@ -23,3 +23,7 @@ NEXT MOVE: import runtime_tests.json and run them! in nodejs folks. Maybe I'll w
   - `cargo run --release -- pack-all-json ~/.unison/v1/terms runtime_tests ../runtime_tests.json`
   - `yarn run node` (this will be a watcher, rebuilding on changes)
   - `node dist/node.js`
+
+
+Tests to make:
+- abilities with a deep stack
