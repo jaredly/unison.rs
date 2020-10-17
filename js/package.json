@@ -1,7 +1,8 @@
 {
     "scripts": {
         "start": "parcel ui/index.html",
-        "node": "parcel build --target node node.js"
+        "node": "parcel build --target node node.js",
+        "test": "jest"
     },
     "dependencies": {
         "@birchill/json-equalish": "^1.1.0",

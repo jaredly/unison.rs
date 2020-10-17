@@ -178,6 +178,16 @@ export class Stack {
     }
 
     back_to_handler() {
+        let has_handler = false;
+        for (let i = 0; i < this._frames.length; i++) {
+            if (this._frames[i].handler != null) {
+                has_handler = true;
+                break;
+            }
+        }
+        if (!has_handler) {
+            return null;
+        }
         const old_tid = this._frames[0].trace_id;
         const frames = [];
         while (this._frames[0].handler == null) {
