@@ -230,7 +230,7 @@ pub fn run_sync(
     args: Vec<JsValue>,
     raw_handlers: Vec<JsValue>,
 ) -> Result<JsValue, JsValue> {
-    // TODO bail if any handlers aer async?
+    // TODO bail if any handlers are async?
     let mut ffi = FFI::from(raw_handlers);
 
     let mut l = ENV.lock().unwrap();
@@ -238,7 +238,6 @@ pub fn run_sync(
 
     let hash = shared::types::Hash::from_string(term);
     let t = &env.terms.get(&hash).unwrap().1;
-    // TODO effects!
     let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
     for effect in effects.iter() {
         use shared::ffi::FFI;

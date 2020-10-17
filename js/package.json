@@ -1,6 +1,6 @@
 {
     "scripts": {
-        "start": "parcel index.html",
+        "start": "parcel ui/index.html",
         "node": "parcel build --target node node.js"
     },
     "dependencies": {

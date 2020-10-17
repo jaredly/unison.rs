@@ -1,5 +1,4 @@
-import { RuntimeEnv, State, eval_value } from './ir_runtime';
-// import chalk from 'chalk';
+import { RuntimeEnv, eval_value } from './src/ir_runtime';
 import fs from 'fs';
 
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -42,19 +41,12 @@ describe('runtime tests', () => {
             groups[name].forEach((hash) => {
                 const name = names[0][hash][0].join('.');
                 test(name, () => {
-                    const res = eval_value(env, hash, debug);
+                    const res = env.eval(hash, debug);
                     expect(res).toEqual({ Boolean: true });
                 });
             });
         });
     }
-    // tests.forEach((hash) => {
-    //     const name = names[0][hash][0].join('.');
-    //     test(name, () => {
-    //         const res = eval_value(env, hash, debug);
-    //         expect(res).toEqual({ Boolean: true });
-    //     });
-    // });
 });
 
 describe('ffi tests', () => {
@@ -81,7 +73,9 @@ describe('ffi tests', () => {
             groups[name].forEach((hash) => {
                 const name = names[0][hash][0].join('.');
                 test(name, () => {
-                    const res = eval_value(env, hash, debug);
+                    const evalHash = env.addEval(hash, [{ Nat: 1 }]);
+                    const res = env.eval(evalHash, debug);
+                    // const res = env.eval(hash, debug);
                     expect(res).toEqual({ Boolean: true });
                 });
             });

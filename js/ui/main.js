@@ -1,7 +1,7 @@
 // const data = import('./data/all.json');
-const names = import('./data/all.json.names.json');
+const names = import('../data/all.json.names.json');
 
-import { RuntimeEnv, State, eval_value } from './ir_runtime';
+import { RuntimeEnv, State, eval_value } from '../src/ir_runtime';
 import * as React from 'react';
 import { render } from 'react-dom';
 import Trace from './Trace';
@@ -11,7 +11,7 @@ document.body.appendChild(root);
 
 import jsonEqual from '@birchill/json-equalish';
 window.jsonEqual = jsonEqual;
-import { diff } from './diff';
+import { diff } from '../src/diff';
 window.diff = diff;
 
 const data = fetch('./all.json').then((r) => r.json());

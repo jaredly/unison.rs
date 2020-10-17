@@ -1,42 +1,7 @@
-// Ok folks
-
 import clone from 'clone-deep';
 import { Stack } from './stack';
 import { eval_ir } from './ir_exec';
 import { pretty_print } from './pretty_print';
-
-export const eval_value = (env, hash, debug = {}) => {
-    const state = new State(env, hash, debug);
-    // window.trace = state.stack.trace;
-    return state.run_to_end();
-};
-
-const DEBUG = true;
-
-export class RuntimeEnv {
-    // terms: { [key: string]: [Array<IR>, ABTType] };
-    // anon_fns: Array<[String, Array<IR>]>;
-    // types: { [key: string]: TypeDecl };
-
-    constructor({ terms, anon_fns, types }, names) {
-        this.terms = terms;
-        this.anon_fns = anon_fns;
-        this.types = types;
-        // console.log('names', names);
-        this.names = names;
-    }
-
-    cmds(source) {
-        if (source.Value) {
-            if (this.terms[source.Value]) return this.terms[source.Value][0];
-        }
-        /* istanbul ignore next */
-        if (!this.anon_fns[source.Fn[0]]) {
-            throw new Error(`No function: ${JSON.stringify(source)}`);
-        }
-        return this.anon_fns[source.Fn[0]][1];
-    }
-}
 
 export class State {
     constructor(env, hash, debug = {}) {
@@ -139,6 +104,9 @@ export class State {
                 `Cannot handle ret ${JSON.stringify(ret)} : ${typ}`,
             );
         }
+        if (this.debug.ret) {
+            console.log('RET', typ, ret[typ]);
+        }
         return this.rets[typ](ret[typ]);
     }
 
@@ -187,11 +155,11 @@ export class State {
         },
         Request: ([kind, number, args]) => {
             const final_index = this.idx;
-            const [
-                nidx,
-                saved_frames,
-                frame_idx,
-            ] = this.stack.back_to_handler();
+            const back = this.stack.back_to_handler();
+            if (!back) {
+                throw new Error('No handler found for ' + JSON.stringify(kind));
+            }
+            const [nidx, saved_frames, frame_idx] = back;
             this.idx = nidx;
             this.cmds = this.env.cmds(this.stack.currentFrame().source);
 
