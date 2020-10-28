@@ -48,8 +48,10 @@ export class Stack {
     }
 
     // STOPSHIP implement
-    static fromFrames() {
-        throw new Error('IMPL');
+    static fromFrames(frames) {
+        const stack = Object.create(Stack.prototype);
+        stack._frames = frames;
+        return stack;
     }
 
     drain() {

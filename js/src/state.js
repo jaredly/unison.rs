@@ -23,44 +23,50 @@ const unit_value = () => {
 };
 
 export class State {
-    constructor(env, hash, ffi, debug = {}) {
+    constructor(env, ffi, debug = {}) {
+        this.debug = debug;
+        this.trace = {};
+        this.ffi = ffi;
+        this.idx = 0;
+        this.env = env;
+        this.cmds = [];
+        this.stack = null;
+        // if (!ffi) {
+        //     throw new Error('No ffi');
+        // }
+    }
+
+    loadHash(hash) {
         // find by prefix
         /* istanbul ignore next */
-        if (!env.terms[hash]) {
-            for (let k of Object.keys(env.terms)) {
+        if (!this.env.terms[hash]) {
+            for (let k of Object.keys(this.env.terms)) {
                 if (k.startsWith(hash)) {
                     hash = k;
                     break;
                 }
             }
             /* istanbul ignore next */
-            if (!env.terms[hash]) {
+            if (!this.env.terms[hash]) {
                 throw new Error(`Hash not found ${hash}`);
             }
         }
-        this.debug = debug;
-        this.trace = {};
-        this.ffi = ffi;
-        this.cmds = env.terms[hash][0];
-        this.idx = 0;
-        this.env = env;
+        this.cmds = this.env.terms[hash][0];
         this.stack = new Stack({ Value: hash });
     }
 
     // STOPSHIP fullResume needs to be an alternative constructor
-    static fullResume(env, kont, arg, ffi) {
+    fullResume(kont, arg) {
         // throw new Error('MAKE A CONSTRUCTOR SOMEHOW');
         const [hash, number, frames, final_idx] = kont;
 
-        const state = Object.create(State.prototype);
-        state.debug = {};
-        state.trace = {};
-        state.ffi = ffi;
-        state.idx = final_idx;
-        state.stack = Stack.fromFrames(frames);
-        state.stack.push(arg);
-        state.cmds = env.cmds(state.stack.frames[0].source);
-        return state;
+        arg = arg != null ? arg : unit_value();
+
+        this.idx = final_idx;
+        this.stack = Stack.fromFrames(frames);
+        this.stack.push(arg);
+        // console.log('pushed', state.stack, arg);
+        this.cmds = this.env.cmds(this.stack._frames[0].source);
     }
 
     /* istanbul ignore next */
@@ -259,6 +265,9 @@ export class State {
 
 const handleExternalRequest = (kind, number, args, state) => {
     const hash = kind.DerivedId[0];
+    if (!state.ffi) {
+        throw new Error('State has no "ffi" defined');
+    }
     // console.log(hash, number, args);
     if (!state.ffi[hash] || !state.ffi[hash][number]) {
         throw new Error(`No ffi defined for ${hash}`);
@@ -282,7 +291,7 @@ const handleExternalRequest = (kind, number, args, state) => {
     if (value == null) {
         value = unit_value();
     }
-    console.log('EXTERANL', hash, number, args, value);
+    // console.log('EXTERANL', hash, number, args, value);
     state.stack.push(value);
     // let constructor_type = self.env.get_ability_type(&kind, number);
     // let concrete_type = match self

@@ -7,7 +7,8 @@ import { pretty_print } from './pretty_print';
 import { State } from './state';
 
 export const eval_value = (env, hash, debug = {}) => {
-    const state = new State(env, hash, {}, debug);
+    const state = new State(env, {}, debug);
+    state.loadHash(hash);
     // window.trace = state.stack.trace;
     return state.run_to_end();
 };
@@ -24,12 +25,14 @@ export class RuntimeEnv {
     }
 
     eval(hash, ffi, debug = {}) {
-        const state = new State(this, hash, ffi, debug);
+        const state = new State(this, ffi, debug);
+        state.loadHash(hash);
         return state.run_to_end();
     }
 
-    resume(kont, arg, ffi) {
-        const state = State.fullResume(this, kont, arg, ffi);
+    resume(kont, arg, ffi, debug = {}) {
+        const state = new State(this, ffi, debug);
+        state.fullResume(kont, arg);
         return state.run_to_end();
     }
 

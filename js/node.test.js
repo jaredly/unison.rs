@@ -121,13 +121,11 @@ describe('ffi tests', () => {
             5: {
                 fn: (timeout, kont) => {
                     setTimeout(() => {
-                        // UMMM TODO idk what to do here?
-                        const res = env.resume(kont, null);
+                        const res = env.resume(kont, null, ffi(resolve), debug);
                         if (res != null) {
                             resolve(res);
                         }
-                    }, timeout);
-                    // throw new Error('async not yet supported');
+                    }, timeout.Nat);
                 },
             },
         },
