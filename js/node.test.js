@@ -1,3 +1,4 @@
+import 'regenerator-runtime';
 import { RuntimeEnv, eval_value } from './src/ir_runtime';
 import fs from 'fs';
 import compare from './src/compare';
@@ -69,7 +70,7 @@ describe('ffi tests', () => {
         groups[name].push(hash);
     });
 
-    const ffi = {
+    const ffi = (resolve) => ({
         // MVar
         itn4m9gem5cdsu2ira2nv7vnr1vnp8uabqeveccqqqabvoff8qbicuejpno80van23r5mjh1sdjr0m7uhggb6tjc4hk6e332p5rdako: {
             // create
@@ -108,28 +109,43 @@ describe('ffi tests', () => {
             0: (tid) => clearTimeout(tid),
             1: () => ({ Nat: Date.now() }),
             2: (iid) => clearInterval(iid), // STOPSHIP unwrap ffi?
+            // SetInterval
             3: (fn, interval) => {
                 throw new Error('lambdas not yet supported');
             },
+            // SetTimeout
             4: (fn, timeout) => {
                 throw new Error('lambdas not yet supported');
             },
+            // Wait
             5: {
-                fn: (fn, timeout) => {
-                    throw new Error('async not yet supported');
+                fn: (timeout, kont) => {
+                    setTimeout(() => {
+                        // UMMM TODO idk what to do here?
+                        const res = env.resume(kont, null);
+                        if (res != null) {
+                            resolve(res);
+                        }
+                    }, timeout);
+                    // throw new Error('async not yet supported');
                 },
             },
         },
-    };
+    });
 
     for (const name of Object.keys(groups).sort()) {
         describe(name, () => {
             groups[name].forEach((hash) => {
                 const name = names[0][hash][0].join('.');
-                test(name, () => {
+                test(name, async () => {
                     const evalHash = env.addEval(hash, [{ Nat: 1 }]);
-                    const res = env.eval(evalHash, ffi, debug);
-                    // const res = env.eval(hash, debug);
+                    const res = await new Promise((resolve) => {
+                        const ffi_ = ffi(resolve);
+                        const res = env.eval(evalHash, ffi_, debug);
+                        if (res != null) {
+                            resolve(res);
+                        }
+                    });
                     expect(res).toEqual({ Boolean: true });
                 });
             });

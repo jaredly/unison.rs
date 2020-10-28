@@ -28,6 +28,11 @@ export class RuntimeEnv {
         return state.run_to_end();
     }
 
+    resume(kont, arg, ffi) {
+        const state = State.fullResume(this, kont, arg, ffi);
+        return state.run_to_end();
+    }
+
     addEval(hash, args) {
         const newHash = `<eval-${this.evals++}>`;
         const current = this.terms[hash];

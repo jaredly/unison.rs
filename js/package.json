@@ -10,7 +10,8 @@
         "jest": "^26.5.3",
         "parcel": "^1.12.4",
         "react": "^16.13.1",
-        "react-dom": "^16.13.1"
+        "react-dom": "^16.13.1",
+        "regenerator-runtime": "^0.13.7"
     },
     "devDependencies": {
         "@babel/core": "^7.11.6",

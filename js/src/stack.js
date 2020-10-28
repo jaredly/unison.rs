@@ -47,6 +47,17 @@ export class Stack {
         this.new_frame(0, source);
     }
 
+    // STOPSHIP implement
+    static fromFrames() {
+        throw new Error('IMPL');
+    }
+
+    drain() {
+        const frames = this._frames;
+        this._frames = [];
+        return frames;
+    }
+
     bind(binding) {
         this._frames[0].bindings.unshift(binding);
     }

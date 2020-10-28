@@ -47,6 +47,22 @@ export class State {
         this.stack = new Stack({ Value: hash });
     }
 
+    // STOPSHIP fullResume needs to be an alternative constructor
+    static fullResume(env, kont, arg, ffi) {
+        // throw new Error('MAKE A CONSTRUCTOR SOMEHOW');
+        const [hash, number, frames, final_idx] = kont;
+
+        const state = Object.create(State.prototype);
+        state.debug = {};
+        state.trace = {};
+        state.ffi = ffi;
+        state.idx = final_idx;
+        state.stack = Stack.fromFrames(frames);
+        state.stack.push(arg);
+        state.cmds = env.cmds(state.stack.frames[0].source);
+        return state;
+    }
+
     /* istanbul ignore next */
     pretty_print(value) {
         return pretty_print(this.env.names, value);
@@ -54,7 +70,24 @@ export class State {
 
     run_to_end() {
         // console.log(this.cmds);
-        this.run();
+        const result = this.run();
+        // TODO think about using exception handling?
+        // would be interesting to benchmark
+        if (result && result.FullRequest) {
+            const [
+                hash,
+                number,
+                args,
+                frames,
+                final_idx,
+                _, // return_type,
+            ] = result.FullRequest;
+            const kont = [hash, number, frames, final_idx];
+            const allArgs = args.slice();
+            allArgs.push(kont);
+            this.ffi[hash][number].fn(...allArgs);
+            return null; // indicates that we are async
+        }
         return this.stack.pop();
     }
 
@@ -97,7 +130,13 @@ export class State {
                         this.stack.currentFrame().trace_id
                     ].events.push({ Ret: ret });
                 }
-                this.handle_ret(ret);
+                const res = this.handle_ret(ret);
+                // Ok folks, got to bubble
+                if (res && res.FullRequest) {
+                    // AHH HERE WE GOOOOOOO
+                    // STOPSHIP here it is folks.
+                    return res;
+                }
             }
             this.handle_tail();
         }
@@ -225,17 +264,18 @@ const handleExternalRequest = (kind, number, args, state) => {
         throw new Error(`No ffi defined for ${hash}`);
     }
     if (typeof state.ffi[hash][number] !== 'function') {
-        throw new Error('async not yet supported');
-        // return {
-        //     FullRequest: [
-        //         hash,
-        //         number,
-        //         args,
-        //         state.stack.frames.drain(),
-        //         final_index,
-        //         return_type,
-        //     ],
-        // };
+        // throw new Error('async not yet supported');
+        const frames = state.stack.drain();
+        return {
+            FullRequest: [
+                hash,
+                number,
+                args,
+                frames,
+                state.idx,
+                null, // return_type,
+            ],
+        };
     }
     // TODO translate args
     let value = state.ffi[hash][number](...args);
