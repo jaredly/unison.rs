@@ -1,0 +1,351 @@
+
+-- equality
+
+eq.t_01 = 1 == 1
+eq.t_02 = 10 == 10
+eq.t_03 = 1 != 2
+eq.t_04 = 10 != 11
+eq.t_05 = "hi" == "hi"
+eq.t_06 = "Hi" Text.!= "hi"
+eq.t_07 = 1.1 == 1.1
+eq.t_08 = -1 == -1
+eq.t_09 = true == true
+eq.t_10 = false == false
+
+-- complex equality
+
+eq.t_11 = Some(1) == Some(1)
+eq.t_12 = Some(0) != Some(1)
+eq.t_13 = None == None
+eq.t_14 = Some(1) != None
+
+-- let bindings
+
+let_.t_01 =
+    a = 2
+    a == 2
+
+let_.t_02 =
+    a = 2
+    b = 3
+    a != b
+
+let_.t_03 =
+    a = 2
+    b = 2
+    a == b
+
+let_.t_04 =
+    a = 2
+    let
+        a = 3
+        a == 3
+
+-- math
+
+math.t_01 = 1 + 1 == 2
+math.t_02 = 2 * 3 == 6
+math.t_03 = 1.1 + 1.1 == 2.2
+math.t_04 = 2.1 / 2.0 == 1.05
+math.t_05 = 1 - 2 == -1
+math.t_06 = maxNat + 1 == 0
+math.t_07 = minInt - +1 == maxInt
+math.t_08 = Nat.shiftLeft 3 3 == 24
+math.t_09 = Nat.shiftRight 24 3 == 3
+math.t_10 = Nat.and 24 20 == 16
+math.t_11 = Nat.or 24 20 == 28
+math.t_12 = Nat.xor 24 20 == 12
+math.t_13 = Nat.pow 24 3 == 13824
+math.t_14 = Nat.drop 24 3 == 21
+math.t_15 = Nat.drop 3 24 == 0
+
+int.t_01 = Int.increment +3 == +4
+int.t_02 = Int.negate +3 == -3
+int.t_03 = Int.isEven +2 == true
+int.t_04 = Int.isEven +3 == false
+int.t_05 = Int.isOdd +3 == true
+int.t_06 = Int.toText -0 == "+0"
+int.t_07 = Int.complement +2 == -3
+int.t_08 = Int.complement -3 == +2
+int.t_09 = +1 + -2 == -1
+int.t_10 = +1 - -2 == +3
+int.t_11 = +6 / +2 == +3
+int.t_12 = +6 Int.> +3
+int.t_13 = +6 Int.<= +6
+int.t_14 = +5 Int.== +5
+int.t_15 = Int.and +13 +23 == +5
+int.t_16 = Int.or +13 +23 == +31
+int.t_17 = Int.xor +13 +23 == +26
+int.t_18 = Int.mod +15 +4 == +3
+int.t_19 = Int.pow +2 3 == +8
+int.t_20 = Int.shiftLeft +3 5 == +96
+int.t_21 = Int.shiftRight +96 5 == +3
+int.t_22 = +4 * +3 == +12
+int.t_23 = Int.toText -3 == "-3"
+> int.t_23
+
+nat.t_01 = Nat.increment 3 == 4
+nat.t_02 = Nat.increment maxNat == 0
+nat.t_03 = Nat.isEven 2
+nat.t_04 = Nat.isOdd 3
+nat.t_05 = Nat.toText 123 == "123"
+nat.t_06 = 3 + 4 == 7
+nat.t_07 = 3 * 4 == 12
+nat.t_08 = 13 / 4 == 3
+nat.t_09 = 4 Nat.> 3
+nat.t_10 = 2 Nat.< 10
+nat.t_11 = 2 Nat.<= 2
+nat.t_12 = 2 Nat.>= 2
+nat.t_13 = 3 Nat.== 3
+nat.t_14 = (3 == 5) == false
+nat.t_15 = Nat.and 13 23 == 5
+nat.t_16 = Nat.or 13 23 == 31
+nat.t_17 = Nat.xor 13 23 == 26
+nat.t_18 = Nat.mod 14 4 == 2
+nat.t_19 = Nat.pow 3 2 == 9
+nat.t_20 = Nat.shiftLeft 3 5 == 96
+nat.t_21 = Nat.shiftRight 96 5 == 3
+nat.t_22 = Nat.sub 1 3 == -2
+nat.t_23 = Nat.sub 3 1 == +2
+nat.t_24 = Nat.drop 1 3 == 0
+nat.t_25 = Nat.drop 3 1 == 2
+nat.t_26 = Nat.toInt 3 == +3
+
+float.t_01 = 1.1 + 1.2 == 2.3
+float.t_02 = 2.3 - 1.1 == 1.1999999999999997
+float.t_03 = 1.1 * 2.0 == 2.2
+float.t_04 = 2.2 / 2.0 == 1.1
+float.t_05 = (1.1 < 2.2) && (1.1 <= 2.2)
+float.t_06 = (2.2 > 1.1) && (2.2 >= 1.1)
+
+
+bool.t_01 = Boolean.not true == false
+
+list.t_01 = List.size [1,2,6] == 3
+list.t_02 = List.at 2 [1,2,3] == Some 3
+list.t_03 = List.at 10 [1,2,3] == None
+list.t_04 = 2 +: [3,4] == [2,3,4]
+list.t_05 = [2,3] :+ 4 == [2,3,4]
+list.t_06 = [1,2] ++ [3,4] == [1,2,3,4]
+list.t_07 = List.take 2 [1,2,3] == [1,2]
+list.t_08 = List.take 4 [1,2] == [1,2]
+list.t_09 = List.drop 2 [1,2,3] == [3]
+list.t_10 = List.drop 4 [1,2] == []
+
+text.t_01 = Text.size "3" == 1
+-- !!! oops I can't parse these?
+-- text.t_02 = Text.size "😅" == 1
+-- text.t_03 = Text.toCharList "a😅b" == [?a, ?😅, ?b]
+-- text.t_04 = Text.fromCharList [?a, ?😅, ?b] == "a😅b"
+
+text.t_05 = "a" ++ "b" == "ab"
+text.t_06 = Text.take 2 "abc" == "ab"
+text.t_07 = Text.drop 2 "abc" == "c"
+
+-- > text.t_04
+
+-- bytes aren't really stable imo
+
+-- twos complement wont work, sorry folks
+-- nat.t_06 = Nat.complement 9007199254740991 -- == 3
+
+
+-- TODO floats and ints you know
+
+-- function calls
+
+fn.f_01 a = a Nat.* 2
+fn.t_01 = fn.f_01 6 == 12
+fn.f_02 a b = a Nat.+ (a * b)
+fn.t_02 = f_02 2 6 == 14
+fn.t_03 =
+    x a b = a * 2 + b
+    x 4 1 == 9
+fn.t_04 =
+    m = 3
+    x a b = a * m + b
+    x 4 1 == 13
+fn.f_05 =
+    m = 4
+    (x -> x * m + 2)
+fn.t_05 = f_05 10 == 42
+
+-- control flow
+
+if_.t_01 = (if true then 3 else 8) == 3
+if_.t_02 = (if false then 3 else 8) == 8
+if_.t_03 = (if 3 > 4 then 0 else 1) == 1
+if_.t_04 = (if 3 < 4 then 0 else 1) == 0
+
+-- match
+
+match_.t_01 = match 2 with
+    1 -> false
+    3 -> false
+    2 -> true
+    4 -> false
+    _ -> false
+match_.t_02 = match "hi" with
+    "ho" -> false
+    "hi" -> true
+    _ -> false
+match_.t_03 = match 37 with
+    36 -> false
+    x | x > 30 -> true
+    32 -> false
+    _ -> false
+match_.t_04 = match 14 with
+    10 -> false
+    x -> x == 14
+match_.t_05 = match Some 3 with
+    Some x -> x == 3
+    None -> false
+match_.t_06 = match (3, "hi") with
+    (3, _) -> true
+    _ -> false
+match_.t_07 = match [2,3,4] with
+    3 +: _ -> false
+    2 +: [3] :+ 2 -> false
+    2 +: [3] :+ 4 -> true
+match_.t_08 = match [2,3,4] with
+    3 +: _ -> false
+    2 +: l -> l == [3, 4]
+match_.t_09 = match Some None with
+    None -> false
+    Some _ -> true
+match_.t_10 = match Some None with
+    None -> false
+    Some (Some _) -> false
+    Some None -> true
+match_.t_11 = match Some (Some 4) with
+    None -> false
+    Some None -> false
+    Some (Some x) -> x == 4
+match_.t_12 = match [1,2,3] with
+    a ++ [2] -> false
+    [b@2] ++ a -> false
+    [1] ++ [2, 1] -> false
+    [a, _] ++ [3] -> a == 1
+match_.t_13 = match (1, 2) with
+    (1, x) | x > 2 -> false
+    (a, _) | a > 2 -> false
+    _ -> true
+match_.t_14 = match 3 with
+    1 -> false
+    b@3 -> b == 3
+match_.t_15 = match [2,3] with
+    [] -> false
+    [2] -> false
+    [a,3] -> a == 2
+    _ -> false
+match_.t_16 = match [] with
+    2 +: [2] -> false
+    [2] :+ 3 -> false
+    a ++ [2] -> false
+    [] -> true
+    _ -> false
+match_.t_17 = match [2,3] with
+    2 +: [1] -> false
+    1 +: [1] -> false
+    2 +: [3] -> true
+    _ -> false
+match_.t_18 = match [2,3] with
+    [2, 2, 3] ++ [] -> false
+    (b@[1]) ++ [5] -> false
+    a ++ [3] | a == [] -> false
+    [2] :+ 1 -> false
+    [1] :+ 1 -> false
+    [2] :+ 3 -> true
+    _ -> false
+
+
+-- recursiveness
+
+rec.t_01 =
+    count_down x = if x < 10 then x + 1 else count_down (x / 2)
+    count_down 32 == 9
+rec.is_even =
+    is_even x = if x < 2 then x == 0 else is_odd (Nat.drop x 1)
+    is_odd x = if x < 2 then x == 1 else is_even (Nat.drop x 1)
+    is_even
+rec.is_even_locals =
+    m = 2
+    n = 2
+    is_even x = if x < m then x == 0 else is_odd (Nat.drop x 1)
+    is_odd x = if x < n then x == 1 else is_even (Nat.drop x 1)
+    is_even
+rec.t_02 = is_even 4 == true
+rec.t_03 = is_even 5 == false
+rec.t_04 = is_even 15 == false
+rec.t_05 = is_even 16 == true
+
+-- abilities
+
+ability abilities.a_01 where
+    getInt : Int
+abilities.f_01 = handle (abilities.a_01.getInt) with cases
+    { a } -> (a, 2)
+    { abilities.a_01.getInt -> k } -> handle (k +5) with cases { a } -> (a, 3)
+abilities.t_01 = abilities.f_01 == (+5, 3)
+ability abilities.a_02 where
+    plus5 : Int -> Int
+abilities.v_02 = handle (abilities.a_02.plus5 +6) with cases
+    { a } -> (a, 1)
+    { abilities.a_02.plus5 v -> k } -> handle (k (v + +5)) with cases { a } -> (a, 2)
+abilities.t_02 = abilities.v_02 == (+11, 2)
+ability abilities.a_03 where
+    getTwo : Nat -> Nat -> (Nat, Nat)
+abilities.v_03 = handle ((abilities.a_03.getTwo 2 4), 3) with cases
+    { a } -> (a, 1)
+    { abilities.a_03.getTwo 1 0 -> _ } -> (((0, 0), 0), 0)
+    { abilities.a_03.getTwo a b -> k } -> handle (k (a, b)) with cases
+        { a } -> (a, 2)
+abilities.t_03 = abilities.v_03 == (((2, 4), 3), 2)
+
+abilities.h_plus5 inner = cases
+    { a } -> a
+    { abilities.a_02.plus5 v -> k } -> inner '(k (v + +5))
+abilities.h_getInt v inner = cases
+    { a } -> a
+    { abilities.a_01.getInt -> k } -> inner '(k v)
+abilities.h_maybePlus5 test respond inner = cases
+    { a } -> a
+    { abilities.a_02.plus5 v -> k } | test v -> inner '(respond v)
+abilities.v_04 = 
+    go m = handle !m with (abilities.h_plus5 go)
+    go '(abilities.a_02.plus5 +3)
+abilities.t_04 = abilities.v_04 == +8
+
+abilities.v_05 =
+    go m = handle !m with (abilities.h_maybePlus5 (_ -> true) (_ -> +4) go)
+    go '(abilities.a_02.plus5 +3)
+abilities.t_05 = abilities.v_05 == +4
+
+abilities.v_06 =
+    go m = handle (
+        handle !m with (abilities.h_maybePlus5 (_ -> false) (_ -> +4) go)
+    ) with (abilities.h_plus5 go)
+    go '(abilities.a_02.plus5 +3)
+abilities.t_06 = abilities.v_06 == +8
+abilities.t_07 = (handle (abilities.a_02.plus5 +3) with cases
+    { a } -> 3
+    { abilities.a_02.plus5 v -> _ } -> 4) == 4
+
+abilities.v_08 =
+    go m = handle (
+        handle !m with (abilities.h_getInt +3 go)
+    ) with (abilities.h_plus5 go)
+    go '(abilities.a_02.plus5 +3)
+abilities.t_08 = abilities.v_08 == +8
+
+abilities.v_09 =
+    one x = (go x) + +1
+    two m = (abilities.h_getInt +3 go m)
+    go m = handle (
+        handle !m with two
+    ) with (abilities.h_plus5 go)
+    one '(abilities.a_02.plus5 +3)
+abilities.t_09 = abilities.v_09 == +9
+
+
+> abilities.t_09
