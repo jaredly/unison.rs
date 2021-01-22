@@ -1,6 +1,33 @@
 
 The javascript runtime!
 
+### To run tests:
+```
+yarn test
+```
+
+### To debug things
+```
+env DEBUG=builtins yarn test
+```
+
+Possible debug values: (you can provide multiple separated by commas)
+
+- builtins (logs all calls to a builtin)
+- values (logs all values pushed onto the stack)
+- match (logs match cases & results)
+- `Nat.==` like builtins, but only for the specified builtin
+
+### Next steps
+
+- [x] sync ffi
+- [x] async ffi
+- [ ] port the elm architecture or some such?
+- [ ] provide access to react somehow?
+- [ ] typed ffi? might be overhyped
+
+### Brainstorming
+
 It would be nice to:
 - have evaluation logs on a per-value basis.
   - oooh yeah that would be so dope.
