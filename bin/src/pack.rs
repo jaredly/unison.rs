@@ -312,14 +312,21 @@ fn pack_all_chicken_inner(
     let mut chicken_env = TranslationEnv::new(env);
     // let mut ir_env = ir::TranslationEnv::new(env);
 
-    let mut output = vec![];
+    let mut output = vec![
+        "(load \"stdlib.scm\")\n(import matchable)".to_owned(),
+    ];
 
     let mut hashes: Vec<&Hash> = all_terms.values().collect();
     hashes.sort();
-    for hash in hashes {
+    for hash in hashes.iter() {
         let _ = chicken_env.load(hash);
         output.push(chicken_env.to_string(hash));
     }
+
+    output.push(format!("(define tests (list {}))",
+        hashes.iter().map(|h|h.to_string()).collect::<Vec<String>>().join(" ")
+    ));
+
 
     // {
     //     let mut walker = TypeWalker(&mut ir_env.env);

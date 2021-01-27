@@ -611,8 +611,8 @@ impl<Inner: std::fmt::Debug> std::fmt::Debug for ABT<Inner> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             ABT::Tm(i) => f.write_fmt(format_args!("{:?}", i)),
-            ABT::Var(i, u) => f.write_fmt(format_args!("〰️{} (#{})", i.text, u)),
-            ABT::Cycle(i) => f.write_fmt(format_args!("🚲({:?})", i)),
+            ABT::Var(i, u) => f.write_fmt(format_args!("var{} (#{})", i.text, u)),
+            ABT::Cycle(i) => f.write_fmt(format_args!("cycle({:?})", i)),
             ABT::Abs(s, u, i) => {
                 f.write_fmt(format_args!("|{}/{} #{}|({:?})", s.text, s.unique, u, i))
             }
