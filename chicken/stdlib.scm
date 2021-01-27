@@ -3,7 +3,7 @@
 (define true #t)
 (define false #f)
 
-(define (Universal.== a) (lambda (b) (equal? a b)))
+; (define (Universal.== a) (lambda (b) (equal? a b)))
 (define (Text.!= a) (lambda (b) (not (equal? a b))))
 
 (define (f2c22r2a1sche28mn07brk1j45kp1bam3tr4k2j0un2hi1g7rbrud3f5mes2defqo1tpd9j38pqpg2f0efl3no0ede5ocl2am4bonm0 a)
@@ -103,5 +103,42 @@
     (lambda (b)
         (arithmetic-shift a (- b))))
 
+(define (Int.toText n) 
+    (if (>= n 0)
+        (string-append "+" (number->string n))
+        (number->string n)
+        ))
+(define Int.isEven even?)
+(define Int.isOdd odd?)
+(define (Int.pow a) (lambda (b) (expt a b)))
+(define (Int.mod a) (lambda (b) (modulo a b)))
+(define (Int.mod a) (lambda (b) (modulo a b)))
+(define (Int.complement a) (bitwise-not a))
+(define (Int.or a) (lambda (b) (bitwise-ior a b)))
+(define (Int.and a) (lambda (b) (bitwise-and a b)))
+(define (Int.xor a) (lambda (b) (bitwise-xor a b)))
+(define (Int.increment a) (+ a 1))
+(define (Int.decrement a) (- a 1))
+(define (Int./ a) (lambda (b) (/ a b)))
+(define (Int.* a) (lambda (b) (* a b)))
+(define (Int.negate a) (- a))
 
-; (define (not-implemented _) false)
+(define (Int.shiftLeft a)
+    (lambda (b)
+        (arithmetic-shift a b)))
+
+(define (Int.shiftRight a)
+    (lambda (b)
+        (arithmetic-shift a (- b))))
+
+
+(import srfi-67)
+
+(import srfi-128)
+(define default-comparator (make-default-comparator))
+
+(define (Universal.> a) (lambda (b) (>? default-comparator a b)))
+(define (Universal.>= a) (lambda (b) (>=? default-comparator a b)))
+(define (Universal.<= a) (lambda (b) (<=? default-comparator a b)))
+(define (Universal.< a) (lambda (b) (<? default-comparator a b)))
+(define (Universal.== a) (lambda (b) (=? default-comparator a b)))
