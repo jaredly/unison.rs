@@ -202,3 +202,12 @@
 ; (define (List.++ a) (lambda (b) (append a b))) 
 ; (define (List.drop a) (lambda (b) (list-tail b a)))
 ; (define (List.at a) (lambda (b) (list-ref b a)))
+
+(define (Text.++ a) (lambda (b) (string-append a b)))
+(define Text.size string-length)
+(define (Text.take count) (lambda (str)
+    (let ((count (min count (string-length str))))
+        (substring str 0 count))))
+(define (Text.drop count) (lambda (str)
+    (let ((count (min count (string-length str))))
+        (substring str count))))
