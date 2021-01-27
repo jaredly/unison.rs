@@ -164,37 +164,28 @@
     (let ((dest (make-vector (+ 1 (vector-length vec)))))
         (vector-copy! dest 1 vec)
         (vector-set! dest 0 item)
-        dest
-    )))
+        dest)))
 (define (List.snoc vec) (lambda (item)
     (let ((dest (make-vector (+ 1 (vector-length vec)))))
         (vector-copy! dest 0 vec)
         (vector-set! dest (vector-length vec) item)
-        dest
-    )))
+        dest)))
 (define (List.++ a) (lambda (b) (vector-append a b))) 
 (define (List.drop count) (lambda (vec)
     (let ((count (min (vector-length vec) count)))
         (let ((ln (- (vector-length vec) count)))
             (let ((dest (make-vector ln)))
                 (vector-copy! dest 0 vec count)
-                dest
-            )))))
+                dest)))))
 (define (List.at a) (lambda (b)
     (if (< a (vector-length b))
         (Some (vector-ref b a))
-        None
-    )))
+        None)))
 (define (List.take ln) (lambda (vec)
-    (let (
-        (ln_ (min ln (vector-length vec)))
-    )
-    (let (        (dest (make-vector ln_)))
-        (vector-copy! dest 0 vec 0 ln_)
-        dest
-    )
-    )
-))
+    (let ((ln_ (min ln (vector-length vec))))
+        (let ((dest (make-vector ln_)))
+            (vector-copy! dest 0 vec 0 ln_)
+            dest))))
 
 ;; using linked lists
 ; (define List.size length)
@@ -202,6 +193,8 @@
 ; (define (List.++ a) (lambda (b) (append a b))) 
 ; (define (List.drop a) (lambda (b) (list-tail b a)))
 ; (define (List.at a) (lambda (b) (list-ref b a)))
+
+; --- text stdlib ---
 
 (define (Text.++ a) (lambda (b) (string-append a b)))
 (define Text.size string-length)
@@ -211,3 +204,5 @@
 (define (Text.drop count) (lambda (str)
     (let ((count (min count (string-length str))))
         (substring str count))))
+
+; --- functions ? ---

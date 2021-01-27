@@ -5,7 +5,7 @@
     [() '()]
     [(x . y)
     
-    (if (x)
+    (if x
         (display "pass\n")
         (begin
             (display "fail: ")

@@ -21,6 +21,14 @@ use serde_derive::{Deserialize, Serialize};
 //         .collect()
 // }
 
+fn atom(s: &str) -> Chicken {
+    Chicken::Atom(s.to_owned())
+}
+
+fn list(items: Vec<Chicken>) -> Chicken {
+    Chicken::Apply(items)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Chicken {
     Atom(String),
@@ -50,8 +58,7 @@ impl ToChicken for ABT<Term> {
             ABT::Tm(term) => term.to_chicken(env),
             ABT::Cycle(inner) => {
                 let mut names = vec![];
-                let (mut values, body) = unroll_cycle(inner, &mut names);
-                let mut res = vec![Chicken::Atom("let".to_owned())];
+                let (values, body) = unroll_cycle(inner, &mut names);
                 let mut bindings = vec![];
                 // let mut buf = String::from("(let (");
 
@@ -81,7 +88,7 @@ impl ToChicken for ABT<Term> {
                     // values[i].to_chicken(cmds, env)?;
                 }
                 return Ok(Chicken::Apply(vec![
-                    Chicken::Atom("let".to_owned()),
+                    Chicken::Atom("letrec".to_owned()),
                     Chicken::Apply(bindings),
                     body.to_chicken(env)?,
                 ]))
@@ -90,7 +97,7 @@ impl ToChicken for ABT<Term> {
                 // cmds.push(Chicken::Cycle(names));
                 // body.to_chicken(cmds, env)?;
             }
-            ABT::Abs(name, uses, body) => {
+            ABT::Abs(name, _uses, body) => {
                 // cmds.push(Chicken::PopAndName(name.clone(), *uses));
                 // body.to_chicken(cmds, env)?;
                 return Ok(Chicken::Apply(vec![Chicken::Atom(name.to_atom()), body.to_chicken(env)?]))
@@ -122,18 +129,6 @@ pub struct TranslationEnv {
     pub anon_fns: Vec<(Hash, Chicken)>, // I think?
 }
 
-// impl Into<RuntimeEnv> for TranslationEnv {
-//     fn into(self) -> RuntimeEnv {
-//         RuntimeEnv {
-//             terms: self.terms,
-//             types: self.types,
-//             anon_fns: self.anon_fns,
-//         }
-//     }
-// }
-
-// impl std::fmt::Debug for 
-
 impl TranslationEnv {
     pub fn new(env: env::Env) -> Self {
         TranslationEnv {
@@ -145,10 +140,10 @@ impl TranslationEnv {
     }
 
     pub fn to_string(&self, hash: &Hash) -> String {
-        let mut res = String::from("(define (");
+        let mut res = String::from("(define ");
         res.push_str(&hash.to_string());
-        res.push_str(")\n  ");
-        let (term, typ) = self.terms.get(hash).unwrap();
+        res.push_str("\n  ");
+        let (term, _typ) = self.terms.get(hash).unwrap();
         res.push_str(&term.to_string());
         res.push_str(")");
         return res
@@ -316,6 +311,34 @@ impl ToChicken for Term {
                     res.push(item.to_chicken(env)?);
                 }
                 return Ok(Chicken::Apply(res))
+            }
+            Term::Let(_, bound, body) => {
+                match &**body {
+                    ABT::Abs(name, _, body) => {
+                        Ok(Chicken::Apply(vec![
+                            atom("let"),
+                            list(vec![list(vec![
+                                atom(&name.to_atom()),
+                                bound.to_chicken(env)?,
+                            ])]),
+                            body.to_chicken(env)?,
+                        ]))
+                    },
+                    _ => unimplemented!()
+                }
+            }
+            Term::Lam(contents, _) => {
+                match &**contents {
+                    ABT::Abs(name, _, body) => {
+                        Ok(Chicken::Apply(vec![
+                            atom("lambda"),
+                            list(vec![atom(&name.to_atom())]),
+                            body.to_chicken(env)?,
+                        ]))
+                    },
+                    _ => unimplemented!()
+                }
+                // Ok(atom("lambda I think"))
             }
             _ => Ok(Chicken::Atom(format!("(not-implemented {:?})", format!("{:?}", self))))
             // _ => Err(env::Error::NotImplemented(format!("Term: {:?}", self)))

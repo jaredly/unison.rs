@@ -26,7 +26,8 @@ impl Symbol {
         self.num == other.num && self.text == other.text
     }
     pub fn to_atom(&self) -> String {
-        return format!("{}-{}", self.text, self.unique)
+        return self.text.clone()
+        // return format!("{}-{}", self.text, self.unique)
     }
 }
 
