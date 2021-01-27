@@ -310,6 +310,13 @@ impl ToChicken for Term {
             Term::Constructor(Reference::DerivedId(Id(hash, _, _)), num) => {
                 Ok(Chicken::Atom(format!("{}_{}", hash.to_string(), num)))
             },
+            Term::Sequence(items) => {
+                let mut res = vec![Chicken::Atom("vector".to_owned())];
+                for item in items {
+                    res.push(item.to_chicken(env)?);
+                }
+                return Ok(Chicken::Apply(res))
+            }
             _ => Ok(Chicken::Atom(format!("(not-implemented {:?})", format!("{:?}", self))))
             // _ => Err(env::Error::NotImplemented(format!("Term: {:?}", self)))
         }

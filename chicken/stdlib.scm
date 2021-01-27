@@ -11,10 +11,13 @@
 )
 
 (define (5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_0)
-    (list '5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_0))
+    '5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_0)
 
 (define (5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_1 arg)
     (list '5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_1 arg))
+
+(define None 5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_0)
+(define Some 5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_1)
 
 (define (m7uplgfko92kqdmm6u898j5h4n86587f44u7fq1vjcad1f68n35r8j2mdfdbjta5hq9o699dgn2aphteditp30g34hsh3gru68593j0 a)
     (lambda (b) (- a b)))
@@ -59,14 +62,12 @@
 (define (Nat.pow a)
     (lambda (b) (expt a b)))
 
-        
-(define (Float.+ a)
-    (lambda (b)
-        (+ a b)))
 
-(define (Float./ a)
-    (lambda (b)
-        (/ a b)))
+(define (Float.* a) (lambda (b) (* a b)))
+(define (Float./ a) (lambda (b) (/ a b)))
+(define (Float.- a) (lambda (b) (- a b)))
+(define (Float.+ a) (lambda (b) (+ a b)))
+(define Boolean.not not)
 
         
 (define (Int.- a)
@@ -110,8 +111,8 @@
         ))
 (define Int.isEven even?)
 (define Int.isOdd odd?)
+
 (define (Int.pow a) (lambda (b) (expt a b)))
-(define (Int.mod a) (lambda (b) (modulo a b)))
 (define (Int.mod a) (lambda (b) (modulo a b)))
 (define (Int.complement a) (bitwise-not a))
 (define (Int.or a) (lambda (b) (bitwise-ior a b)))
@@ -122,6 +123,17 @@
 (define (Int./ a) (lambda (b) (/ a b)))
 (define (Int.* a) (lambda (b) (* a b)))
 (define (Int.negate a) (- a))
+
+(define Nat.toText number->string)
+(define (Nat.toInt x) x)
+(define (Nat.sub a) (lambda (b) (- a b)))
+(define Nat.isEven even?)
+(define Nat.isOdd odd?)
+(define (Nat.mod a) (lambda (b) (modulo a b)))
+(define (Nat.increment a) (natLoop (+ a 1)))
+(define (Nat.decrement a) (max 0 (- a 1)))
+(define (Nat./ a) (lambda (b) (floor (/ a b))))
+(define (Nat.* a) (lambda (b) (* a b)))
 
 (define (Int.shiftLeft a)
     (lambda (b)
@@ -142,3 +154,51 @@
 (define (Universal.<= a) (lambda (b) (<=? default-comparator a b)))
 (define (Universal.< a) (lambda (b) (<? default-comparator a b)))
 (define (Universal.== a) (lambda (b) (=? default-comparator a b)))
+
+; --- lists ---
+
+;; using vectors
+(import srfi-133)
+(define List.size vector-length)
+(define (List.cons item) (lambda (vec)
+    (let ((dest (make-vector (+ 1 (vector-length vec)))))
+        (vector-copy! dest 1 vec)
+        (vector-set! dest 0 item)
+        dest
+    )))
+(define (List.snoc vec) (lambda (item)
+    (let ((dest (make-vector (+ 1 (vector-length vec)))))
+        (vector-copy! dest 0 vec)
+        (vector-set! dest (vector-length vec) item)
+        dest
+    )))
+(define (List.++ a) (lambda (b) (vector-append a b))) 
+(define (List.drop count) (lambda (vec)
+    (let ((count (min (vector-length vec) count)))
+        (let ((ln (- (vector-length vec) count)))
+            (let ((dest (make-vector ln)))
+                (vector-copy! dest 0 vec count)
+                dest
+            )))))
+(define (List.at a) (lambda (b)
+    (if (< a (vector-length b))
+        (Some (vector-ref b a))
+        None
+    )))
+(define (List.take ln) (lambda (vec)
+    (let (
+        (ln_ (min ln (vector-length vec)))
+    )
+    (let (        (dest (make-vector ln_)))
+        (vector-copy! dest 0 vec 0 ln_)
+        dest
+    )
+    )
+))
+
+;; using linked lists
+; (define List.size length)
+; (define List.cons cons)
+; (define (List.++ a) (lambda (b) (append a b))) 
+; (define (List.drop a) (lambda (b) (list-tail b a)))
+; (define (List.at a) (lambda (b) (list-ref b a)))
