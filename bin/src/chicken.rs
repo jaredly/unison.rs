@@ -268,42 +268,116 @@ impl TranslationEnv {
 //     }
 // }
 
-impl ToChicken for Pattern {
-    fn to_chicken(&self, env: &mut TranslationEnv) -> Result<Chicken> {
-        use Pattern::*;
-        Ok(match self {
-            Unbound => atom("_"),
-            Var => atom("x"),
-            Boolean(b) => Chicken::Atom(format!("{}", b)),
-            Int(b) => Chicken::Atom(format!("{}", b)),
-            Nat(b) => Chicken::Atom(format!("{}", b)),
-            Float(b) => Chicken::Atom(format!("{}", b)),
-            Text(b) => Chicken::Atom(format!("{:?}", b)),
-            Char(b) => Chicken::Atom(format!("{:?}", b)),
-            Constructor(Reference::DerivedId(Id(hash, _, _)), num, innards) => {
-                let mut res = vec![
-                    Chicken::Atom(format!("'{}_{}", hash.to_string(), num)),
-                ];
-                for inner in innards {
-                    res.push(inner.to_chicken(env)?);
-                }
-                list(res)
-            }
-            As(inner) => list(vec![atom("and"), atom("x"), inner.to_chicken(env)?]),
-            SequenceLiteral(inner) => {
-                let mut res = vec![];
-                for i in inner {
-                    res.push(i.to_chicken(env)?);
-                }
-                Chicken::Vector(res)
-            }
-            SequenceOp(left, SeqOp::Cons, right) => {
-                list(vec![left.to_chicken(env)?, atom("."), right.to_chicken(env)?])
-            }
-            _ => atom(&format!("{:?}", format!("{:?}", self))),
-        })
-    }
+fn ifeq(term: Chicken, cmp: Chicken, yes: Chicken) -> Chicken {
+    list(vec![ atom("if"), list(vec![atom("equal?"), term, cmp]), yes, atom("'fallthrough") ])
 }
+
+// what are we creating?
+// an ever-deepening nest, I think
+// how do we unwrap that?
+// oh do we do it in reverse?
+fn pattern_to_chicken(pat: &Pattern, term: Chicken, mut body: Chicken) -> Result<Chicken> {
+    use Pattern::*;
+    Ok(match pat {
+        Unbound => body,
+        Var => list(vec![
+            atom("let"),
+            list(vec![list(vec![atom("x"), term])]),
+            body,
+        ]),
+        Boolean(b) => ifeq(term, atom(&format!("{}", b)), body),
+        Nat(b) => ifeq(term, atom(&format!("{}", b)), body),
+        Int(b) => ifeq(term, atom(&format!("{}", b)), body),
+        Float(b) => ifeq(term, atom(&format!("{}", b)), body),
+        Text(b) => ifeq(term, atom(&format!("{:?}", b)), body),
+        Char(b) => ifeq(term, atom(&format!("{:?}", b)), body),
+        Constructor(Reference::DerivedId(Id(hash, _, _)), num, innards) => {
+            let tmp = atom("tmp");
+            for (i, inner) in innards.iter().enumerate().rev() {
+                body = pattern_to_chicken(
+                    inner,
+                    list(vec![atom("list-ref"), tmp.clone(), atom(&format!("{}", i + 1))]),
+                    body
+                )?;
+            }
+            list(vec![
+                atom("let"),
+                list(vec![list(vec![tmp.clone(), term])]),
+                list(vec![
+                    atom("if"),
+                    list(vec![
+                        atom("and"),
+                        list(vec![
+                            atom("list?"),
+                            tmp.clone(),
+                        ]),
+                        list(vec![
+                            atom("equal?"),
+                            atom(&format!("'{}_{}", hash.to_string(), num)),
+                            list(vec![atom("list-ref"), tmp.clone(), atom("0")])
+                        ]),
+                        list(vec![
+                            atom("equal?"),
+                            list(vec![atom("list-length"), tmp]),
+                            atom(&format!("{}", innards.len() + 1)),
+                        ]),
+                    ]),
+                    body,
+                    atom("'fallback"),
+                ]),
+            ])
+        }
+        // As(inner) => list(vec![atom("and"), atom("x"), inner.to_chicken(env)?]),
+        // SequenceLiteral(inner) => {
+        //     let mut res = vec![];
+        //     for i in inner {
+        //         res.push(i.to_chicken(env)?);
+        //     }
+        //     Chicken::Vector(res)
+        // }
+        // SequenceOp(left, SeqOp::Cons, right) => {
+        //     list(vec![left.to_chicken(env)?, atom("."), right.to_chicken(env)?])
+        // }
+        _ => atom(&format!("{:?}", format!("{:?}", pat))),
+    })
+}
+
+// impl ToChicken for Pattern {
+//     fn to_chicken(&self, env: &mut TranslationEnv) -> Result<Chicken> {
+//         use Pattern::*;
+//         Ok(match self {
+//             Unbound => atom("_"),
+//             Var => atom("x"),
+//             Boolean(b) => Chicken::Atom(format!("{}", b)),
+//             Int(b) => Chicken::Atom(format!("{}", b)),
+//             Nat(b) => Chicken::Atom(format!("{}", b)),
+//             Float(b) => Chicken::Atom(format!("{}", b)),
+//             Text(b) => Chicken::Atom(format!("{:?}", b)),
+//             Char(b) => Chicken::Atom(format!("{:?}", b)),
+//             Constructor(Reference::DerivedId(Id(hash, _, _)), num, innards) => {
+//                 let mut res = vec![
+//                     Chicken::Atom(format!("'{}_{}", hash.to_string(), num)),
+//                 ];
+//                 for inner in innards {
+//                     res.push(inner.to_chicken(env)?);
+//                 }
+//                 list(res)
+//             }
+//             As(inner) => list(vec![atom("and"), atom("x"), inner.to_chicken(env)?]),
+//             SequenceLiteral(inner) => {
+//                 let mut res = vec![];
+//                 for i in inner {
+//                     res.push(i.to_chicken(env)?);
+//                 }
+//                 Chicken::Vector(res)
+//             }
+//             SequenceOp(left, SeqOp::Cons, right) => {
+//                 list(vec![left.to_chicken(env)?, atom("."), right.to_chicken(env)?])
+//             }
+//             _ => atom(&format!("{:?}", format!("{:?}", self))),
+//         })
+//     }
+// }
 
 impl ToChicken for Term {
     fn to_chicken(&self, env: &mut TranslationEnv) -> Result<Chicken> {
@@ -386,28 +460,37 @@ impl ToChicken for Term {
                 // Ok(atom("lambda I think"))
             }
             Term::Match(value, cases) => {
-                let mut res = vec![atom("match"), value.to_chicken(env)?];
-                for MatchCase(pattern, cond, body) in cases {
-                    let mut arm = vec![pattern.to_chicken(env)?];
+                let mut result = list(vec![atom("no-match")]);
+                let tmp = atom("tmp-match-head");
+                // let mut res = vec![atom("match"), value.to_chicken(env)?];
+                for MatchCase(pattern, cond, body) in cases.iter().rev() {
+                    // let mut arm = vec![pattern.to_chicken(env)?];
                     // res.push(case.to_chicken(env)?);
-                    match cond {
-                        None => {
-                            arm.push(body.to_chicken(env)?);
-                        }
+                    let mut body = match cond {
+                        None => body.to_chicken(env)?,
                         Some(cond) => {
-                            arm.push(atom("=>"));
-                            arm.push(atom("-cond-failed"));
-                            arm.push(list(vec![
+                            list(vec![
                                 atom("if"),
                                 cond.to_chicken(env)?,
                                 body.to_chicken(env)?,
-                                list(vec![atom("-cond-failed")])
-                            ]));
+                                atom("'fallthrough")
+                            ])
                         }
-                    }
-                    res.push(Chicken::Square(arm))
+                    };
+                    body = pattern_to_chicken(&pattern, tmp.clone(), body)?;
+                    result = list(vec![
+                        atom("let"),
+                        list(vec![list(vec![atom("result"), body])]),
+                        list(vec![
+                            atom("if"),
+                            list(vec![atom("equal?"), atom("'fallthrough"), atom("result")]),
+                            result,
+                            atom("result")
+                        ])
+                    ]);
+                    // res.push(Chicken::Square(arm))
                 }
-                Ok(Chicken::Apply(res))
+                Ok(list(vec![atom("let"), list(vec![list(vec![tmp, value.to_chicken(env)?])]), result]))
             }
             _ => Ok(Chicken::Atom(format!("(not-implemented {:?})", format!("{:?}", self))))
             // _ => Err(env::Error::NotImplemented(format!("Term: {:?}", self)))
