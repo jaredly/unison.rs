@@ -33,6 +33,8 @@ fn list(items: Vec<Chicken>) -> Chicken {
 pub enum Chicken {
     Atom(String),
     Apply(Vec<Chicken>),
+    Square(Vec<Chicken>),
+    Vector(Vec<Chicken>),
 }
 
 impl Chicken {
@@ -42,6 +44,12 @@ impl Chicken {
             Atom(atom) => atom.clone(),
             Apply(items) => {
                 "(".to_owned() + &items.iter().map(|item|item.to_string()).collect::<Vec<String>>().join(" ") + ")"
+            }
+            Vector(items) => {
+                "#(".to_owned() + &items.iter().map(|item|item.to_string()).collect::<Vec<String>>().join(" ") + ")"
+            }
+            Square(items) => {
+                "[".to_owned() + &items.iter().map(|item|item.to_string()).collect::<Vec<String>>().join(" ") + "]"
             }
         }
     }
@@ -54,7 +62,7 @@ pub trait ToChicken {
 impl ToChicken for ABT<Term> {
     fn to_chicken(&self, env: &mut TranslationEnv) -> Result<Chicken> {
         match self {
-            ABT::Var(symbol, usage) => Ok(Chicken::Atom(symbol.to_atom())),
+            ABT::Var(symbol, _usage) => Ok(Chicken::Atom(symbol.to_atom())),
             ABT::Tm(term) => term.to_chicken(env),
             ABT::Cycle(inner) => {
                 let mut names = vec![];
@@ -260,6 +268,43 @@ impl TranslationEnv {
 //     }
 // }
 
+impl ToChicken for Pattern {
+    fn to_chicken(&self, env: &mut TranslationEnv) -> Result<Chicken> {
+        use Pattern::*;
+        Ok(match self {
+            Unbound => atom("_"),
+            Var => atom("x"),
+            Boolean(b) => Chicken::Atom(format!("{}", b)),
+            Int(b) => Chicken::Atom(format!("{}", b)),
+            Nat(b) => Chicken::Atom(format!("{}", b)),
+            Float(b) => Chicken::Atom(format!("{}", b)),
+            Text(b) => Chicken::Atom(format!("{:?}", b)),
+            Char(b) => Chicken::Atom(format!("{:?}", b)),
+            Constructor(Reference::DerivedId(Id(hash, _, _)), num, innards) => {
+                let mut res = vec![
+                    Chicken::Atom(format!("'{}_{}", hash.to_string(), num)),
+                ];
+                for inner in innards {
+                    res.push(inner.to_chicken(env)?);
+                }
+                list(res)
+            }
+            As(inner) => list(vec![atom("and"), atom("x"), inner.to_chicken(env)?]),
+            SequenceLiteral(inner) => {
+                let mut res = vec![];
+                for i in inner {
+                    res.push(i.to_chicken(env)?);
+                }
+                Chicken::Vector(res)
+            }
+            SequenceOp(left, SeqOp::Cons, right) => {
+                list(vec![left.to_chicken(env)?, atom("."), right.to_chicken(env)?])
+            }
+            _ => atom(&format!("{:?}", format!("{:?}", self))),
+        })
+    }
+}
+
 impl ToChicken for Term {
     fn to_chicken(&self, env: &mut TranslationEnv) -> Result<Chicken> {
         match self {
@@ -306,11 +351,11 @@ impl ToChicken for Term {
                 Ok(Chicken::Atom(format!("{}_{}", hash.to_string(), num)))
             },
             Term::Sequence(items) => {
-                let mut res = vec![Chicken::Atom("vector".to_owned())];
+                let mut res = vec![];
                 for item in items {
                     res.push(item.to_chicken(env)?);
                 }
-                return Ok(Chicken::Apply(res))
+                return Ok(Chicken::Vector(res))
             }
             Term::Let(_, bound, body) => {
                 match &**body {
@@ -339,6 +384,30 @@ impl ToChicken for Term {
                     _ => unimplemented!()
                 }
                 // Ok(atom("lambda I think"))
+            }
+            Term::Match(value, cases) => {
+                let mut res = vec![atom("match"), value.to_chicken(env)?];
+                for MatchCase(pattern, cond, body) in cases {
+                    let mut arm = vec![pattern.to_chicken(env)?];
+                    // res.push(case.to_chicken(env)?);
+                    match cond {
+                        None => {
+                            arm.push(body.to_chicken(env)?);
+                        }
+                        Some(cond) => {
+                            arm.push(atom("=>"));
+                            arm.push(atom("-cond-failed"));
+                            arm.push(list(vec![
+                                atom("if"),
+                                cond.to_chicken(env)?,
+                                body.to_chicken(env)?,
+                                list(vec![atom("-cond-failed")])
+                            ]));
+                        }
+                    }
+                    res.push(Chicken::Square(arm))
+                }
+                Ok(Chicken::Apply(res))
             }
             _ => Ok(Chicken::Atom(format!("(not-implemented {:?})", format!("{:?}", self))))
             // _ => Err(env::Error::NotImplemented(format!("Term: {:?}", self)))
