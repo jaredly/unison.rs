@@ -108,11 +108,31 @@ impl ToChicken for ABT<Term> {
             ABT::Abs(name, _uses, body) => {
                 // cmds.push(Chicken::PopAndName(name.clone(), *uses));
                 // body.to_chicken(cmds, env)?;
-                return Ok(Chicken::Apply(vec![Chicken::Atom(name.to_atom()), body.to_chicken(env)?]))
+                // return Ok(Chicken::Apply(vec![Chicken::Atom(name.to_atom()), body.to_chicken(env)?]))
+                return Ok(list(vec![
+                    atom("'bare-abs"),
+                    atom(&name.to_atom()),
+                    body.to_chicken(env)?,
+                ]))
             }
         }
     }
 }
+
+fn collect_names(t: &ABT<Type>) -> usize {
+    match t {
+        ABT::Tm(t) => match t {
+            Type::Effect(_, _) => 0,
+            Type::Arrow(_, inner) => 1 + collect_names(&*inner),
+            Type::Forall(inner) => collect_names(inner),
+            _ => unimplemented!("Unexpected element of a request {:?}", t),
+        },
+        ABT::Abs(_, _, inner) => collect_names(inner),
+        ABT::Cycle(inner) => collect_names(inner),
+        _ => unimplemented!("Unexpected ABT"),
+    }
+}
+
 
 fn unroll_cycle(
     inner: &ABT<Term>,
@@ -272,17 +292,18 @@ fn ifeq(term: Chicken, cmp: Chicken, yes: Chicken) -> Chicken {
     list(vec![ atom("if"), list(vec![atom("equal?"), term, cmp]), yes, atom("'fallthrough") ])
 }
 
+
 // what are we creating?
 // an ever-deepening nest, I think
 // how do we unwrap that?
 // oh do we do it in reverse?
-fn pattern_to_chicken(pat: &Pattern, term: Chicken, mut body: Chicken) -> Result<Chicken> {
+fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut body: Chicken) -> Result<Chicken> {
     use Pattern::*;
     Ok(match pat {
         Unbound => body,
         Var => list(vec![
             atom("let"),
-            list(vec![list(vec![atom("x"), term])]),
+            list(vec![list(vec![atom(&vbls.pop().unwrap()), term])]),
             body,
         ]),
         Boolean(b) => ifeq(term, atom(&format!("{}", b)), body),
@@ -292,10 +313,20 @@ fn pattern_to_chicken(pat: &Pattern, term: Chicken, mut body: Chicken) -> Result
         Text(b) => ifeq(term, atom(&format!("{:?}", b)), body),
         Char(b) => ifeq(term, atom(&format!("{:?}", b)), body),
         Constructor(Reference::DerivedId(Id(hash, _, _)), num, innards) => {
+            if innards.len() == 0 {
+                return Ok(list(vec![
+                    atom("if"),
+                    list(vec![atom("equal?"), atom(&format!("'{}_{}", hash.to_string(), num)), term]),
+                    body,
+                    atom("'fallthrough"),
+                ]))
+            }
+
             let tmp = atom("tmp");
             for (i, inner) in innards.iter().enumerate().rev() {
                 body = pattern_to_chicken(
                     inner,
+                    vbls,
                     list(vec![atom("list-ref"), tmp.clone(), atom(&format!("{}", i + 1))]),
                     body
                 )?;
@@ -318,12 +349,12 @@ fn pattern_to_chicken(pat: &Pattern, term: Chicken, mut body: Chicken) -> Result
                         ]),
                         list(vec![
                             atom("equal?"),
-                            list(vec![atom("list-length"), tmp]),
+                            list(vec![atom("length"), tmp]),
                             atom(&format!("{}", innards.len() + 1)),
                         ]),
                     ]),
                     body,
-                    atom("'fallback"),
+                    atom("'fallthrough"),
                 ]),
             ])
         }
@@ -466,18 +497,20 @@ impl ToChicken for Term {
                 for MatchCase(pattern, cond, body) in cases.iter().rev() {
                     // let mut arm = vec![pattern.to_chicken(env)?];
                     // res.push(case.to_chicken(env)?);
+                    let (mut vbls, body) = get_vbls(body);
                     let mut body = match cond {
                         None => body.to_chicken(env)?,
                         Some(cond) => {
                             list(vec![
                                 atom("if"),
-                                cond.to_chicken(env)?,
+                                // do I just strip args?
+                                strip_args(cond).to_chicken(env)?,
                                 body.to_chicken(env)?,
                                 atom("'fallthrough")
                             ])
                         }
                     };
-                    body = pattern_to_chicken(&pattern, tmp.clone(), body)?;
+                    body = pattern_to_chicken(&pattern, &mut vbls, tmp.clone(), body)?;
                     result = list(vec![
                         atom("let"),
                         list(vec![list(vec![atom("result"), body])]),
@@ -495,6 +528,27 @@ impl ToChicken for Term {
             _ => Ok(Chicken::Atom(format!("(not-implemented {:?})", format!("{:?}", self))))
             // _ => Err(env::Error::NotImplemented(format!("Term: {:?}", self)))
         }
+    }
+}
+
+fn strip_args(body: &ABT<Term>) -> &ABT<Term> {
+    match body {
+        ABT::Abs(name, _, inner) => {
+            strip_args(inner)
+        }
+        _ => body
+    }
+}
+
+
+fn get_vbls(body: &ABT<Term>) -> (Vec<String>, &ABT<Term>) {
+    match body {
+        ABT::Abs(name, _, inner) => {
+            let (mut vbls, body) = get_vbls(inner);
+            vbls.push(name.to_atom());
+            return (vbls, body)
+        }
+        _ => (vec![], body)
     }
 }
 

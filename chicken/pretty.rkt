@@ -2,7 +2,7 @@
 
 (require racket/pretty)
 (define inp (open-input-file "runtime_tests.scm"))
-(define oup (open-output-file "runtime_tests_pretty.scm"))
+(define oup (open-output-file "runtime_tests_pretty.scm" #:exists 'replace))
 
 (define (loop)
     (let [(x (read inp))]
