@@ -18,6 +18,7 @@ mod run;
 mod server;
 mod unique;
 mod visitor;
+mod chicken;
 
 fn help() {
     println!(
@@ -61,10 +62,9 @@ fn main() -> std::io::Result<()> {
             }
             ("pack-watch", [path, output]) => pack::pack_watch(path, output),
             ("pack", [path, output]) => pack::pack(path, output),
+            ("pack-all-chicken", [path, ns, output]) => pack::pack_all_chicken(path, &[ns.clone()], output),
             ("pack-json", [path, output]) => pack::pack_json(path, output),
-            ("pack-all-json", [path, ns, output]) => {
-                pack::pack_all_json(path, &[ns.clone()], output)
-            }
+            ("pack-all-json", [path, ns, output]) => pack::pack_all_json(path, &[ns.clone()], output),
             ("pack-all-json-watch", args) => pack::pack_all_json_watch(&args[1..], &args[0]),
             ("pack-all", [path, output]) => pack::pack_all(&std::path::PathBuf::from(path), output),
             // ("test-all", [path]) => run_all_tests(path),

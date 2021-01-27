@@ -49,6 +49,8 @@ import runtime_tests.json and run them! in nodejs folks. Maybe I'll want webpack
 - to run stuff in node, first do
   - `cargo run --release -- pack-all-json-watch ./data/runtime_tests.json runtime_tests ffi_tests`
   - `yarn jest --coverage`
+  - or
+  - `cargo run ---release -- ~/unison/v1/terms pack-all-json runtime_tests ./data/runtime_tests.json`
 
 FFI FOLKS:
 ok so things we need to port over from wasm-land include:

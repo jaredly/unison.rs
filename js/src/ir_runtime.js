@@ -40,7 +40,6 @@ export class RuntimeEnv {
         const newHash = `<eval-${this.evals++}>`;
         const current = this.terms[hash];
         const cmds = [{ Value: { Ref: { DerivedId: [hash, 0, 1] } } }];
-        // const [_, __, typ] = extractArgs(current[1]);
         const typ = 'dynamically added folks';
         args.forEach((arg) => {
             cmds.push({ Value: arg });

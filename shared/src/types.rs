@@ -25,6 +25,9 @@ impl Symbol {
     pub fn pre_eq(&self, other: &Self) -> bool {
         self.num == other.num && self.text == other.text
     }
+    pub fn to_atom(&self) -> String {
+        return format!("{}-{}", self.text, self.unique)
+    }
 }
 
 impl std::cmp::PartialEq for Symbol {

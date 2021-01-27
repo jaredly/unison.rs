@@ -287,7 +287,58 @@ pub fn pack_term(codebase: &mut Codebase, hash: &str, out: &str) -> std::io::Res
     Ok(())
 }
 
-// fn pack_json
+fn pack_all_chicken_inner(
+    codebase: &mut Codebase,
+    outfile: &String,
+    ns: &[String],
+) -> std::io::Result<()> {
+    let mut all_terms = std::collections::HashMap::new();
+
+    for ns in ns {
+        let ns = if ns == &"" || ns == &"." {
+            codebase.head.clone()
+        } else {
+            codebase
+                .find_ns(ns.split(".").collect::<Vec<&str>>().as_slice())
+                .unwrap()
+                .0
+        };
+
+        codebase.collect_terms(&ns, &vec![], &mut all_terms);
+    }
+
+    let env = env::Env::init(codebase.root().as_path());
+    use crate::chicken::TranslationEnv;
+    let mut chicken_env = TranslationEnv::new(env);
+    // let mut ir_env = ir::TranslationEnv::new(env);
+
+    let mut output = vec![];
+
+    let mut hashes: Vec<&Hash> = all_terms.values().collect();
+    hashes.sort();
+    for hash in hashes {
+        let _ = chicken_env.load(hash);
+        output.push(chicken_env.to_string(hash));
+    }
+
+    // {
+    //     let mut walker = TypeWalker(&mut ir_env.env);
+    //     let ks: Vec<String> = walker.0.type_cache.keys().cloned().collect();
+    //     for k in ks {
+    //         use visitor::Accept;
+    //         let mut m = walker.0.load_type(&k);
+    //         m.accept(&mut walker);
+    //     }
+    // }
+    // let runtime_env: shared::types::RuntimeEnv = ir_env.into();
+
+    std::fs::write(
+        outfile,
+        output.join("\n\n")
+    )?;
+
+    Ok(())
+}
 
 fn pack_all_json_inner(
     codebase: &mut Codebase,
@@ -338,6 +389,17 @@ fn pack_all_json_inner(
     )?;
 
     Ok(())
+}
+
+pub fn pack_all_chicken(file: &String, ns: &[String], outfile: &String) -> std::io::Result<()> {
+    let terms_path = std::path::PathBuf::from(file);
+
+    println!("Packing all the terms I can find");
+    let root = terms_path.parent().unwrap();
+    let mut codebase = Codebase::new(root.to_owned())?;
+    codebase.load_all()?;
+
+    pack_all_chicken_inner(&mut codebase, outfile, ns)
 }
 
 pub fn pack_all_json(file: &String, ns: &[String], outfile: &String) -> std::io::Result<()> {
