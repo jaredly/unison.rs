@@ -54,8 +54,8 @@
         (add-handler name k) ; TODO we'll have to pop at some point?
         (let ((value (inner)))
             (print "Got value " name " " value)
-            ; (throw-pure)
-            (list 'pure value)
+            (throw-pure value)
+            ; (list 'pure value)
         )
     )))
 )
