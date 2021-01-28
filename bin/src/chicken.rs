@@ -1,8 +1,8 @@
 use super::env;
 use crate::env::Result;
+use serde_derive::{Deserialize, Serialize};
 use shared::types::*;
 use std::collections::HashMap;
-use serde_derive::{Deserialize, Serialize};
 
 // fn filter_free_vbls(
 //     free: &Vec<(Symbol, usize, usize, bool)>,
@@ -43,24 +43,42 @@ impl Chicken {
         match self {
             Atom(atom) => atom.clone(),
             Apply(items) => {
-                "(".to_owned() + &items.iter().map(|item|item.to_string()).collect::<Vec<String>>().join(" ") + ")"
+                "(".to_owned()
+                    + &items
+                        .iter()
+                        .map(|item| item.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                    + ")"
             }
             Vector(items) => {
-                "#(".to_owned() + &items.iter().map(|item|item.to_string()).collect::<Vec<String>>().join(" ") + ")"
+                "#(".to_owned()
+                    + &items
+                        .iter()
+                        .map(|item| item.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                    + ")"
             }
             Square(items) => {
-                "[".to_owned() + &items.iter().map(|item|item.to_string()).collect::<Vec<String>>().join(" ") + "]"
+                "[".to_owned()
+                    + &items
+                        .iter()
+                        .map(|item| item.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                    + "]"
             }
         }
     }
 }
 
 pub trait ToChicken {
-    fn to_chicken(&self, env: &mut TranslationEnv) -> Result<Chicken>;
+    fn to_chicken<T: HashLoader>(&self, env: &mut T) -> Result<Chicken>;
 }
 
 impl ToChicken for ABT<Term> {
-    fn to_chicken(&self, env: &mut TranslationEnv) -> Result<Chicken> {
+    fn to_chicken<T: HashLoader>(&self, env: &mut T) -> Result<Chicken> {
         match self {
             ABT::Var(symbol, _usage) => Ok(Chicken::Atom(symbol.to_atom())),
             ABT::Tm(term) => term.to_chicken(env),
@@ -75,31 +93,12 @@ impl ToChicken for ABT<Term> {
                         Chicken::Atom(names[i].0.to_atom()),
                         values[i].to_chicken(env)?,
                     ]));
-                    // match values[i].as_mut() {
-                    //     ABT::Tm(Term::Lam(_body, free)) => {
-                    //         // Filter out references to the items in the cycle
-                    //         *free = filter_free_vbls(free, &names);
-                    //     }
-                    //     ABT::Tm(Term::Ann(inner, _)) => match inner.as_mut() {
-                    //         ABT::Tm(Term::Lam(_body, free)) => {
-                    //             // Filter out references to the items in the cycle
-                    //             *free = filter_free_vbls(free, &names);
-                    //         }
-                    //         _ => {
-                    //             // println!("NOT A TM {:?}", x);
-                    //         }
-                    //     },
-                    //     _ => {
-                    //         // println!("NOT A TM {:?}", x);
-                    //     }
-                    // };
-                    // values[i].to_chicken(cmds, env)?;
                 }
                 return Ok(Chicken::Apply(vec![
                     Chicken::Atom("letrec".to_owned()),
                     Chicken::Apply(bindings),
                     body.to_chicken(env)?,
-                ]))
+                ]));
                 // Err(env::Error::NotImplemented("cycle".to_owned()))
                 // names.reverse();
                 // cmds.push(Chicken::Cycle(names));
@@ -113,7 +112,7 @@ impl ToChicken for ABT<Term> {
                     atom("'bare-abs"),
                     atom(&name.to_atom()),
                     body.to_chicken(env)?,
-                ]))
+                ]));
             }
         }
     }
@@ -133,7 +132,6 @@ fn collect_names(t: &ABT<Type>) -> usize {
     }
 }
 
-
 fn unroll_cycle(
     inner: &ABT<Term>,
     names: &mut Vec<(Symbol, usize)>,
@@ -152,10 +150,12 @@ fn unroll_cycle(
 
 pub struct TranslationEnv {
     pub env: env::Env,
-    pub terms: HashMap<Hash, (Chicken, ABT<Type>)>,
+    pub terms: HashMap<Hash, (Chicken, ABT<Type>, std::collections::HashSet<Hash>)>,
     types: HashMap<Hash, TypeDecl>,
     pub anon_fns: Vec<(Hash, Chicken)>, // I think?
 }
+
+use std::collections::HashSet;
 
 impl TranslationEnv {
     pub fn new(env: env::Env) -> Self {
@@ -171,10 +171,10 @@ impl TranslationEnv {
         let mut res = String::from("(define ");
         res.push_str(&hash.to_string());
         res.push_str("\n  ");
-        let (term, _typ) = self.terms.get(hash).unwrap();
+        let (term, _typ, _) = self.terms.get(hash).unwrap();
         res.push_str(&term.to_string());
         res.push_str(")");
-        return res
+        return res;
     }
 
     pub fn get_type(&mut self, hash: &Hash) -> TypeDecl {
@@ -188,10 +188,11 @@ impl TranslationEnv {
         }
     }
 
-    pub fn load(&mut self, hash: &Hash) -> Result<()> {
+    pub fn load(&mut self, hash: &Hash) -> Result<HashSet<Hash>> {
         if self.terms.contains_key(hash) {
+            let (_, _, used_hashes) = self.terms.get(hash).unwrap();
             // Already loaded
-            return Ok(());
+            return Ok(used_hashes.clone());
         }
         // let mut cmds = ChickenEnv::new(hash.clone());
         self.terms.insert(
@@ -199,32 +200,60 @@ impl TranslationEnv {
             (
                 Chicken::Atom("not-yet-evaluated".to_owned()),
                 ABT::Tm(Type::Ref(Reference::Builtin("nvm".to_owned()))),
+                std::collections::HashSet::new(),
             ),
         );
         let (term, typ) = self.env.load(&hash.to_string())?;
-        match term.to_chicken(self) {
-            Ok(ch) => self.terms.insert(hash.to_owned(), (ch, typ)),
-            Err(env::Error::NotImplemented(text)) => self.terms.insert(hash.to_owned(), (Chicken::Atom(text), typ)),
-            Err(err) => {return Err(err)}
+        let (res, used_hashes) = {
+            let mut loader = Loader {
+                used_hashes: std::collections::HashSet::new(),
+                translationEnv: self,
+            };
+            let res = term.to_chicken(&mut loader);
+            (res, loader.used_hashes)
         };
-        Ok(())
+        match res {
+            Ok(ch) => self
+                .terms
+                .insert(hash.to_owned(), (ch, typ, used_hashes.clone())),
+            Err(env::Error::NotImplemented(text)) => self.terms.insert(
+                hash.to_owned(),
+                (Chicken::Atom(text), typ, used_hashes.clone()),
+            ),
+            Err(err) => return Err(err),
+        };
+        Ok(used_hashes)
     }
 
-    pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> Result<usize> {
-        // let mut sub = ChickenEnv::new(hash.clone());
-        let ch = contents.to_chicken(self)?;
+    // pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> Result<usize> {
+    //     // let mut sub = ChickenEnv::new(hash.clone());
+    //     let ch = contents.to_chicken(self)?;
+    //     // resolve_marks(&mut sub.cmds);
+    //     let idx = self.anon_fns.iter().position(|(_, cmds)| *cmds == ch);
+    //     Ok(match idx {
+    //         None => {
+    //             let v = self.anon_fns.len();
+    //             self.anon_fns.push((hash, ch));
+    //             v
+    //         }
+    //         Some(idx) => idx,
+    //     })
+    // }
+}
 
-        // resolve_marks(&mut sub.cmds);
+struct Loader<'a> {
+    used_hashes: std::collections::HashSet<Hash>,
+    translationEnv: &'a mut TranslationEnv,
+}
 
-        let idx = self.anon_fns.iter().position(|(_, cmds)| *cmds == ch);
-        Ok(match idx {
-            None => {
-                let v = self.anon_fns.len();
-                self.anon_fns.push((hash, ch));
-                v
-            }
-            Some(idx) => idx,
-        })
+impl<'a> HashLoader for Loader<'a> {
+    fn load(&mut self, hash: &Hash) -> Result<()> {
+        self.used_hashes.insert(hash.clone());
+        self.translationEnv.load(hash)?;
+        return Ok(());
+    }
+    fn add(&mut self, hash: &Hash) {
+        self.used_hashes.insert(hash.clone());
     }
 }
 
@@ -289,15 +318,26 @@ impl TranslationEnv {
 // }
 
 fn ifeq(term: Chicken, cmp: Chicken, yes: Chicken) -> Chicken {
-    list(vec![ atom("if"), list(vec![atom("equal?"), term, cmp]), yes, atom("'fallthrough") ])
+    list(vec![
+        atom("if"),
+        list(vec![atom("equal?"), term, cmp]),
+        yes,
+        atom("'fallthrough"),
+    ])
 }
-
 
 // what are we creating?
 // an ever-deepening nest, I think
 // how do we unwrap that?
 // oh do we do it in reverse?
-fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut body: Chicken, depth: usize) -> Result<Chicken> {
+fn pattern_to_chicken<T: HashLoader>(
+    env: &mut T,
+    pat: &Pattern,
+    vbls: &mut Vec<String>,
+    term: Chicken,
+    mut body: Chicken,
+    depth: usize,
+) -> Result<Chicken> {
     use Pattern::*;
     Ok(match pat {
         Unbound => body,
@@ -313,21 +353,31 @@ fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut 
         Text(b) => ifeq(term, atom(&format!("{:?}", b)), body),
         Char(b) => ifeq(term, atom(&format!("{:?}", b)), body),
         Constructor(Reference::DerivedId(Id(hash, _, _)), num, innards) => {
+            env.add(hash);
             if innards.len() == 0 {
                 return Ok(list(vec![
                     atom("if"),
-                    list(vec![atom("equal?"), atom(&format!("'{}_{}", hash.to_string(), num)), term]),
+                    list(vec![
+                        atom("equal?"),
+                        atom(&format!("'{}_{}", hash.to_string(), num)),
+                        term,
+                    ]),
                     body,
                     atom("'fallthrough"),
-                ]))
+                ]));
             }
 
             let tmp = atom(&format!("tmp-{}", depth));
             for (i, inner) in innards.iter().enumerate().rev() {
                 body = pattern_to_chicken(
+                    env,
                     inner,
                     vbls,
-                    list(vec![atom("list-ref"), tmp.clone(), atom(&format!("{}", i + 1))]),
+                    list(vec![
+                        atom("list-ref"),
+                        tmp.clone(),
+                        atom(&format!("{}", i + 1)),
+                    ]),
                     body,
                     depth + 1,
                 )?;
@@ -339,14 +389,11 @@ fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut 
                     atom("if"),
                     list(vec![
                         atom("and"),
-                        list(vec![
-                            atom("list?"),
-                            tmp.clone(),
-                        ]),
+                        list(vec![atom("list?"), tmp.clone()]),
                         list(vec![
                             atom("equal?"),
                             atom(&format!("'{}_{}", hash.to_string(), num)),
-                            list(vec![atom("list-ref"), tmp.clone(), atom("0")])
+                            list(vec![atom("list-ref"), tmp.clone(), atom("0")]),
                         ]),
                         list(vec![
                             atom("equal?"),
@@ -364,9 +411,14 @@ fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut 
             let tmp = atom(&format!("tmp-vec-{}", depth));
             for (i, item) in items.iter().enumerate().rev() {
                 body = pattern_to_chicken(
+                    env,
                     item,
                     vbls,
-                    list(vec![atom("vector-ref"), tmp.clone(), atom(&format!("{}", i))]),
+                    list(vec![
+                        atom("vector-ref"),
+                        tmp.clone(),
+                        atom(&format!("{}", i)),
+                    ]),
                     body,
                     depth + 1,
                 )?;
@@ -382,28 +434,117 @@ fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut 
                         atom(&format!("{}", items.len())),
                     ]),
                     body,
-                    atom("'fallthrough")
-                ])
+                    atom("'fallthrough"),
+                ]),
             ])
-
         }
         As(inner) => {
             let name = atom(&vbls.pop().unwrap());
-            body = pattern_to_chicken(inner, vbls, name.clone(), body, depth + 1)?;
+            body = pattern_to_chicken(env, inner, vbls, name.clone(), body, depth + 1)?;
             list(vec![atom("let"), list(vec![list(vec![name, term])]), body])
         }
+
+        EffectPure(inner) => {
+            body = pattern_to_chicken(
+                env,
+                inner,
+                vbls,
+                list(vec![atom("cadr"), term.clone()]),
+                body,
+                depth + 1,
+            )?;
+
+            list(vec![
+                atom("if"),
+                list(vec![
+                    atom("and"),
+                    list(vec![atom("list?"), term.clone()]),
+                    list(vec![
+                        atom("equal?"),
+                        list(vec![atom("length"), term.clone()]),
+                        atom("2"),
+                    ]),
+                    list(vec![
+                        atom("equal?"),
+                        list(vec![atom("car"), term.clone()]),
+                        atom("'pure"),
+                    ]),
+                ]),
+                body,
+                atom("'fallthrough"),
+            ])
+        }
+
+        EffectBind(Reference::DerivedId(Id(hash, _, _)), num, args, kont) => {
+            env.add(hash);
+            body = pattern_to_chicken(
+                env,
+                kont,
+                vbls,
+                list(vec![atom("cadr"), term.clone()]),
+                body,
+                depth + 1,
+            )?;
+            for (i, arg) in args.iter().enumerate().rev() {
+                body = pattern_to_chicken(
+                    env,
+                    arg,
+                    vbls,
+                    list(vec![
+                        atom("list-ref"),
+                        term.clone(),
+                        atom(&format!("{}", i + 2)),
+                    ]),
+                    body,
+                    depth + 1,
+                )?;
+            }
+
+            list(vec![
+                atom("if"),
+                list(vec![
+                    atom("and"),
+                    list(vec![atom("list?"), term.clone()]),
+                    list(vec![
+                        atom("equal?"),
+                        list(vec![atom("length"), term.clone()]),
+                        atom(&format!("{}", args.len() + 3)),
+                    ]),
+                    list(vec![
+                        atom("equal?"),
+                        list(vec![atom("car"), term.clone()]),
+                        atom("'effect"),
+                    ]),
+                    list(vec![
+                        atom("equal?"),
+                        list(vec![atom("caddr"), term.clone()]),
+                        atom(&format!("'{}_{}", hash.to_string(), num)),
+                    ]),
+                ]),
+                body,
+                atom("'fallthrough"),
+            ])
+        }
+
         SequenceOp(left, op, right) => {
             let tmp = atom(&format!("snoc-tmp-{}", depth));
 
             let (left_val, right_val, min_size) = match op {
                 SeqOp::Snoc => {
-                    let len_minus_1 = list(vec![ atom("-"), list(vec![atom("vector-length"), tmp.clone()]), atom("1") ]);
+                    let len_minus_1 = list(vec![
+                        atom("-"),
+                        list(vec![atom("vector-length"), tmp.clone()]),
+                        atom("1"),
+                    ]);
                     (
-                        list(vec![ list(vec![ atom("List.take"), len_minus_1.clone() ]), tmp.clone(), ]),
+                        list(vec![
+                            list(vec![atom("List.take"), len_minus_1.clone()]),
+                            tmp.clone(),
+                        ]),
                         list(vec![atom("vector-ref"), tmp.clone(), len_minus_1]),
                         1,
                     )
-                },
+                }
                 SeqOp::Cons => (
                     list(vec![atom("vector-ref"), tmp.clone(), atom("0")]),
                     list(vec![list(vec![atom("List.drop"), atom("1")]), tmp.clone()]),
@@ -411,38 +552,33 @@ fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut 
                 ),
                 SeqOp::Concat => {
                     let (count, take) = match (&**left, &**right) {
-                        (SequenceLiteral(items), _) => (items.len(), atom(&format!("{}", items.len()))),
+                        (SequenceLiteral(items), _) => {
+                            (items.len(), atom(&format!("{}", items.len())))
+                        }
                         (_, SequenceLiteral(items)) => (
                             items.len(),
-                            list(vec![ atom("-"), list(vec![atom("vector-length"), tmp.clone()]), atom(&format!("{}", items.len())) ]),
+                            list(vec![
+                                atom("-"),
+                                list(vec![atom("vector-length"), tmp.clone()]),
+                                atom(&format!("{}", items.len())),
+                            ]),
                         ),
-                        _ => unreachable!("concat must have a sequence literal on one side")
+                        _ => unreachable!("concat must have a sequence literal on one side"),
                     };
 
                     (
-                        list(vec![list(vec![atom("List.take"), take.clone()]), tmp.clone(), ]),
-                        list(vec![list(vec![atom("List.drop"), take]), tmp.clone()]), // TODO 
-                        count
+                        list(vec![
+                            list(vec![atom("List.take"), take.clone()]),
+                            tmp.clone(),
+                        ]),
+                        list(vec![list(vec![atom("List.drop"), take]), tmp.clone()]), // TODO
+                        count,
                     )
                 }
             };
 
-            body = pattern_to_chicken(
-                right,
-                vbls,
-                right_val,
-                // list(vec![atom("vector-ref"), tmp.clone(), len_minus_1.clone()]),
-                body,
-                depth + 1,
-            )?;
-            body = pattern_to_chicken(
-                left,
-                vbls,
-                left_val,
-                // list(vec![ list(vec![ atom("List.take"), len_minus_1 ]), tmp.clone(), ]),
-                body,
-                depth + 1,
-            )?;
+            body = pattern_to_chicken(env, right, vbls, right_val, body, depth + 1)?;
+            body = pattern_to_chicken(env, left, vbls, left_val, body, depth + 1)?;
             list(vec![
                 atom("let"),
                 list(vec![list(vec![tmp.clone(), term])]),
@@ -455,123 +591,41 @@ fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut 
                         // atom("0"),
                     ]),
                     body,
-                    atom("'fallthrough")
-                ])
+                    atom("'fallthrough"),
+                ]),
             ])
         }
-        // SequenceOp(left, SeqOp::Cons, right) => {
-        //     let tmp = atom("cons-tmp");
-        //     body = pattern_to_chicken(
-        //         right,
-        //         vbls,
-        //         list(vec![list(vec![atom("List.drop"), atom("1")]), tmp.clone()]), // TODO 
-        //         body,
-        //     )?;
-        //     body = pattern_to_chicken(
-        //         left,
-        //         vbls,
-        //         list(vec![atom("vector-ref"), tmp.clone(), atom("0")]),
-        //         body,
-        //     )?;
-        //     list(vec![
-        //         atom("let"),
-        //         list(vec![list(vec![tmp.clone(), term])]),
-        //         list(vec![
-        //             atom("if"),
-        //             list(vec![
-        //                 atom(">"),
-        //                 list(vec![atom("vector-length"), tmp]),
-        //                 atom("0"),
-        //             ]),
-        //             body,
-        //             atom("'fallthrough")
-        //         ])
-        //     ])
-        // }
-        // SequenceOp(left, SeqOp::Concat, right) => {
-        //     let tmp = atom("concat-tmp");
-        //     let (count, take) = match (&**left, &**right) {
-        //         (SequenceLiteral(items), _) => (items.len(), atom(&format!("{}", items.len()))),
-        //         (_, SequenceLiteral(items)) => (
-        //             items.len(),
-        //             list(vec![ atom("-"), list(vec![atom("vector-length"), tmp.clone()]), atom(&format!("{}", items.len())) ]),
-        //         ),
-        //         _ => unreachable!("concat must have a sequence literal on one side")
-        //     };
-        //     body = pattern_to_chicken(
-        //         right,
-        //         vbls,
-        //         list(vec![list(vec![atom("List.drop"), take.clone()]), tmp.clone()]), // TODO 
-        //         body,
-        //     )?;
-        //     body = pattern_to_chicken(
-        //         left,
-        //         vbls,
-        //         list(vec![list(vec![atom("List.take"), take ]), tmp.clone(), ]),
-        //         body,
-        //     )?;
-        //     list(vec![
-        //         atom("let"),
-        //         list(vec![list(vec![tmp.clone(), term])]),
-        //         list(vec![
-        //             atom("if"),
-        //             list(vec![
-        //                 atom(">="),
-        //                 list(vec![atom("vector-length"), tmp]),
-        //                 atom(&format!("{}", count)),
-        //             ]),
-        //             body,
-        //             atom("'fallthrough")
-        //         ])
-        //     ])
-        // }
         _ => atom(&format!("{:?}", format!("{:?}", pat))),
     })
 }
 
-// impl ToChicken for Pattern {
-//     fn to_chicken(&self, env: &mut TranslationEnv) -> Result<Chicken> {
-//         use Pattern::*;
-//         Ok(match self {
-//             Unbound => atom("_"),
-//             Var => atom("x"),
-//             Boolean(b) => Chicken::Atom(format!("{}", b)),
-//             Int(b) => Chicken::Atom(format!("{}", b)),
-//             Nat(b) => Chicken::Atom(format!("{}", b)),
-//             Float(b) => Chicken::Atom(format!("{}", b)),
-//             Text(b) => Chicken::Atom(format!("{:?}", b)),
-//             Char(b) => Chicken::Atom(format!("{:?}", b)),
-//             Constructor(Reference::DerivedId(Id(hash, _, _)), num, innards) => {
-//                 let mut res = vec![
-//                     Chicken::Atom(format!("'{}_{}", hash.to_string(), num)),
-//                 ];
-//                 for inner in innards {
-//                     res.push(inner.to_chicken(env)?);
-//                 }
-//                 list(res)
-//             }
-//             As(inner) => list(vec![atom("and"), atom("x"), inner.to_chicken(env)?]),
-//             SequenceLiteral(inner) => {
-//                 let mut res = vec![];
-//                 for i in inner {
-//                     res.push(i.to_chicken(env)?);
-//                 }
-//                 Chicken::Vector(res)
-//             }
-//             SequenceOp(left, SeqOp::Cons, right) => {
-//                 list(vec![left.to_chicken(env)?, atom("."), right.to_chicken(env)?])
-//             }
-//             _ => atom(&format!("{:?}", format!("{:?}", self))),
-//         })
+trait HashLoader {
+    fn load(&mut self, hash: &Hash) -> Result<()>;
+    fn add(&mut self, hash: &Hash);
+}
+
+// impl HashLoader for TranslationEnv {
+//     fn load(&mut self, hash: &Hash) -> Result<()> {
+//         self.load(hash)
 //     }
 // }
 
 impl ToChicken for Term {
-    fn to_chicken(&self, env: &mut TranslationEnv) -> Result<Chicken> {
+    fn to_chicken<T: HashLoader>(&self, env: &mut T) -> Result<Chicken> {
         match self {
-            // Term::Handle(handler, expr) => {
-            //     Err(env::Error::NotImplemented("handle".to_owned()))
-            // }
+            Term::Request(Reference::DerivedId(Id(hash, _, _)), number) => {
+                env.add(hash);
+                // STOPSHIP: if this is a type w/ no args, we actually have to call it.
+                Ok(atom(&format!("{}_{}", hash.to_string(), number)))
+            }
+            Term::Handle(handler, expr) => {
+                Ok(list(vec![
+                    atom("handle-ability"),
+                    list(vec![atom("lambda"), atom("()"), expr.to_chicken(env)?]),
+                    handler.to_chicken(env)?,
+                ]))
+                // Err(env::Error::NotImplemented("handle".to_owned()))
+            }
             Term::Ref(Reference::Builtin(name)) => Ok(Chicken::Atom(name.clone())),
             Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
                 env.load(&hash)?;
@@ -607,53 +661,52 @@ impl ToChicken for Term {
             // arguments, and returns a list with its name as the first item.
             Term::Constructor(Reference::Builtin(name), num) => {
                 Ok(Chicken::Atom(format!("{}_{}", name, num)))
-            },
+            }
             Term::Constructor(Reference::DerivedId(Id(hash, _, _)), num) => {
+                env.add(hash);
                 Ok(Chicken::Atom(format!("{}_{}", hash.to_string(), num)))
-            },
+            }
             Term::Sequence(items) => {
                 let mut res = vec![];
                 for item in items {
                     res.push(item.to_chicken(env)?);
                 }
-                return Ok(Chicken::Vector(res))
+                return Ok(Chicken::Vector(res));
             }
-            Term::Let(_, bound, body) => {
-                match &**body {
-                    ABT::Abs(name, _, body) => {
-                        Ok(Chicken::Apply(vec![
-                            atom("let"),
-                            list(vec![list(vec![
-                                atom(&name.to_atom()),
-                                bound.to_chicken(env)?,
-                            ])]),
-                            body.to_chicken(env)?,
-                        ]))
-                    },
-                    _ => unimplemented!()
-                }
-            }
+            Term::Let(_, bound, body) => match &**body {
+                ABT::Abs(name, _, body) => Ok(Chicken::Apply(vec![
+                    atom("let"),
+                    list(vec![list(vec![
+                        atom(&name.to_atom()),
+                        bound.to_chicken(env)?,
+                    ])]),
+                    body.to_chicken(env)?,
+                ])),
+                _ => unimplemented!(),
+            },
             Term::Lam(contents, _) => {
                 match &**contents {
-                    ABT::Abs(name, _, body) => {
-                        Ok(Chicken::Apply(vec![
-                            atom("lambda"),
-                            list(vec![atom(&name.to_atom())]),
-                            body.to_chicken(env)?,
-                        ]))
-                    },
-                    _ => unimplemented!()
+                    ABT::Abs(name, _, body) => Ok(Chicken::Apply(vec![
+                        atom("lambda"),
+                        list(vec![atom(&name.to_atom())]),
+                        body.to_chicken(env)?,
+                    ])),
+                    _ => unimplemented!(),
                 }
                 // Ok(atom("lambda I think"))
             }
             Term::Match(value, cases) => {
                 let mut result = list(vec![atom("no-match")]);
                 let tmp = atom("tmp-match-head");
-                // let mut res = vec![atom("match"), value.to_chicken(env)?];
+                // STOPSHIP: add a `_ (rethrow-effect)` if this is an effect matcher
                 for MatchCase(pattern, cond, body) in cases.iter().rev() {
-                    // let mut arm = vec![pattern.to_chicken(env)?];
-                    // res.push(case.to_chicken(env)?);
                     let (mut vbls, body) = get_vbls(body);
+                    vbls.reverse();
+                    let mut vblnames = vbls
+                        .iter()
+                        .map(|name| atom(&format!("'{}", name)))
+                        .collect::<Vec<Chicken>>();
+                    vblnames.insert(0, atom("list"));
                     let mut body = match cond {
                         None => body.to_chicken(env)?,
                         Some(cond) => {
@@ -662,49 +715,54 @@ impl ToChicken for Term {
                                 // do I just strip args?
                                 strip_args(cond).to_chicken(env)?,
                                 body.to_chicken(env)?,
-                                atom("'fallthrough")
+                                atom("'fallthrough"),
                             ])
                         }
                     };
-                    body = pattern_to_chicken(&pattern, &mut vbls, tmp.clone(), body, 0)?;
+                    body = pattern_to_chicken(env, &pattern, &mut vbls, tmp.clone(), body, 0)?;
                     result = list(vec![
                         atom("let"),
-                        list(vec![list(vec![atom("result"), body])]),
+                        list(vec![
+                            list(vec![atom("_vblnames"), list(vblnames)]),
+                            list(vec![atom("result"), body]),
+                        ]),
                         list(vec![
                             atom("if"),
                             list(vec![atom("equal?"), atom("'fallthrough"), atom("result")]),
                             result,
-                            atom("result")
-                        ])
+                            atom("result"),
+                        ]),
                     ]);
-                    // res.push(Chicken::Square(arm))
                 }
-                Ok(list(vec![atom("let"), list(vec![list(vec![tmp, value.to_chicken(env)?])]), result]))
+                Ok(list(vec![
+                    atom("let"),
+                    list(vec![list(vec![tmp, value.to_chicken(env)?])]),
+                    result,
+                ]))
             }
-            _ => Ok(Chicken::Atom(format!("(not-implemented {:?})", format!("{:?}", self))))
-            // _ => Err(env::Error::NotImplemented(format!("Term: {:?}", self)))
+            _ => Ok(Chicken::Atom(format!(
+                "(not-implemented {:?})",
+                format!("{:?}", self)
+            ))),
         }
     }
 }
 
 fn strip_args(body: &ABT<Term>) -> &ABT<Term> {
     match body {
-        ABT::Abs(name, _, inner) => {
-            strip_args(inner)
-        }
-        _ => body
+        ABT::Abs(name, _, inner) => strip_args(inner),
+        _ => body,
     }
 }
-
 
 fn get_vbls(body: &ABT<Term>) -> (Vec<String>, &ABT<Term>) {
     match body {
         ABT::Abs(name, _, inner) => {
             let (mut vbls, body) = get_vbls(inner);
             vbls.push(name.to_atom());
-            return (vbls, body)
+            return (vbls, body);
         }
-        _ => (vec![], body)
+        _ => (vec![], body),
     }
 }
 

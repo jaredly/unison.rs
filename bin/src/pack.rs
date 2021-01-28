@@ -5,7 +5,7 @@ use crate::visitor;
 use serde_derive::Serialize;
 use shared::types;
 use shared::types::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 struct TypeWalker<'a>(&'a mut crate::env::Env);
 
@@ -73,7 +73,7 @@ pub fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> 
     let mut codebase = Codebase::new(root.to_owned())?;
     codebase.load_all()?;
 
-    let mut all_terms = std::collections::HashMap::new();
+    let mut all_terms = HashMap::new();
     codebase.collect_terms(&codebase.head.clone(), &vec![], &mut all_terms);
 
     let env = env::Env::init(root);
@@ -287,12 +287,57 @@ pub fn pack_term(codebase: &mut Codebase, hash: &str, out: &str) -> std::io::Res
     Ok(())
 }
 
+fn topo_visit(
+    key: &Hash,
+    deps: &mut HashMap<Hash, HashSet<Hash>>,
+    res: &mut Vec<Hash>,
+    visiting: &mut HashSet<Hash>,
+) {
+    if !deps.contains_key(key) {
+        return;
+    }
+    if visiting.contains(key) {
+        unreachable!("Loop");
+    }
+    visiting.insert(key.clone());
+    let v = deps.get(key).unwrap().clone();
+    // if v.len() == 0 {
+    //     res.insert(0, key.clone());
+    //     deps.remove(key);
+    //     return;
+    //     // unreachable!();
+    // }
+    // deps.insert(key.clone(), HashSet::new());
+    for k in v {
+        if k == key {
+            continue;
+        }
+        topo_visit(&k, deps, res, visiting);
+    }
+    visiting.remove(key);
+    res.insert(0, key.clone());
+}
+
+fn topo_sort(mut deps: HashMap<Hash, HashSet<Hash>>) -> Vec<Hash> {
+    let mut visiting = HashSet::new();
+    let mut res = vec![];
+    loop {
+        let key = match deps.keys().next() {
+            None => break,
+            Some(key) => key.clone(),
+        };
+        topo_visit(&key, &mut deps, &mut res, &mut visiting);
+        // let v = deps.get(key).unwrap();
+    }
+    return res;
+}
+
 fn pack_all_chicken_inner(
     codebase: &mut Codebase,
     outfile: &String,
     ns: &[String],
 ) -> std::io::Result<()> {
-    let mut all_terms = std::collections::HashMap::new();
+    let mut all_terms = HashMap::new();
 
     for ns in ns {
         let ns = if ns == &"" || ns == &"." {
@@ -312,21 +357,30 @@ fn pack_all_chicken_inner(
     let mut chicken_env = TranslationEnv::new(env);
     // let mut ir_env = ir::TranslationEnv::new(env);
 
-    let mut output = vec![
-        "(load \"stdlib.scm\")\n(import matchable)".to_owned(),
-    ];
+    let mut output = vec!["(load \"stdlib.scm\")\n(import matchable)".to_owned()];
 
     let mut hashes: Vec<&Hash> = all_terms.values().collect();
     hashes.sort();
-    for hash in hashes.iter() {
-        let _ = chicken_env.load(hash);
-        output.push(chicken_env.to_string(hash));
+    let mut deps = HashMap::new();
+    for hash in &hashes {
+        let used_hashes = chicken_env.load(*hash).unwrap();
+        deps.insert((*hash).to_owned(), used_hashes);
+        // let text = chicken_env.to_string(hash);
+        // output.push(text);
+    }
+    let sorted = topo_sort(deps);
+    for hash in &sorted {
+        output.push(chicken_env.to_string(hash))
     }
 
-    output.push(format!("(define tests (list {}))",
-        hashes.iter().map(|h|h.to_string()).collect::<Vec<String>>().join(" ")
+    output.push(format!(
+        "(define tests (list {}))",
+        hashes
+            .iter()
+            .map(|h| h.to_string())
+            .collect::<Vec<String>>()
+            .join(" ")
     ));
-
 
     // {
     //     let mut walker = TypeWalker(&mut ir_env.env);
@@ -339,10 +393,7 @@ fn pack_all_chicken_inner(
     // }
     // let runtime_env: shared::types::RuntimeEnv = ir_env.into();
 
-    std::fs::write(
-        outfile,
-        output.join("\n\n")
-    )?;
+    std::fs::write(outfile, output.join("\n\n"))?;
 
     Ok(())
 }
@@ -352,7 +403,7 @@ fn pack_all_json_inner(
     outfile: &String,
     ns: &[String],
 ) -> std::io::Result<()> {
-    let mut all_terms = std::collections::HashMap::new();
+    let mut all_terms = HashMap::new();
 
     for ns in ns {
         let ns = if ns == &"" || ns == &"." {

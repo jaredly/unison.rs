@@ -1,4 +1,4 @@
-(load "runtime_tests_match.scm")
+(load "runtime_tests_abilities.scm")
 
 ; (use matchable)
 (define runtests
