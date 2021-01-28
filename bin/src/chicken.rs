@@ -297,7 +297,7 @@ fn ifeq(term: Chicken, cmp: Chicken, yes: Chicken) -> Chicken {
 // an ever-deepening nest, I think
 // how do we unwrap that?
 // oh do we do it in reverse?
-fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut body: Chicken) -> Result<Chicken> {
+fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut body: Chicken, depth: usize) -> Result<Chicken> {
     use Pattern::*;
     Ok(match pat {
         Unbound => body,
@@ -322,13 +322,14 @@ fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut 
                 ]))
             }
 
-            let tmp = atom("tmp");
+            let tmp = atom(&format!("tmp-{}", depth));
             for (i, inner) in innards.iter().enumerate().rev() {
                 body = pattern_to_chicken(
                     inner,
                     vbls,
                     list(vec![atom("list-ref"), tmp.clone(), atom(&format!("{}", i + 1))]),
-                    body
+                    body,
+                    depth + 1,
                 )?;
             }
             list(vec![
@@ -358,16 +359,171 @@ fn pattern_to_chicken(pat: &Pattern, vbls: &mut Vec<String>, term: Chicken, mut 
                 ]),
             ])
         }
-        // As(inner) => list(vec![atom("and"), atom("x"), inner.to_chicken(env)?]),
-        // SequenceLiteral(inner) => {
-        //     let mut res = vec![];
-        //     for i in inner {
-        //         res.push(i.to_chicken(env)?);
-        //     }
-        //     Chicken::Vector(res)
-        // }
+        // STOPSHIP: make sure to have tests that check the order of bound variables
+        SequenceLiteral(items) => {
+            let tmp = atom(&format!("tmp-vec-{}", depth));
+            for (i, item) in items.iter().enumerate().rev() {
+                body = pattern_to_chicken(
+                    item,
+                    vbls,
+                    list(vec![atom("vector-ref"), tmp.clone(), atom(&format!("{}", i))]),
+                    body,
+                    depth + 1,
+                )?;
+            }
+            list(vec![
+                atom("let"),
+                list(vec![list(vec![tmp.clone(), term])]),
+                list(vec![
+                    atom("if"),
+                    list(vec![
+                        atom("="),
+                        list(vec![atom("vector-length"), tmp]),
+                        atom(&format!("{}", items.len())),
+                    ]),
+                    body,
+                    atom("'fallthrough")
+                ])
+            ])
+
+        }
+        As(inner) => {
+            let name = atom(&vbls.pop().unwrap());
+            body = pattern_to_chicken(inner, vbls, name.clone(), body, depth + 1)?;
+            list(vec![atom("let"), list(vec![list(vec![name, term])]), body])
+        }
+        SequenceOp(left, op, right) => {
+            let tmp = atom(&format!("snoc-tmp-{}", depth));
+
+            let (left_val, right_val, min_size) = match op {
+                SeqOp::Snoc => {
+                    let len_minus_1 = list(vec![ atom("-"), list(vec![atom("vector-length"), tmp.clone()]), atom("1") ]);
+                    (
+                        list(vec![ list(vec![ atom("List.take"), len_minus_1.clone() ]), tmp.clone(), ]),
+                        list(vec![atom("vector-ref"), tmp.clone(), len_minus_1]),
+                        1,
+                    )
+                },
+                SeqOp::Cons => (
+                    list(vec![atom("vector-ref"), tmp.clone(), atom("0")]),
+                    list(vec![list(vec![atom("List.drop"), atom("1")]), tmp.clone()]),
+                    1,
+                ),
+                SeqOp::Concat => {
+                    let (count, take) = match (&**left, &**right) {
+                        (SequenceLiteral(items), _) => (items.len(), atom(&format!("{}", items.len()))),
+                        (_, SequenceLiteral(items)) => (
+                            items.len(),
+                            list(vec![ atom("-"), list(vec![atom("vector-length"), tmp.clone()]), atom(&format!("{}", items.len())) ]),
+                        ),
+                        _ => unreachable!("concat must have a sequence literal on one side")
+                    };
+
+                    (
+                        list(vec![list(vec![atom("List.take"), take.clone()]), tmp.clone(), ]),
+                        list(vec![list(vec![atom("List.drop"), take]), tmp.clone()]), // TODO 
+                        count
+                    )
+                }
+            };
+
+            body = pattern_to_chicken(
+                right,
+                vbls,
+                right_val,
+                // list(vec![atom("vector-ref"), tmp.clone(), len_minus_1.clone()]),
+                body,
+                depth + 1,
+            )?;
+            body = pattern_to_chicken(
+                left,
+                vbls,
+                left_val,
+                // list(vec![ list(vec![ atom("List.take"), len_minus_1 ]), tmp.clone(), ]),
+                body,
+                depth + 1,
+            )?;
+            list(vec![
+                atom("let"),
+                list(vec![list(vec![tmp.clone(), term])]),
+                list(vec![
+                    atom("if"),
+                    list(vec![
+                        atom(">="),
+                        list(vec![atom("vector-length"), tmp]),
+                        atom(&format!("{}", min_size)),
+                        // atom("0"),
+                    ]),
+                    body,
+                    atom("'fallthrough")
+                ])
+            ])
+        }
         // SequenceOp(left, SeqOp::Cons, right) => {
-        //     list(vec![left.to_chicken(env)?, atom("."), right.to_chicken(env)?])
+        //     let tmp = atom("cons-tmp");
+        //     body = pattern_to_chicken(
+        //         right,
+        //         vbls,
+        //         list(vec![list(vec![atom("List.drop"), atom("1")]), tmp.clone()]), // TODO 
+        //         body,
+        //     )?;
+        //     body = pattern_to_chicken(
+        //         left,
+        //         vbls,
+        //         list(vec![atom("vector-ref"), tmp.clone(), atom("0")]),
+        //         body,
+        //     )?;
+        //     list(vec![
+        //         atom("let"),
+        //         list(vec![list(vec![tmp.clone(), term])]),
+        //         list(vec![
+        //             atom("if"),
+        //             list(vec![
+        //                 atom(">"),
+        //                 list(vec![atom("vector-length"), tmp]),
+        //                 atom("0"),
+        //             ]),
+        //             body,
+        //             atom("'fallthrough")
+        //         ])
+        //     ])
+        // }
+        // SequenceOp(left, SeqOp::Concat, right) => {
+        //     let tmp = atom("concat-tmp");
+        //     let (count, take) = match (&**left, &**right) {
+        //         (SequenceLiteral(items), _) => (items.len(), atom(&format!("{}", items.len()))),
+        //         (_, SequenceLiteral(items)) => (
+        //             items.len(),
+        //             list(vec![ atom("-"), list(vec![atom("vector-length"), tmp.clone()]), atom(&format!("{}", items.len())) ]),
+        //         ),
+        //         _ => unreachable!("concat must have a sequence literal on one side")
+        //     };
+        //     body = pattern_to_chicken(
+        //         right,
+        //         vbls,
+        //         list(vec![list(vec![atom("List.drop"), take.clone()]), tmp.clone()]), // TODO 
+        //         body,
+        //     )?;
+        //     body = pattern_to_chicken(
+        //         left,
+        //         vbls,
+        //         list(vec![list(vec![atom("List.take"), take ]), tmp.clone(), ]),
+        //         body,
+        //     )?;
+        //     list(vec![
+        //         atom("let"),
+        //         list(vec![list(vec![tmp.clone(), term])]),
+        //         list(vec![
+        //             atom("if"),
+        //             list(vec![
+        //                 atom(">="),
+        //                 list(vec![atom("vector-length"), tmp]),
+        //                 atom(&format!("{}", count)),
+        //             ]),
+        //             body,
+        //             atom("'fallthrough")
+        //         ])
+        //     ])
         // }
         _ => atom(&format!("{:?}", format!("{:?}", pat))),
     })
@@ -510,7 +666,7 @@ impl ToChicken for Term {
                             ])
                         }
                     };
-                    body = pattern_to_chicken(&pattern, &mut vbls, tmp.clone(), body)?;
+                    body = pattern_to_chicken(&pattern, &mut vbls, tmp.clone(), body, 0)?;
                     result = list(vec![
                         atom("let"),
                         list(vec![list(vec![atom("result"), body])]),

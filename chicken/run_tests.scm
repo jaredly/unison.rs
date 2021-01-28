@@ -1,4 +1,4 @@
-(load "runtime_tests.scm")
+(load "runtime_tests_match.scm")
 
 ; (use matchable)
 (define runtests
@@ -6,7 +6,7 @@
     [() 10]
     [(x . y)
     
-    (if x
+    (if (equal? #t x)
         (display "pass\n")
         (begin
             (display "fail: ")
