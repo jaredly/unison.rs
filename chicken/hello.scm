@@ -30,7 +30,7 @@
     (let* ((handler (car stack)) (name (car handler)) (fn (cadr handler)))
         (set! stack (cdr stack))
         (print "Calling " name)
-        (fn (cons 'pure value))
+        (fn (list 'pure value))
     )
 )
 
@@ -59,8 +59,8 @@
         )
     )))
 )
-(print)
 
+(print)
 
 (define f_01
     (handle "top"
