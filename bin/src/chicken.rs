@@ -37,7 +37,102 @@ pub enum Chicken {
     Vector(Vec<Chicken>),
 }
 
+fn white(num: usize) -> String {
+    let mut res = String::with_capacity(num);
+    for _ in 0..num {
+        res.push(' ');
+    }
+    return res;
+}
+
+fn pretty_list(left: usize, max_width: usize, items: &Vec<Chicken>) -> (String, usize) {
+    if items.len() == 0 {
+        return ("".to_owned(), left);
+    }
+    let mut total = 0;
+    for item in items {
+        total += item.width();
+    }
+    if total + left + items.len() - 1 > max_width {
+        let (mut res, first) = items[0].pretty_string(left, max_width);
+        // if ["if", "or", "and", "let", "lambda"].contains(&res.as_str()) {
+        //     left += first;
+        // }
+        // let mut idx = 1;
+        // if ["if", "lambda"]
+        for item in &items[1..] {
+            res += "\n";
+            res += &white(left);
+            let (str, _) = item.pretty_string(left, max_width);
+            res += &str;
+        }
+        return (res, left); // STOPSHIP this left is wrong....
+    }
+    let (mut res, mut at) = items[0].pretty_string(left, max_width);
+    for item in &items[1..] {
+        res += " ";
+        let (str, att) = item.pretty_string(left, max_width);
+        res += &str;
+        at += att + 1;
+    }
+    return (res, at);
+}
+
 impl Chicken {
+    pub fn width(&self) -> usize {
+        use Chicken::*;
+        match self {
+            Atom(atom) => atom.len(),
+            Apply(items) => {
+                let mut sum = 2 + items.len() - 1;
+                for item in items {
+                    sum += item.width();
+                }
+                sum
+            }
+            Square(items) => {
+                let mut sum = 2 + items.len() - 1;
+                for item in items {
+                    sum += item.width();
+                }
+                sum
+            }
+            Vector(items) => {
+                let mut sum = 3 + items.len() - 1;
+                for item in items {
+                    sum += item.width();
+                }
+                sum
+            }
+        }
+    }
+
+    pub fn pretty_string(&self, left: usize, max_width: usize) -> (String, usize) {
+        use Chicken::*;
+        match self {
+            Atom(atom) => (atom.to_owned(), left + atom.len()),
+            Apply(items) => {
+                let (mut res, w) = pretty_list(left + 1, max_width, items);
+                res.insert(0, '(');
+                res.push(')');
+                return (res, w + 1);
+            }
+            Vector(items) => {
+                let (mut res, w) = pretty_list(left + 2, max_width, items);
+                res.insert(0, '(');
+                res.insert(0, '#');
+                res.push(')');
+                return (res, w + 1);
+            }
+            Square(items) => {
+                let (mut res, w) = pretty_list(left + 1, max_width, items);
+                res.insert(0, '[');
+                res.push(']');
+                return (res, w + 1);
+            }
+        }
+    }
+
     pub fn to_string(&self) -> String {
         use Chicken::*;
         match self {
@@ -172,7 +267,7 @@ impl TranslationEnv {
         res.push_str(&hash.to_string());
         res.push_str("\n  ");
         let (term, _typ, _) = self.terms.get(hash).unwrap();
-        res.push_str(&term.to_string());
+        res.push_str(&term.pretty_string(2, 100).0);
         res.push_str(")");
         return res;
     }
@@ -303,7 +398,7 @@ fn pattern_to_chicken<T: HashLoader>(
         Int(b) => ifeq(term, atom(&format!("{}", b)), body),
         Float(b) => ifeq(term, atom(&format!("{}", b)), body),
         Text(b) => ifeq(term, atom(&format!("{:?}", b)), body),
-        Char(b) => ifeq(term, atom(&format!("{:?}", b)), body),
+        Char(b) => ifeq(term, atom(&format!("\"{}\"", b)), body),
         Constructor(Reference::DerivedId(Id(hash, _, _)), num, innards) => {
             env.add(hash);
             if innards.len() == 0 {
@@ -606,7 +701,7 @@ impl ToChicken for Term {
             Term::Nat(num) => Ok(Chicken::Atom(num.to_string())),
             Term::Boolean(num) => Ok(Chicken::Atom(num.to_string())),
             Term::Text(num) => Ok(Chicken::Atom(format!("{:?}", num))),
-            Term::Char(num) => Ok(Chicken::Atom(num.to_string())),
+            Term::Char(num) => Ok(Chicken::Atom(format!("\"{}\"", num))),
             Term::If(cond, yes, no) => Ok(Chicken::Apply(vec![
                 Chicken::Atom("if".to_owned()),
                 cond.to_chicken(env)?,
@@ -629,7 +724,7 @@ impl ToChicken for Term {
                 Ok(Chicken::Atom(format!("{}_{}", name, num)))
             }
             Term::Constructor(Reference::DerivedId(Id(hash, _, _)), num) => {
-                env.add(hash);
+                env.get_type(hash);
                 Ok(Chicken::Atom(format!("{}_{}", hash.to_string(), num)))
             }
             Term::Sequence(items) => {
@@ -639,6 +734,19 @@ impl ToChicken for Term {
                 }
                 return Ok(Chicken::Vector(res));
             }
+            // Term::LetRec(_, bound, body) => match &**body {
+            //     ABT::Abs(name, _, body) => Ok(Chicken::Apply(vec![
+            //         atom("letrec"),
+            //         list(vec![
+            //             list(vec![
+            //                 atom(&name.to_atom()),
+            //                 bound.to_chicken(env)?,
+            //             ])
+            //         ]),
+            //         body.to_chicken(env)?,
+            //     ])),
+            //     _ => unimplemented!(),
+            // },
             Term::Let(_, bound, body) => match &**body {
                 ABT::Abs(name, _, body) => Ok(Chicken::Apply(vec![
                     atom("let"),
@@ -714,6 +822,10 @@ impl ToChicken for Term {
                     result,
                 ]))
             }
+            Term::Ann(inner, _) => inner.to_chicken(env),
+            Term::Blank => unreachable!("blank found"),
+            Term::TermLink(_) => Ok(atom("term-link")),
+            Term::TypeLink(_) => Ok(atom("type-link")),
             _ => Ok(Chicken::Atom(format!(
                 "(not-implemented {:?})",
                 format!("{:?}", self)
@@ -907,13 +1019,36 @@ pub fn ability_to_chicken(name: &str, t: &ABT<Type>) -> Chicken {
     return list(vec![atom("define"), atom(name), body]);
 }
 
+pub fn ability_to_type(name: &str, t: &ABT<Type>) -> Chicken {
+    let args = calc_args(t);
+    let mut vbls = vec![];
+    for i in 0..args {
+        vbls.push(atom(&format!("arg_{}", i)));
+    }
+    let mut body = list(
+        vec![atom("list"), atom(&format!("'{}", name))]
+            .into_iter()
+            .chain(vbls.iter().cloned())
+            .collect(),
+    );
+    for vbl in vbls.iter().rev() {
+        body = list(vec![atom("lambda"), list(vec![vbl.clone()]), body]);
+    }
+    if args == 0 {
+        body = list(vec![atom("lambda"), list(vec![]), body]);
+    }
+    return list(vec![atom("define"), atom(name), body]);
+}
+
 fn calc_args(t: &ABT<Type>) -> usize {
     match t {
         ABT::Tm(t) => match t {
             Type::Effect(_, _) => 0,
             Type::Arrow(_, inner) => 1 + calc_args(&*inner),
             Type::Forall(inner) => calc_args(inner),
-            _ => unimplemented!("Unexpected element of a request {:?}", t),
+            // Type::Ref(_) => 0,
+            // _ => unimplemented!("Unexpected element of a request {:?}", t),
+            _ => 0,
         },
         ABT::Abs(_, _, inner) => calc_args(inner),
         ABT::Cycle(inner) => calc_args(inner),

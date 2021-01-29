@@ -339,6 +339,7 @@ fn pack_all_chicken_inner(
     ns: &[String],
 ) -> std::io::Result<()> {
     let mut all_terms = HashMap::new();
+    let mut all_types = HashMap::new();
 
     for ns in ns {
         let ns = if ns == &"" || ns == &"." {
@@ -351,6 +352,7 @@ fn pack_all_chicken_inner(
         };
 
         codebase.collect_terms(&ns, &vec![], &mut all_terms);
+        codebase.collect_types(&ns, &vec![], &mut all_types);
     }
 
     let env = env::Env::init(codebase.root().as_path());
@@ -363,19 +365,41 @@ fn pack_all_chicken_inner(
     let hashes: Vec<&Hash> = all_terms.values().collect();
     let mut deps = HashMap::new();
     for hash in &hashes {
-        deps.insert((*hash).to_owned(), chicken_env.load(*hash).unwrap());
+        match chicken_env.load(*hash) {
+            Err(env::Error::TermNotFound(term)) => println!(
+                "Unable to pack {:?} - depended on missing term {:?}",
+                hash, term
+            ),
+            Err(err) => {
+                unreachable!("{:?}", err)
+            }
+            Ok(uses) => {
+                deps.insert((*hash).to_owned(), uses);
+            }
+        }
     }
 
     // the types folks
     for (hash, decl) in chicken_env.types.iter() {
+        all_types.get(hash).map(|names| {
+            output.push(format!("; {}", names[0].join(".")));
+        });
+        output.push(format!("; {:?}", decl));
         match decl {
             TypeDecl::Effect(DataDecl { constructors, .. }) => {
-                for (i, (_, t)) in constructors.iter().enumerate() {
+                for (i, (name, t)) in constructors.iter().enumerate() {
+                    output.push(format!("; {}", name.to_atom()));
                     let name = format!("{}_{}", hash.to_string(), i);
                     output.push(super::chicken::ability_to_chicken(&name, t).to_string());
                 }
             }
-            _ => (),
+            TypeDecl::Data(DataDecl { constructors, .. }) => {
+                for (i, (name, t)) in constructors.iter().enumerate() {
+                    output.push(format!("; {}", name.to_atom()));
+                    let name = format!("{}_{}", hash.to_string(), i);
+                    output.push(super::chicken::ability_to_type(&name, t).to_string());
+                }
+            }
         }
         // deps.insert(hash.clone(), HashSet::new());
     }
@@ -387,15 +411,27 @@ fn pack_all_chicken_inner(
         names_for_terms.insert(v.clone(), current);
     }
 
+    // let mut names_for_types: HashMap<Hash, Vec<Vec<String>>> = HashMap::new();
+    // for (k, v) in all_types.iter() {
+    //     let mut current = names_for_types.get(v).cloned().unwrap_or_default();
+    //     current.push(k.to_owned());
+    //     names_for_types.insert(v.clone(), current);
+    // }
+
     let sorted = topo_sort(deps);
     for hash in &sorted {
+        let names = names_for_terms.get(hash);
+        names.map(|names| {
+            output.push(format!("; {}", names[0].join(".")));
+            output.push(format!("(print {:?})", names[0].join(".")));
+        });
         output.push(chicken_env.to_string(hash));
         // Add a `(check)` call if it's a `t_` term
-        let names = names_for_terms.get(hash);
         match names {
             None => (),
             Some(names) => {
                 let first = &names[0];
+                output.push(format!("; /end {}", first.join(".")));
                 if first[first.len() - 1].starts_with("t_") {
                     output.push(format!(
                         "(check {} '{})",
@@ -407,14 +443,14 @@ fn pack_all_chicken_inner(
         }
     }
 
-    output.push(format!(
-        "(define tests (list {}))",
-        hashes
-            .iter()
-            .map(|h| h.to_string())
-            .collect::<Vec<String>>()
-            .join(" ")
-    ));
+    // output.push(format!(
+    //     "(define tests (list {}))",
+    //     hashes
+    //         .iter()
+    //         .map(|h| h.to_string())
+    //         .collect::<Vec<String>>()
+    //         .join(" ")
+    // ));
 
     // {
     //     let mut walker = TypeWalker(&mut ir_env.env);

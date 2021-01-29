@@ -389,6 +389,21 @@ impl Codebase {
         }
     }
 
+    pub fn collect_types(
+        &self,
+        of: &str,
+        path: &Vec<String>,
+        names: &mut std::collections::HashMap<Hash, Vec<Vec<String>>>,
+    ) {
+        let item = self.branches.get(of).unwrap();
+        item.collect_types(path, names);
+        for (k, v) in &item.children {
+            let mut full = path.clone();
+            full.push(k.text.clone());
+            self.collect_types(&v.0, &full, names);
+        }
+    }
+
     pub fn collect_names(
         &mut self,
         of: &str,
