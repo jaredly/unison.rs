@@ -26,7 +26,10 @@ impl Symbol {
         self.num == other.num && self.text == other.text
     }
     pub fn to_atom(&self) -> String {
-        return self.text.clone()
+        if self.text == "()" {
+            return "_".to_owned();
+        }
+        return self.text.clone();
         // return format!("{}-{}", self.text, self.unique)
     }
 }
@@ -155,15 +158,15 @@ impl Hash {
         // Hash(data)
         Hash(hash.to_owned())
     }
-    pub fn to_string(&self) -> String {
-        // if self.0.len() == 0 {
-        //     return "<eval>".to_owned();
-        // }
-        // let mut m = base32hex::encode(&self.0);
-        // m.pop();
-        // m
-        self.0.clone()
-    }
+    // pub fn to_string(&self) -> String {
+    //     // if self.0.len() == 0 {
+    //     //     return "<eval>".to_owned();
+    //     // }
+    //     // let mut m = base32hex::encode(&self.0);
+    //     // m.pop();
+    //     // m
+    //     self.0.clone()
+    // }
 }
 
 #[derive(

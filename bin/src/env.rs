@@ -9,7 +9,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     TermNotFound(String),
-    NotImplemented(String)
+    NotImplemented(String),
 }
 
 #[derive(Clone, Debug)]

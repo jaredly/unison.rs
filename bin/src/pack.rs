@@ -301,19 +301,15 @@ fn topo_visit(
     }
     visiting.insert(key.clone());
     let v = deps.get(key).unwrap().clone();
-    // if v.len() == 0 {
-    //     res.insert(0, key.clone());
-    //     deps.remove(key);
-    //     return;
-    //     // unreachable!();
-    // }
-    // deps.insert(key.clone(), HashSet::new());
+    let mut v = v.iter().collect::<Vec<&Hash>>();
+    v.sort();
     for k in v {
         if k == key {
             continue;
         }
         topo_visit(&k, deps, res, visiting);
     }
+    deps.remove(key);
     visiting.remove(key);
     res.insert(0, key.clone());
 }
@@ -322,13 +318,18 @@ fn topo_sort(mut deps: HashMap<Hash, HashSet<Hash>>) -> Vec<Hash> {
     let mut visiting = HashSet::new();
     let mut res = vec![];
     loop {
-        let key = match deps.keys().next() {
-            None => break,
-            Some(key) => key.clone(),
+        let key = {
+            let mut keys = deps.keys().cloned().collect::<Vec<Hash>>();
+            keys.sort();
+            match keys.get(0) {
+                None => break,
+                Some(key) => key.clone(),
+            }
         };
         topo_visit(&key, &mut deps, &mut res, &mut visiting);
         // let v = deps.get(key).unwrap();
     }
+    res.reverse();
     return res;
 }
 
@@ -357,14 +358,13 @@ fn pack_all_chicken_inner(
     let mut chicken_env = TranslationEnv::new(env);
     // let mut ir_env = ir::TranslationEnv::new(env);
 
-    let mut output = vec!["(load \"stdlib.scm\")\n(import matchable)".to_owned()];
+    let mut output = vec!["(load \"stdlib.scm\")\n".to_owned()];
 
     let mut hashes: Vec<&Hash> = all_terms.values().collect();
     hashes.sort();
     let mut deps = HashMap::new();
     for hash in &hashes {
-        let used_hashes = chicken_env.load(*hash).unwrap();
-        deps.insert((*hash).to_owned(), used_hashes);
+        deps.insert((*hash).to_owned(), chicken_env.load(*hash).unwrap());
         // let text = chicken_env.to_string(hash);
         // output.push(text);
     }

@@ -1,7 +1,9 @@
 (import (chicken bitwise))
+(import (chicken condition))
 
 (define true #t)
 (define false #f)
+
 
 ; (define (Universal.== a) (lambda (b) (equal? a b)))
 (define (Text.!= a) (lambda (b) (not (equal? a b))))
@@ -228,13 +230,20 @@
 (define name "wip")
 
 (define (throw-effect k effect)
+    (if (or (not (list? effect))
+        (not (procedure? k))
+        (not (symbol? (car effect)))
+        )
+        (begin
+        (print "Invalid input to throw-effect " k " " effect)
+        (abort "Invalid throw effect"))
     (if (eq? '() stack)
         (abort "no handler for effect")
         (let* ((handler (car stack)))
             (set! stack (cdr stack))
             (print "Calling " name)
             (handler (cons 'effect (cons k effect)))
-        )
+        ))
     )
 )
 
@@ -278,9 +287,12 @@
 
 
 (define (jbvl6groqo3gsiodptlckggapgclh37o4b0a2ia8v7j82v0589jfu5e6k220tcng8ds136lt7r33mlnbhjuau8ujcq0laci2pu22cr0_0)
-    (call/cc (lambda (k) (throw-effect k 'jbvl6groqo3gsiodptlckggapgclh37o4b0a2ia8v7j82v0589jfu5e6k220tcng8ds136lt7r33mlnbhjuau8ujcq0laci2pu22cr0_0))))
+    (call/cc (lambda (k) (throw-effect k (list 'jbvl6groqo3gsiodptlckggapgclh37o4b0a2ia8v7j82v0589jfu5e6k220tcng8ds136lt7r33mlnbhjuau8ujcq0laci2pu22cr0_0)))))
 
 (define (1r0gt3snct0dbe4g4e42b3s6jsknadma01j28nrnm598783gnlpap9s9vd522re7iomr2qurmrpf135gis17db0lebolfslpol7p6dg_0 one)
+    (print "Constructin a one" one)
     (lambda (two)
+        (print "Constructin a two" one two)
         (call/cc (lambda (k) (throw-effect k (list '1r0gt3snct0dbe4g4e42b3s6jsknadma01j28nrnm598783gnlpap9s9vd522re7iomr2qurmrpf135gis17db0lebolfslpol7p6dg_0 one two))))
         ))
+(define getTwo 1r0gt3snct0dbe4g4e42b3s6jsknadma01j28nrnm598783gnlpap9s9vd522re7iomr2qurmrpf135gis17db0lebolfslpol7p6dg_0)

@@ -207,7 +207,7 @@ impl TranslationEnv {
         let (res, used_hashes) = {
             let mut loader = Loader {
                 used_hashes: std::collections::HashSet::new(),
-                translationEnv: self,
+                translation_env: self,
             };
             let res = term.to_chicken(&mut loader);
             (res, loader.used_hashes)
@@ -243,79 +243,23 @@ impl TranslationEnv {
 
 struct Loader<'a> {
     used_hashes: std::collections::HashSet<Hash>,
-    translationEnv: &'a mut TranslationEnv,
+    translation_env: &'a mut TranslationEnv,
 }
 
 impl<'a> HashLoader for Loader<'a> {
-    fn load(&mut self, hash: &Hash) -> Result<()> {
-        self.used_hashes.insert(hash.clone());
-        self.translationEnv.load(hash)?;
-        return Ok(());
-    }
     fn add(&mut self, hash: &Hash) {
         self.used_hashes.insert(hash.clone());
     }
+    fn load(&mut self, hash: &Hash) -> Result<()> {
+        self.add(hash);
+        self.translation_env.load(hash)?;
+        return Ok(());
+    }
+    fn get_type(&mut self, hash: &Hash) -> TypeDecl {
+        self.add(hash);
+        return self.translation_env.get_type(hash);
+    }
 }
-
-// fn make_marks(cmds: &[Chicken]) -> HashMap<usize, usize> {
-//     let mut marks = HashMap::new();
-//     for i in 0..cmds.len() {
-//         match &cmds[i] {
-//             Chicken::Mark(m) => {
-//                 marks.insert(*m, i);
-//             }
-//             _ => (),
-//         }
-//     }
-
-//     marks
-// }
-
-// fn resolve_marks(cmds: &mut Vec<Chicken>) {
-//     let marks = make_marks(cmds);
-//     for cmd in cmds {
-//         match cmd {
-//             Chicken::Handle(mark) => {
-//                 *mark = *marks.get(mark).unwrap();
-//             }
-//             Chicken::JumpTo(mark) => {
-//                 *mark = *marks.get(mark).unwrap();
-//             }
-//             Chicken::IfAndPopStack(mark) => {
-//                 *mark = *marks.get(mark).unwrap();
-//             }
-//             Chicken::If(mark) => {
-//                 *mark = *marks.get(mark).unwrap();
-//             }
-//             _ => (),
-//         }
-//     }
-// }
-
-// pub struct ChickenEnv {
-//     pub term: Hash,
-//     pub cmds: Vec<Chicken>,
-//     pub counter: usize,
-// }
-
-// impl ChickenEnv {
-//     pub fn new(term: Hash) -> Self {
-//         ChickenEnv {
-//             term,
-//             cmds: vec![],
-//             counter: 0,
-//         }
-//     }
-
-//     fn push(&mut self, chicken: Chicken) {
-//         self.cmds.push(chicken)
-//     }
-
-//     fn mark(&mut self) -> usize {
-//         self.counter += 1;
-//         self.counter
-//     }
-// }
 
 fn ifeq(term: Chicken, cmp: Chicken, yes: Chicken) -> Chicken {
     list(vec![
@@ -324,6 +268,14 @@ fn ifeq(term: Chicken, cmp: Chicken, yes: Chicken) -> Chicken {
         yes,
         atom("'fallthrough"),
     ])
+}
+
+fn is_effect_pat(pat: &Pattern) -> bool {
+    match pat {
+        Pattern::EffectBind(_, _, _, _) => true,
+        Pattern::EffectPure(_) => true,
+        _ => false,
+    }
 }
 
 // what are we creating?
@@ -493,7 +445,7 @@ fn pattern_to_chicken<T: HashLoader>(
                     list(vec![
                         atom("list-ref"),
                         term.clone(),
-                        atom(&format!("{}", i + 2)),
+                        atom(&format!("{}", i + 3)),
                     ]),
                     body,
                     depth + 1,
@@ -599,9 +551,10 @@ fn pattern_to_chicken<T: HashLoader>(
     })
 }
 
-trait HashLoader {
+pub trait HashLoader {
     fn load(&mut self, hash: &Hash) -> Result<()>;
     fn add(&mut self, hash: &Hash);
+    fn get_type(&mut self, hash: &Hash) -> TypeDecl;
 }
 
 // impl HashLoader for TranslationEnv {
@@ -614,9 +567,22 @@ impl ToChicken for Term {
     fn to_chicken<T: HashLoader>(&self, env: &mut T) -> Result<Chicken> {
         match self {
             Term::Request(Reference::DerivedId(Id(hash, _, _)), number) => {
-                env.add(hash);
-                // STOPSHIP: if this is a type w/ no args, we actually have to call it.
-                Ok(atom(&format!("{}_{}", hash.to_string(), number)))
+                let args_count = match env.get_type(&hash) {
+                    TypeDecl::Effect(DataDecl { constructors, .. }) => {
+                        calc_args(&constructors[*number].1)
+                    }
+                    _ => unreachable!("effect type not found"),
+                };
+
+                if args_count == 0 {
+                    Ok(list(vec![atom(&format!(
+                        "{}_{}",
+                        hash.to_string(),
+                        number
+                    ))]))
+                } else {
+                    Ok(atom(&format!("{}_{}", hash.to_string(), number)))
+                }
             }
             Term::Handle(handler, expr) => {
                 Ok(list(vec![
@@ -698,6 +664,14 @@ impl ToChicken for Term {
             Term::Match(value, cases) => {
                 let mut result = list(vec![atom("no-match")]);
                 let tmp = atom("tmp-match-head");
+                result = if cases
+                    .iter()
+                    .any(|MatchCase(pattern, _, _)| is_effect_pat(pattern))
+                {
+                    list(vec![atom("rethrow-effect"), tmp.clone()])
+                } else {
+                    result
+                };
                 // STOPSHIP: add a `_ (rethrow-effect)` if this is an effect matcher
                 for MatchCase(pattern, cond, body) in cases.iter().rev() {
                     let (mut vbls, body) = get_vbls(body);
@@ -750,7 +724,7 @@ impl ToChicken for Term {
 
 fn strip_args(body: &ABT<Term>) -> &ABT<Term> {
     match body {
-        ABT::Abs(name, _, inner) => strip_args(inner),
+        ABT::Abs(_, _, inner) => strip_args(inner),
         _ => body,
     }
 }
@@ -901,16 +875,16 @@ fn get_vbls(body: &ABT<Term>) -> (Vec<String>, &ABT<Term>) {
 //     }
 // }
 
-// fn calc_args(t: &ABT<Type>) -> usize {
-//     match t {
-//         ABT::Tm(t) => match t {
-//             Type::Effect(_, _) => 0,
-//             Type::Arrow(_, inner) => 1 + calc_args(&*inner),
-//             Type::Forall(inner) => calc_args(inner),
-//             _ => unimplemented!("Unexpected element of a request {:?}", t),
-//         },
-//         ABT::Abs(_, _, inner) => calc_args(inner),
-//         ABT::Cycle(inner) => calc_args(inner),
-//         _ => unimplemented!("Unexpected ABT"),
-//     }
-// }
+fn calc_args(t: &ABT<Type>) -> usize {
+    match t {
+        ABT::Tm(t) => match t {
+            Type::Effect(_, _) => 0,
+            Type::Arrow(_, inner) => 1 + calc_args(&*inner),
+            Type::Forall(inner) => calc_args(inner),
+            _ => unimplemented!("Unexpected element of a request {:?}", t),
+        },
+        ABT::Abs(_, _, inner) => calc_args(inner),
+        ABT::Cycle(inner) => calc_args(inner),
+        _ => unimplemented!("Unexpected ABT"),
+    }
+}
