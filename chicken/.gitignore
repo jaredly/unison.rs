@@ -1,3 +1,4 @@
 runtime_tests.scm
 runtime_tests_pretty.scm
 hello
+*.scm

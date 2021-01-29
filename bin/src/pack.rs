@@ -411,13 +411,6 @@ fn pack_all_chicken_inner(
         names_for_terms.insert(v.clone(), current);
     }
 
-    // let mut names_for_types: HashMap<Hash, Vec<Vec<String>>> = HashMap::new();
-    // for (k, v) in all_types.iter() {
-    //     let mut current = names_for_types.get(v).cloned().unwrap_or_default();
-    //     current.push(k.to_owned());
-    //     names_for_types.insert(v.clone(), current);
-    // }
-
     let sorted = topo_sort(deps);
     for hash in &sorted {
         let names = names_for_terms.get(hash);
@@ -442,26 +435,6 @@ fn pack_all_chicken_inner(
             }
         }
     }
-
-    // output.push(format!(
-    //     "(define tests (list {}))",
-    //     hashes
-    //         .iter()
-    //         .map(|h| h.to_string())
-    //         .collect::<Vec<String>>()
-    //         .join(" ")
-    // ));
-
-    // {
-    //     let mut walker = TypeWalker(&mut ir_env.env);
-    //     let ks: Vec<String> = walker.0.type_cache.keys().cloned().collect();
-    //     for k in ks {
-    //         use visitor::Accept;
-    //         let mut m = walker.0.load_type(&k);
-    //         m.accept(&mut walker);
-    //     }
-    // }
-    // let runtime_env: shared::types::RuntimeEnv = ir_env.into();
 
     std::fs::write(outfile, output.join("\n\n"))?;
 

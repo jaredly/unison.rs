@@ -26,15 +26,35 @@ fn atom(s: &str) -> Chicken {
 }
 
 fn list(items: Vec<Chicken>) -> Chicken {
-    Chicken::Apply(items)
+    let mut w = 2;
+    for item in &items {
+        w += item.width();
+    }
+    Chicken::Apply(items, w)
+}
+
+fn vector(items: Vec<Chicken>) -> Chicken {
+    let mut w = 3;
+    for item in &items {
+        w += item.width();
+    }
+    Chicken::Vector(items, w)
+}
+
+fn square(items: Vec<Chicken>) -> Chicken {
+    let mut w = 2;
+    for item in &items {
+        w += item.width();
+    }
+    Chicken::Square(items, w)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Chicken {
     Atom(String),
-    Apply(Vec<Chicken>),
-    Square(Vec<Chicken>),
-    Vector(Vec<Chicken>),
+    Apply(Vec<Chicken>, usize),
+    Square(Vec<Chicken>, usize),
+    Vector(Vec<Chicken>, usize),
 }
 
 fn white(num: usize) -> String {
@@ -45,7 +65,7 @@ fn white(num: usize) -> String {
     return res;
 }
 
-fn pretty_list(left: usize, max_width: usize, items: &Vec<Chicken>) -> (String, usize) {
+fn pretty_list(mut left: usize, max_width: usize, items: &Vec<Chicken>) -> (String, usize) {
     if items.len() == 0 {
         return ("".to_owned(), left);
     }
@@ -55,6 +75,9 @@ fn pretty_list(left: usize, max_width: usize, items: &Vec<Chicken>) -> (String, 
     }
     if total + left + items.len() - 1 > max_width {
         let (mut res, first) = items[0].pretty_string(left, max_width);
+        if &res == "if" || &res == "let" || &res == "lambda" {
+            // left += first;
+        }
         // if ["if", "or", "and", "let", "lambda"].contains(&res.as_str()) {
         //     left += first;
         // }
@@ -83,27 +106,9 @@ impl Chicken {
         use Chicken::*;
         match self {
             Atom(atom) => atom.len(),
-            Apply(items) => {
-                let mut sum = 2 + items.len() - 1;
-                for item in items {
-                    sum += item.width();
-                }
-                sum
-            }
-            Square(items) => {
-                let mut sum = 2 + items.len() - 1;
-                for item in items {
-                    sum += item.width();
-                }
-                sum
-            }
-            Vector(items) => {
-                let mut sum = 3 + items.len() - 1;
-                for item in items {
-                    sum += item.width();
-                }
-                sum
-            }
+            Apply(items, w) => *w,
+            Square(items, w) => *w,
+            Vector(items, w) => *w,
         }
     }
 
@@ -111,20 +116,20 @@ impl Chicken {
         use Chicken::*;
         match self {
             Atom(atom) => (atom.to_owned(), left + atom.len()),
-            Apply(items) => {
+            Apply(items, _) => {
                 let (mut res, w) = pretty_list(left + 1, max_width, items);
                 res.insert(0, '(');
                 res.push(')');
                 return (res, w + 1);
             }
-            Vector(items) => {
+            Vector(items, _) => {
                 let (mut res, w) = pretty_list(left + 2, max_width, items);
                 res.insert(0, '(');
                 res.insert(0, '#');
                 res.push(')');
                 return (res, w + 1);
             }
-            Square(items) => {
+            Square(items, _) => {
                 let (mut res, w) = pretty_list(left + 1, max_width, items);
                 res.insert(0, '[');
                 res.push(']');
@@ -137,7 +142,7 @@ impl Chicken {
         use Chicken::*;
         match self {
             Atom(atom) => atom.clone(),
-            Apply(items) => {
+            Apply(items, _) => {
                 "(".to_owned()
                     + &items
                         .iter()
@@ -146,7 +151,7 @@ impl Chicken {
                         .join(" ")
                     + ")"
             }
-            Vector(items) => {
+            Vector(items, _) => {
                 "#(".to_owned()
                     + &items
                         .iter()
@@ -155,7 +160,7 @@ impl Chicken {
                         .join(" ")
                     + ")"
             }
-            Square(items) => {
+            Square(items, _) => {
                 "[".to_owned()
                     + &items
                         .iter()
@@ -184,14 +189,14 @@ impl ToChicken for ABT<Term> {
                 // let mut buf = String::from("(let (");
 
                 for i in 0..names.len() {
-                    bindings.push(Chicken::Apply(vec![
+                    bindings.push(list(vec![
                         Chicken::Atom(names[i].0.to_atom()),
                         values[i].to_chicken(env)?,
                     ]));
                 }
-                return Ok(Chicken::Apply(vec![
+                return Ok(list(vec![
                     Chicken::Atom("letrec".to_owned()),
-                    Chicken::Apply(bindings),
+                    list(bindings),
                     body.to_chicken(env)?,
                 ]));
                 // Err(env::Error::NotImplemented("cycle".to_owned()))
@@ -692,28 +697,25 @@ impl ToChicken for Term {
                 env.load(&hash)?;
                 Ok(Chicken::Atom(hash.to_string()))
             }
-            Term::App(one, two) => Ok(Chicken::Apply(vec![
-                one.to_chicken(env)?,
-                two.to_chicken(env)?,
-            ])),
+            Term::App(one, two) => Ok(list(vec![one.to_chicken(env)?, two.to_chicken(env)?])),
             Term::Int(num) => Ok(Chicken::Atom(num.to_string())),
             Term::Float(num) => Ok(Chicken::Atom(num.to_string())),
             Term::Nat(num) => Ok(Chicken::Atom(num.to_string())),
             Term::Boolean(num) => Ok(Chicken::Atom(num.to_string())),
             Term::Text(num) => Ok(Chicken::Atom(format!("{:?}", num))),
             Term::Char(num) => Ok(Chicken::Atom(format!("\"{}\"", num))),
-            Term::If(cond, yes, no) => Ok(Chicken::Apply(vec![
+            Term::If(cond, yes, no) => Ok(list(vec![
                 Chicken::Atom("if".to_owned()),
                 cond.to_chicken(env)?,
                 yes.to_chicken(env)?,
                 no.to_chicken(env)?,
             ])),
-            Term::And(one, two) => Ok(Chicken::Apply(vec![
+            Term::And(one, two) => Ok(list(vec![
                 Chicken::Atom("and".to_owned()),
                 one.to_chicken(env)?,
                 two.to_chicken(env)?,
             ])),
-            Term::Or(one, two) => Ok(Chicken::Apply(vec![
+            Term::Or(one, two) => Ok(list(vec![
                 Chicken::Atom("and".to_owned()),
                 one.to_chicken(env)?,
                 two.to_chicken(env)?,
@@ -732,7 +734,7 @@ impl ToChicken for Term {
                 for item in items {
                     res.push(item.to_chicken(env)?);
                 }
-                return Ok(Chicken::Vector(res));
+                return Ok(vector(res));
             }
             // Term::LetRec(_, bound, body) => match &**body {
             //     ABT::Abs(name, _, body) => Ok(Chicken::Apply(vec![
@@ -748,7 +750,7 @@ impl ToChicken for Term {
             //     _ => unimplemented!(),
             // },
             Term::Let(_, bound, body) => match &**body {
-                ABT::Abs(name, _, body) => Ok(Chicken::Apply(vec![
+                ABT::Abs(name, _, body) => Ok(list(vec![
                     atom("let"),
                     list(vec![list(vec![
                         atom(&name.to_atom()),
@@ -760,7 +762,7 @@ impl ToChicken for Term {
             },
             Term::Lam(contents, _) => {
                 match &**contents {
-                    ABT::Abs(name, _, body) => Ok(Chicken::Apply(vec![
+                    ABT::Abs(name, _, body) => Ok(list(vec![
                         atom("lambda"),
                         list(vec![atom(&name.to_atom())]),
                         body.to_chicken(env)?,
