@@ -62,7 +62,8 @@ impl Env {
                 info!("Trying to load term {:?}", full);
                 let file = full.as_path();
                 if !file.exists() {
-                    return Err(Error::TermNotFound(hash.to_owned()));
+                    unreachable!("Nope");
+                    // return Err(Error::TermNotFound(hash.to_owned()));
                 }
                 let type_file = {
                     let mut full = self.root.clone();

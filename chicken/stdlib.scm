@@ -4,17 +4,45 @@
 (define true #t)
 (define false #f)
 
+(define term-link 'term-link)
+(define type-link 'type-link)
+
+(define (print-processing name)
+    ;; Uncomment this line to debug terms that are failing to process
+    (print "Evaluating " name)
+    '())
+
 (define (check v name)
     (if (not v)
     (begin
         (print "Test failed! " name)
         (print "Got " v)
-        (abort "Test failure")
+        ; (print "Test failure")
         )
-    (print "✅ passed #" (substring (symbol->string name) 0 10))
+    (print "✅ passed " name)
         )
     )
 
+(define (result-is-good result)
+    (and (list? result)
+        (= (length result) 2)
+        (equal? (car result) 'vmc06s4f236sps61vqv35g7ridnae03uetth98aocort1825stbv7m6ncfca2j0gcane47c8db2rjtd2o6kch2lr7v2gst895pcs0m0_1)
+    )
+)
+
+(define (check-results v name)
+    (map
+        (lambda (result)
+            (if (not (result-is-good result))
+            (begin
+                (print "Test failed " name " " result)
+                (abort "Test failed")
+            )))
+        (vector->list v)
+    )
+    (print "✅ passed " name)
+    '()
+)
 
 (define (f2c22r2a1sche28mn07brk1j45kp1bam3tr4k2j0un2hi1g7rbrud3f5mes2defqo1tpd9j38pqpg2f0efl3no0ede5ocl2am4bonm0 a)
     (lambda (b) (not (equal? a b)))
@@ -65,6 +93,12 @@
 
 (define (Nat.+ a)
     (lambda (b)
+        (if (not (number? a))
+        (begin
+        (print "A is " a " " (symbol? a) " " (string? a))
+        (abort "a is not a number")
+        )
+        )
         (natLoop (+ a b))))
 
 (define (natLoop num)
@@ -192,6 +226,7 @@
 (define (Universal.<= a) (lambda (b) (<=? default-comparator a b)))
 (define (Universal.< a) (lambda (b) (<? default-comparator a b)))
 (define (Universal.== a) (lambda (b) (=? default-comparator a b)))
+(define (Universal.compare a) (lambda (b) (comparator-if<=> default-comparator a b -1 0 1)))
 
 ; --- lists ---
 

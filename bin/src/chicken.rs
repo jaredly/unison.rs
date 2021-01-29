@@ -21,6 +21,13 @@ use std::collections::HashMap;
 //         .collect()
 // }
 
+// Hrmmmm ok so I do need to do some munging of symbols.
+// because `w'` isn't valid scheme
+
+fn munge_identifier(id: String) -> String {
+    id.replace("'", "-quot")
+}
+
 fn atom(s: &str) -> Chicken {
     Chicken::Atom(s.to_owned())
 }
@@ -74,7 +81,7 @@ fn pretty_list(mut left: usize, max_width: usize, items: &Vec<Chicken>) -> (Stri
         total += item.width();
     }
     if total + left + items.len() - 1 > max_width {
-        let (mut res, first) = items[0].pretty_string(left, max_width);
+        let (mut res, _first) = items[0].pretty_string(left, max_width);
         if &res == "if" || &res == "let" || &res == "lambda" {
             // left += first;
         }
@@ -106,9 +113,9 @@ impl Chicken {
         use Chicken::*;
         match self {
             Atom(atom) => atom.len(),
-            Apply(items, w) => *w,
-            Square(items, w) => *w,
-            Vector(items, w) => *w,
+            Apply(_items, w) => *w,
+            Square(_items, w) => *w,
+            Vector(_items, w) => *w,
         }
     }
 
@@ -124,8 +131,7 @@ impl Chicken {
             }
             Vector(items, _) => {
                 let (mut res, w) = pretty_list(left + 2, max_width, items);
-                res.insert(0, '(');
-                res.insert(0, '#');
+                res.insert_str(0, "(vector ");
                 res.push(')');
                 return (res, w + 1);
             }
@@ -152,7 +158,7 @@ impl Chicken {
                     + ")"
             }
             Vector(items, _) => {
-                "#(".to_owned()
+                "(vector ".to_owned()
                     + &items
                         .iter()
                         .map(|item| item.to_string())
@@ -320,7 +326,10 @@ impl TranslationEnv {
                 hash.to_owned(),
                 (Chicken::Atom(text), typ, used_hashes.clone()),
             ),
-            Err(err) => return Err(err),
+            Err(err) => {
+                println!("Term broked: {:?}", term);
+                return Err(err);
+            }
         };
         Ok(used_hashes)
     }
@@ -826,8 +835,16 @@ impl ToChicken for Term {
             }
             Term::Ann(inner, _) => inner.to_chicken(env),
             Term::Blank => unreachable!("blank found"),
-            Term::TermLink(_) => Ok(atom("term-link")),
-            Term::TypeLink(_) => Ok(atom("type-link")),
+            Term::TermLink(Referent::Con(Reference::DerivedId(Id(hash, _, _)), num, _)) => {
+                Ok(list(vec![
+                    atom("term-link"),
+                    atom(&format!("'{}_{}", hash.to_string(), num)),
+                ]))
+            }
+            Term::TypeLink(Reference::DerivedId(Id(hash, _, _))) => Ok(list(vec![
+                atom("type-link"),
+                atom(&format!("'{}", hash.to_string())),
+            ])),
             _ => Ok(Chicken::Atom(format!(
                 "(not-implemented {:?})",
                 format!("{:?}", self)
@@ -1021,8 +1038,16 @@ pub fn ability_to_chicken(name: &str, t: &ABT<Type>) -> Chicken {
     return list(vec![atom("define"), atom(name), body]);
 }
 
+// lol chicken -> type
 pub fn ability_to_type(name: &str, t: &ABT<Type>) -> Chicken {
     let args = calc_args(t);
+    if args == 0 {
+        return list(vec![
+            atom("define"),
+            atom(name),
+            atom(&format!("'{}", name)),
+        ]);
+    }
     let mut vbls = vec![];
     for i in 0..args {
         vbls.push(atom(&format!("arg_{}", i)));
@@ -1036,9 +1061,9 @@ pub fn ability_to_type(name: &str, t: &ABT<Type>) -> Chicken {
     for vbl in vbls.iter().rev() {
         body = list(vec![atom("lambda"), list(vec![vbl.clone()]), body]);
     }
-    if args == 0 {
-        body = list(vec![atom("lambda"), list(vec![]), body]);
-    }
+    // if args == 0 {
+    //     body = list(vec![atom("lambda"), list(vec![]), body]);
+    // }
     return list(vec![atom("define"), atom(name), body]);
 }
 

@@ -333,51 +333,17 @@ fn topo_sort(mut deps: HashMap<Hash, HashSet<Hash>>) -> Vec<Hash> {
     return res;
 }
 
-fn pack_all_chicken_inner(
-    codebase: &mut Codebase,
-    outfile: &String,
-    ns: &[String],
-) -> std::io::Result<()> {
-    let mut all_terms = HashMap::new();
-    let mut all_types = HashMap::new();
+// fn term_to_chichen_env(
+//     root: &std::path::Path,
+//     hash: &str,
+// ) ->
 
-    for ns in ns {
-        let ns = if ns == &"" || ns == &"." {
-            codebase.head.clone()
-        } else {
-            codebase
-                .find_ns(ns.split(".").collect::<Vec<&str>>().as_slice())
-                .unwrap()
-                .0
-        };
-
-        codebase.collect_terms(&ns, &vec![], &mut all_terms);
-        codebase.collect_types(&ns, &vec![], &mut all_types);
-    }
-
-    let env = env::Env::init(codebase.root().as_path());
-    use crate::chicken::TranslationEnv;
-    let mut chicken_env = TranslationEnv::new(env);
-    // let mut ir_env = ir::TranslationEnv::new(env);
-
+fn pack_chicken_env(
+    mut chicken_env: crate::chicken::TranslationEnv,
+    all_types: HashMap<Hash, Vec<Vec<String>>>,
+    all_terms: HashMap<Vec<String>, Hash>,
+) -> std::io::Result<String> {
     let mut output = vec!["(load \"stdlib.scm\")\n".to_owned()];
-
-    let hashes: Vec<&Hash> = all_terms.values().collect();
-    let mut deps = HashMap::new();
-    for hash in &hashes {
-        match chicken_env.load(*hash) {
-            Err(env::Error::TermNotFound(term)) => println!(
-                "Unable to pack {:?} - depended on missing term {:?}",
-                hash, term
-            ),
-            Err(err) => {
-                unreachable!("{:?}", err)
-            }
-            Ok(uses) => {
-                deps.insert((*hash).to_owned(), uses);
-            }
-        }
-    }
 
     // the types folks
     for (hash, decl) in chicken_env.types.iter() {
@@ -411,32 +377,144 @@ fn pack_all_chicken_inner(
         names_for_terms.insert(v.clone(), current);
     }
 
+    let mut deps = HashMap::new();
+    for (k, (_, _, kdeps)) in &chicken_env.terms {
+        deps.insert(k.to_owned(), kdeps.to_owned());
+    }
+
     let sorted = topo_sort(deps);
     for hash in &sorted {
+        let typ = chicken_env.env.load(&hash.to_string()).map(|m| m.1).ok();
         let names = names_for_terms.get(hash);
         names.map(|names| {
-            output.push(format!("; {}", names[0].join(".")));
-            output.push(format!("(print {:?})", names[0].join(".")));
+            println!("Packing {}", names[0].join("."));
+            output.push(format!("; {} : {:?}", names[0].join("."), typ));
+            output.push(format!("(print-processing {:?})", names[0].join(".")));
         });
         output.push(chicken_env.to_string(hash));
-        // Add a `(check)` call if it's a `t_` term
-        match names {
-            None => (),
-            Some(names) => {
-                let first = &names[0];
-                output.push(format!("; /end {}", first.join(".")));
-                if first[first.len() - 1].starts_with("t_") {
-                    output.push(format!(
-                        "(check {} '{})",
-                        hash.to_string(),
-                        hash.to_string()
-                    ))
+
+        names.map(|names| {
+            let first = &names[0];
+            output.push(format!("; /end {}", first.join(".")));
+
+            match typ {
+                Some(ABT::Tm(Type::Ref(Reference::Builtin(b)))) if b == "Boolean" => {
+                    if first[first.len() - 1].starts_with("t_") {
+                        output.push(format!(
+                            "(check {} {:?})",
+                            hash.to_string(),
+                            first.join(".")
+                        ))
+                    }
                 }
+                Some(ABT::Tm(Type::App(one, two))) => match (&*one, &*two) {
+                    (
+                        ABT::Tm(Type::Ref(Reference::Builtin(b))),
+                        ABT::Tm(Type::Ref(Reference::DerivedId(Id(thash, _, _))))
+                    ) if b == "Sequence" &&
+                    thash.0 == "vmc06s4f236sps61vqv35g7ridnae03uetth98aocort1825stbv7m6ncfca2j0gcane47c8db2rjtd2o6kch2lr7v2gst895pcs0m0" => {
+                        output.push(format!(
+                            "(check-results {} {:?})",
+                            hash.to_string(),
+                            first.join(".")
+                        ))
+
+                    }
+                    _ => ()
+                }
+                _ => ()
+            }
+
+        });
+    }
+
+    Ok(output.join("\n\n"))
+}
+
+fn pack_one_chicken_inner(
+    codebase: &mut Codebase,
+    outfile: &String,
+    term: &String,
+) -> std::io::Result<()> {
+    let hash = find_term(codebase, term);
+    println!("Mapped term name {} to hash {:?}", term, hash);
+
+    let mut all_terms = HashMap::new();
+    let mut all_types = HashMap::new();
+
+    // TODO: maybe just the owning namespace of the term?
+    // Or allow you to specify? It's just a perf thing after all...
+    let ns = codebase.head.clone();
+    codebase.collect_terms(&ns, &vec![], &mut all_terms);
+    codebase.collect_types(&ns, &vec![], &mut all_types);
+
+    let env = env::Env::init(codebase.root().as_path());
+    use crate::chicken::TranslationEnv;
+    let mut chicken_env = TranslationEnv::new(env);
+
+    match chicken_env.load(&hash) {
+        Err(env::Error::TermNotFound(term)) => {
+            println!("Cant load a thin");
+            unreachable!("Unable to find term {}", term);
+        }
+        _ => (),
+    }
+
+    std::fs::write(
+        outfile,
+        pack_chicken_env(chicken_env, all_types, all_terms)?,
+    )?;
+
+    Ok(())
+}
+
+fn pack_all_chicken_inner(
+    codebase: &mut Codebase,
+    outfile: &String,
+    ns: &[String],
+) -> std::io::Result<()> {
+    let mut all_terms = HashMap::new();
+    let mut all_types = HashMap::new();
+
+    for ns in ns {
+        let ns = if ns == &"" || ns == &"." {
+            codebase.head.clone()
+        } else {
+            codebase
+                .find_ns(ns.split(".").collect::<Vec<&str>>().as_slice())
+                .expect("Namespace not found in codebase.")
+                .0
+        };
+
+        codebase.collect_terms(&ns, &vec![], &mut all_terms);
+        codebase.collect_types(&ns, &vec![], &mut all_types);
+    }
+
+    let env = env::Env::init(codebase.root().as_path());
+    use crate::chicken::TranslationEnv;
+    let mut chicken_env = TranslationEnv::new(env);
+    // let mut ir_env = ir::TranslationEnv::new(env);
+
+    let hashes: Vec<&Hash> = all_terms.values().collect();
+    for hash in &hashes {
+        match chicken_env.load(*hash) {
+            Err(env::Error::TermNotFound(term)) => println!(
+                "Unable to pack {:?} - depended on missing term {:?}",
+                hash, term
+            ),
+            Err(err) => {
+                unreachable!("{:?}", err)
+            }
+            Ok(_) => {
+                // deps.insert((*hash).to_owned(), uses);
             }
         }
     }
 
-    std::fs::write(outfile, output.join("\n\n"))?;
+    std::fs::write(
+        outfile,
+        pack_chicken_env(chicken_env, all_types, all_terms)?,
+    )?;
 
     Ok(())
 }
@@ -492,6 +570,17 @@ fn pack_all_json_inner(
     Ok(())
 }
 
+pub fn pack_one_chicken(file: &String, term: &String, outfile: &String) -> std::io::Result<()> {
+    let terms_path = std::path::PathBuf::from(file);
+
+    println!("Packing the terms");
+    let root = terms_path.parent().unwrap();
+    let mut codebase = Codebase::new(root.to_owned())?;
+    codebase.load_all()?;
+
+    pack_one_chicken_inner(&mut codebase, outfile, term)
+}
+
 pub fn pack_all_chicken(file: &String, ns: &[String], outfile: &String) -> std::io::Result<()> {
     let terms_path = std::path::PathBuf::from(file);
 
@@ -530,13 +619,14 @@ pub fn default_root() -> std::path::PathBuf {
 }
 
 pub fn find_term(codebase: &mut Codebase, term: &str) -> Hash {
-    if &term[0..1] == "." {
-        codebase
-            .find_term(&term[1..].split(".").collect::<Vec<&str>>().as_slice())
-            .unwrap()
-    } else {
-        types::Hash::from_string(term)
-    }
+    let term = if &term[0..1] == "." { &term[1..] } else { term };
+    // if &term[0..1] == "." {
+    codebase
+        .find_term(term.split(".").collect::<Vec<&str>>().as_slice())
+        .unwrap()
+    // } else {
+    //     types::Hash::from_string(term)
+    // }
 }
 
 pub fn pack_json(file: &String, outfile: &String) -> std::io::Result<()> {

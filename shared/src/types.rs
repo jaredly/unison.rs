@@ -29,7 +29,7 @@ impl Symbol {
         if self.text == "()" {
             return "_".to_owned();
         }
-        return self.text.clone();
+        return self.text.replace("'", "-quot");
         // return format!("{}-{}", self.text, self.unique)
     }
 }

@@ -471,6 +471,7 @@ impl Codebase {
         if path.len() == 1 {
             for (k, v) in item.terms.d1.iter() {
                 if v.text == path[0] {
+                    println!("{:?} : {:?}", k, v);
                     return Ok(match k.reference() {
                         Reference::Builtin(_) => unreachable!(),
                         Reference::DerivedId(Id(hash, _, _)) => hash.clone(),
