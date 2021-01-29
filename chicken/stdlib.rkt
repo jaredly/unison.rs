@@ -63,7 +63,7 @@
 
 (define (rethrow-effect eff)
     (let ((k (cadr eff))
-          (ef (cddr eff)))
+          (ef (cddr ef)))
         (throw-effect k eff)))
 
 (define (add-handler handler)

@@ -283,24 +283,14 @@ rec.t_05 = is_even 16 == true
 
 ability abilities.a_01 where
     getInt : Int
-abilities.f_01 = handle (abilities.a_01.getInt) with cases
-    { a } -> (a, 2)
-    { abilities.a_01.getInt -> k } -> handle (k +5) with cases { a } -> (a, 3)
-abilities.t_01 = abilities.f_01 == (+5, 3)
+
 ability abilities.a_02 where
     plus5 : Int -> Int
-abilities.v_02 = handle (abilities.a_02.plus5 +6) with cases
-    { a } -> (a, 1)
-    { abilities.a_02.plus5 v -> k } -> handle (k (v + +5)) with cases { a } -> (a, 2)
-abilities.t_02 = abilities.v_02 == (+11, 2)
+
 ability abilities.a_03 where
     getTwo : Nat -> Nat -> (Nat, Nat)
-abilities.v_03 = handle ((abilities.a_03.getTwo 2 4), 3) with cases
-    { a } -> (a, 1)
-    { abilities.a_03.getTwo 1 0 -> _ } -> (((0, 0), 0), 0)
-    { abilities.a_03.getTwo a b -> k } -> handle (k (a, b)) with cases
-        { a } -> (a, 2)
-abilities.t_03 = abilities.v_03 == (((2, 4), 3), 2)
+
+-- helper functions
 
 abilities.h_plus5 inner = cases
     { a } -> a
@@ -311,6 +301,26 @@ abilities.h_getInt v inner = cases
 abilities.h_maybePlus5 test respond inner = cases
     { a } -> a
     { abilities.a_02.plus5 v -> k } | test v -> inner '(respond v)
+
+-- tests for them
+
+abilities.f_01 = handle (abilities.a_01.getInt) with cases
+    { a } -> (a, 2)
+    { abilities.a_01.getInt -> k } -> handle (k +5) with cases { a } -> (a, 3)
+abilities.t_01 = abilities.f_01 == (+5, 3)
+
+abilities.v_02 = handle (abilities.a_02.plus5 +6) with cases
+    { a } -> (a, 1)
+    { abilities.a_02.plus5 v -> k } -> handle (k (v + +5)) with cases { a } -> (a, 2)
+abilities.t_02 = abilities.v_02 == (+11, 2)
+
+abilities.v_03 = handle ((abilities.a_03.getTwo 2 4), 3) with cases
+    { a } -> (a, 1)
+    { abilities.a_03.getTwo 1 0 -> _ } -> (((0, 0), 0), 0)
+    { abilities.a_03.getTwo a b -> k } -> handle (k (a, b)) with cases
+        { a } -> (a, 2)
+abilities.t_03 = abilities.v_03 == (((2, 4), 3), 2)
+
 abilities.v_04 = 
     go m = handle !m with (abilities.h_plus5 go)
     go '(abilities.a_02.plus5 +3)
@@ -327,6 +337,7 @@ abilities.v_06 =
     ) with (abilities.h_plus5 go)
     go '(abilities.a_02.plus5 +3)
 abilities.t_06 = abilities.v_06 == +8
+
 abilities.t_07 = (handle (abilities.a_02.plus5 +3) with cases
     { a } -> 3
     { abilities.a_02.plus5 v -> _ } -> 4) == 4

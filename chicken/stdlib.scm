@@ -266,7 +266,7 @@
 (define (rethrow-effect eff)
     (let ((k (cadr eff))
           (ef (cddr eff)))
-        (throw-effect k eff)))
+        (throw-effect k ef)))
 
 (define (add-handler handler)
     (print "add handler " name " " handler " " stack)
