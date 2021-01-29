@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, std::cmp::PartialEq, std::cmp::PartialOrd, Hash, Serialize, Deserialize)]
 pub enum Source {
-    Value(Hash),
-    Fn(usize, Hash),
+    Value(Id),
+    Fn(usize, Id),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -100,8 +100,7 @@ pub fn eval<T: crate::ffi::FFI>(
     do_trace: bool,
     effects: std::collections::HashMap<String, ABT<Type>>,
 ) -> Result<Option<Arc<Value>>, crate::state::InvalidFFI> {
-    let mut state =
-        crate::state::State::new_value(&env, Hash::from_string(hash), do_trace, effects);
+    let mut state = crate::state::State::new_value(&env, Id::from_string(hash), do_trace, effects);
     state.run_to_end(ffi, trace)
 }
 
@@ -111,8 +110,8 @@ pub fn eval<T: crate::ffi::FFI>(
 pub type RunResult<T> = std::result::Result<T, crate::state::Error>;
 
 impl RuntimeEnv {
-    pub fn add_eval(&mut self, hash: &str, args: Vec<Value>) -> Result<Hash, String> {
-        let typ = self.terms.get(&Hash::from_string(hash)).unwrap().1.clone();
+    pub fn add_eval(&mut self, hash: &str, args: Vec<Value>) -> Result<Id, String> {
+        let typ = self.terms.get(&Id::from_string(hash)).unwrap().1.clone();
         let mut cmds = vec![IR::Value(Value::Ref(Reference::from_hash(hash)))];
         let (_arg_typs, _effects, typ) = extract_args(&typ);
         for (_, arg) in args.into_iter().enumerate() {
@@ -123,16 +122,14 @@ impl RuntimeEnv {
             //     return Err("NOPE".to_owned());
             // };
         }
-        let hash = Hash::from_string("<eval>");
+        let hash = Id::from_string("<eval>");
         self.terms.insert(hash.clone(), (cmds, typ));
         Ok(hash)
     }
 
     pub fn get_ability_type(&self, kind: &Reference, number: usize) -> ABT<Type> {
         let decl = match kind {
-            Reference::DerivedId(Id(hash, _, _)) => {
-                self.types.get(hash).expect("Ability type not found")
-            }
+            Reference::DerivedId(id) => self.types.get(&id).expect("Ability type not found"),
             _ => unreachable!("No builtin abilities"),
         };
         let data = match decl {

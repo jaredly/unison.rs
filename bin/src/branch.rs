@@ -37,11 +37,12 @@ impl RawBranch {
         children.sort();
         for (k, v) in children {
             match k {
-                types::Reference::DerivedId(types::Id(hash, _, _)) => {
-                    if names.contains_key(&hash.0) {
+                types::Reference::DerivedId(id) => {
+                    let key = id.to_string();
+                    if names.contains_key(&key) {
                         let mut full = path.clone();
                         full.push(v.text.clone());
-                        names.get_mut(&hash.0).unwrap().push(full);
+                        names.get_mut(&key).unwrap().push(full);
                     }
                 }
                 _ => (),
@@ -52,19 +53,19 @@ impl RawBranch {
     pub fn collect_types(
         &self,
         path: &Vec<String>,
-        names: &mut std::collections::HashMap<types::Hash, Vec<Vec<String>>>,
+        names: &mut std::collections::HashMap<types::Id, Vec<Vec<String>>>,
     ) {
         let mut children: Vec<(&Reference, &NameSegment)> = self.types.d1.iter().collect();
         children.sort();
         for (k, v) in children {
             match k {
-                types::Reference::DerivedId(types::Id(hash, _, _)) => {
+                types::Reference::DerivedId(id) => {
                     let mut full = path.clone();
                     full.push(v.text.clone());
-                    if names.contains_key(hash) {
-                        names.get_mut(hash).unwrap().push(full);
+                    if names.contains_key(id) {
+                        names.get_mut(id).unwrap().push(full);
                     } else {
-                        names.insert(hash.clone(), vec![full]);
+                        names.insert(id.clone(), vec![full]);
                     }
                 }
                 _ => (),
@@ -84,11 +85,11 @@ impl RawBranch {
         let mut constrs = vec![];
         for (k, v) in self.terms.d1.iter() {
             match k {
-                types::Referent::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                    terms.push((v.text.clone(), hash.to_string()));
+                types::Referent::Ref(Reference::DerivedId(id)) => {
+                    terms.push((v.text.clone(), id.to_string()));
                 }
-                types::Referent::Con(Reference::DerivedId(Id(hash, _, _)), n, _) => {
-                    constrs.push((v.text.clone(), hash.to_string(), *n));
+                types::Referent::Con(Reference::DerivedId(id), n, _) => {
+                    constrs.push((v.text.clone(), id.to_string(), *n));
                 }
                 _ => (),
             }
@@ -104,16 +105,16 @@ impl RawBranch {
     pub fn collect_terms_and_constructors(
         &self,
         path: &Vec<String>,
-        dest: &mut std::collections::HashMap<types::Hash, Vec<Vec<String>>>,
-        constructors: &mut std::collections::HashMap<types::Hash, HashMap<usize, Vec<Vec<String>>>>,
+        dest: &mut std::collections::HashMap<types::Id, Vec<Vec<String>>>,
+        constructors: &mut std::collections::HashMap<types::Id, HashMap<usize, Vec<Vec<String>>>>,
     ) {
         for (k, v) in self.terms.d1.iter() {
             match k {
-                types::Referent::Con(types::Reference::DerivedId(types::Id(hash, _, _)), n, _) => {
+                types::Referent::Con(types::Reference::DerivedId(id), n, _) => {
                     let mut full = path.clone();
                     full.push(v.text.clone());
-                    if constructors.contains_key(hash) {
-                        let m = constructors.get_mut(hash).unwrap();
+                    if constructors.contains_key(id) {
+                        let m = constructors.get_mut(id).unwrap();
                         if m.contains_key(n) {
                             m.get_mut(n).unwrap().push(full);
                         } else {
@@ -122,16 +123,16 @@ impl RawBranch {
                     } else {
                         let mut m = HashMap::new();
                         m.insert(*n, vec![full]);
-                        constructors.insert(hash.clone(), m);
+                        constructors.insert(id.clone(), m);
                     }
                 }
-                types::Referent::Ref(types::Reference::DerivedId(types::Id(hash, _, _))) => {
+                types::Referent::Ref(types::Reference::DerivedId(id)) => {
                     let mut full = path.clone();
                     full.push(v.text.clone());
-                    if dest.contains_key(hash) {
-                        dest.get_mut(hash).unwrap().push(full);
+                    if dest.contains_key(id) {
+                        dest.get_mut(id).unwrap().push(full);
                     } else {
-                        dest.insert(hash.clone(), vec![full]);
+                        dest.insert(id.clone(), vec![full]);
                     }
                 }
                 _ => (),
@@ -142,34 +143,34 @@ impl RawBranch {
     pub fn collect_terms(
         &self,
         path: &Vec<String>,
-        dest: &mut std::collections::HashMap<Vec<String>, types::Hash>,
+        dest: &mut std::collections::HashMap<Vec<String>, types::Id>,
     ) {
         let mut children: Vec<(&Referent, &NameSegment)> = self.terms.d1.iter().collect();
         children.sort();
         for (k, v) in children {
             match k {
-                types::Referent::Ref(types::Reference::DerivedId(types::Id(hash, _, _))) => {
+                types::Referent::Ref(types::Reference::DerivedId(id)) => {
                     let mut full = path.clone();
                     full.push(v.text.clone());
-                    dest.insert(full, hash.clone());
+                    dest.insert(full, id.clone());
                 }
                 _ => (),
             }
         }
     }
 
-    pub fn collect_names(&self, path: &Vec<String>, names: &mut crate::pack::Names<Hash>) {
+    pub fn collect_names(&self, path: &Vec<String>, names: &mut crate::pack::Names<Id>) {
         let mut children: Vec<(&Reference, &NameSegment)> = self.types.d1.iter().collect();
         children.sort();
         for (k, v) in children {
             match k {
-                types::Reference::DerivedId(types::Id(hash, _, _)) => {
+                types::Reference::DerivedId(id) => {
                     let mut full = path.clone();
                     full.push(v.text.clone());
-                    if names.types.contains_key(hash) {
-                        names.types.get_mut(hash).unwrap().push(full);
+                    if names.types.contains_key(id) {
+                        names.types.get_mut(id).unwrap().push(full);
                     } else {
-                        names.types.insert(hash.clone(), vec![full]);
+                        names.types.insert(id.clone(), vec![full]);
                     }
                 }
                 _ => (),
@@ -178,11 +179,11 @@ impl RawBranch {
 
         for (k, v) in self.terms.d1.iter() {
             match k {
-                types::Referent::Con(types::Reference::DerivedId(types::Id(hash, _, _)), n, _) => {
+                types::Referent::Con(types::Reference::DerivedId(id), n, _) => {
                     let mut full = path.clone();
                     full.push(v.text.clone());
-                    if names.constrs.contains_key(hash) {
-                        let m = names.constrs.get_mut(hash).unwrap();
+                    if names.constrs.contains_key(id) {
+                        let m = names.constrs.get_mut(id).unwrap();
                         if m.contains_key(n) {
                             m.get_mut(n).unwrap().push(full);
                         } else {
@@ -191,16 +192,16 @@ impl RawBranch {
                     } else {
                         let mut m = HashMap::new();
                         m.insert(*n, vec![full]);
-                        names.constrs.insert(hash.clone(), m);
+                        names.constrs.insert(id.clone(), m);
                     }
                 }
-                types::Referent::Ref(types::Reference::DerivedId(types::Id(hash, _, _))) => {
+                types::Referent::Ref(types::Reference::DerivedId(id)) => {
                     let mut full = path.clone();
                     full.push(v.text.clone());
-                    if names.terms.contains_key(hash) {
-                        names.terms.get_mut(hash).unwrap().push(full);
+                    if names.terms.contains_key(id) {
+                        names.terms.get_mut(id).unwrap().push(full);
                     } else {
-                        names.terms.insert(hash.clone(), vec![full]);
+                        names.terms.insert(id.clone(), vec![full]);
                     }
                 }
                 _ => (),
@@ -211,10 +212,10 @@ impl RawBranch {
     pub fn get_flat_names(&self, path: &Vec<String>, dest: &mut crate::printer::FlatNames) {
         for (k, v) in self.terms.d1.iter() {
             match k {
-                types::Referent::Con(types::Reference::DerivedId(types::Id(hash, _, _)), n, _) => {
+                types::Referent::Con(types::Reference::DerivedId(id), n, _) => {
                     let mut full = path.clone();
                     full.push(v.text.clone());
-                    let k = (hash.to_string(), *n);
+                    let k = (id.to_string(), *n);
                     match dest.constructors.get(&k) {
                         Some(v) if v.len() < full.len() => (),
                         _ => {
@@ -222,10 +223,10 @@ impl RawBranch {
                         }
                     };
                 }
-                types::Referent::Ref(types::Reference::DerivedId(types::Id(hash, _, _))) => {
+                types::Referent::Ref(types::Reference::DerivedId(id)) => {
                     let mut full = path.clone();
                     full.push(v.text.clone());
-                    let k = hash.to_string();
+                    let k = id.to_string();
                     match dest.terms.get(&k) {
                         Some(v) if v.len() < full.len() => (),
                         _ => {
@@ -238,11 +239,11 @@ impl RawBranch {
         }
         for (k, v) in self.types.d1.iter() {
             match k {
-                types::Reference::DerivedId(types::Id(hash, _, _)) => {
+                types::Reference::DerivedId(id) => {
                     let mut full = path.clone();
                     full.push(v.text.clone());
 
-                    let k = hash.to_string();
+                    let k = id.to_string();
                     match dest.types.get(&k) {
                         Some(v) if v.len() < full.len() => (),
                         _ => {
@@ -360,15 +361,15 @@ impl Codebase {
             .cloned()
             .collect::<Vec<Hash>>()
         {
-            self.load(&v.0)?;
+            self.load(&v.to_string())?;
             if deep {
-                self.load_children(&v.0, deep)?;
+                self.load_children(&v.to_string(), deep)?;
             }
         }
         Ok(())
     }
 
-    pub fn get_names(&mut self) -> crate::pack::Names<Hash> {
+    pub fn get_names(&mut self) -> crate::pack::Names<Id> {
         let mut dest = Default::default();
         self.collect_names(&self.head.clone(), &vec![], &mut dest);
         dest
@@ -385,7 +386,7 @@ impl Codebase {
         for (k, v) in &item.children {
             let mut full = path.clone();
             full.push(k.text.clone());
-            self.collect_some_types(&v.0, &full, names);
+            self.collect_some_types(&v.to_string(), &full, names);
         }
     }
 
@@ -393,14 +394,14 @@ impl Codebase {
         &self,
         of: &str,
         path: &Vec<String>,
-        names: &mut std::collections::HashMap<Hash, Vec<Vec<String>>>,
+        names: &mut std::collections::HashMap<Id, Vec<Vec<String>>>,
     ) {
         let item = self.branches.get(of).unwrap();
         item.collect_types(path, names);
         for (k, v) in &item.children {
             let mut full = path.clone();
             full.push(k.text.clone());
-            self.collect_types(&v.0, &full, names);
+            self.collect_types(&v.to_string(), &full, names);
         }
     }
 
@@ -408,14 +409,14 @@ impl Codebase {
         &mut self,
         of: &str,
         path: &Vec<String>,
-        dest: &mut crate::pack::Names<Hash>,
+        dest: &mut crate::pack::Names<Id>,
     ) {
         let item = self.load(of).unwrap();
         item.collect_names(path, dest);
         for (k, v) in &item.children.clone() {
             let mut full = path.clone();
             full.push(k.text.clone());
-            self.collect_names(&v.0, &full, dest);
+            self.collect_names(&v.to_string(), &full, dest);
         }
     }
 
@@ -423,7 +424,7 @@ impl Codebase {
         &self,
         of: &str,
         path: &Vec<String>,
-        dest: &mut std::collections::HashMap<Vec<String>, types::Hash>,
+        dest: &mut std::collections::HashMap<Vec<String>, types::Id>,
     ) {
         let item = self.branches.get(of).unwrap();
         item.collect_terms(path, dest);
@@ -432,7 +433,7 @@ impl Codebase {
         for (k, v) in children {
             let mut full = path.clone();
             full.push(k.text.clone());
-            self.collect_terms(&v.0, &full, dest);
+            self.collect_terms(&v.to_string(), &full, dest);
         }
     }
 
@@ -454,16 +455,16 @@ impl Codebase {
         if path.len() == 1 {
             Ok(child)
         } else {
-            return self.find_ns_inner(&child.0, &path[1..]);
+            return self.find_ns_inner(&child.to_string(), &path[1..]);
         }
     }
 
-    pub fn find_term(&mut self, path: &[&str]) -> std::io::Result<Hash> {
+    pub fn find_term(&mut self, path: &[&str]) -> std::io::Result<Id> {
         // TODO refactor to just use find_ns_inner
         self.find_term_inner(&self.head.clone(), path)
     }
 
-    fn find_term_inner(&mut self, of: &str, path: &[&str]) -> std::io::Result<Hash> {
+    fn find_term_inner(&mut self, of: &str, path: &[&str]) -> std::io::Result<Id> {
         let seg = NameSegment {
             text: path[0].to_owned(),
         };
@@ -474,7 +475,7 @@ impl Codebase {
                     println!("{:?} : {:?}", k, v);
                     return Ok(match k.reference() {
                         Reference::Builtin(_) => unreachable!(),
-                        Reference::DerivedId(Id(hash, _, _)) => hash.clone(),
+                        Reference::DerivedId(id) => id.clone(),
                     });
                 }
             }
@@ -486,7 +487,7 @@ impl Codebase {
                 .get(&seg)
                 .ok_or(std::io::Error::from(std::io::ErrorKind::NotFound))?
                 .clone();
-            return self.find_term_inner(&child.0, &path[1..]);
+            return self.find_term_inner(&child.to_string(), &path[1..]);
         }
     }
 }
@@ -552,7 +553,7 @@ impl Branch {
     pub fn collect_types(
         &self,
         path: &Vec<String>,
-        names: &mut std::collections::HashMap<types::Hash, Vec<Vec<String>>>,
+        names: &mut std::collections::HashMap<types::Id, Vec<Vec<String>>>,
     ) {
         self.raw.collect_types(path, names);
         for (k, v) in &self.children {
@@ -565,8 +566,8 @@ impl Branch {
     pub fn collect_terms_and_constructors(
         &self,
         path: &Vec<String>,
-        dest: &mut std::collections::HashMap<types::Hash, Vec<Vec<String>>>,
-        constructors: &mut std::collections::HashMap<types::Hash, HashMap<usize, Vec<Vec<String>>>>,
+        dest: &mut std::collections::HashMap<types::Id, Vec<Vec<String>>>,
+        constructors: &mut std::collections::HashMap<types::Id, HashMap<usize, Vec<Vec<String>>>>,
     ) {
         self.raw
             .collect_terms_and_constructors(path, dest, constructors);
@@ -590,11 +591,7 @@ impl Branch {
         &mut self,
         paths_root: &std::path::PathBuf,
         path: &[&str],
-    ) -> std::io::Result<Hash> {
-        // let mut parts: Vec<&str> = path.split(".").collect();
-        // if parts[0] == "." {
-        //     parts.remove(0);
-        // }
+    ) -> std::io::Result<Id> {
         let seg = NameSegment {
             text: path[0].to_owned(),
         };
@@ -603,7 +600,7 @@ impl Branch {
                 if v.text == path[0] {
                     return Ok(match k.reference() {
                         Reference::Builtin(_) => unreachable!(),
-                        Reference::DerivedId(Id(hash, _, _)) => hash.clone(),
+                        Reference::DerivedId(id) => id.clone(),
                     });
                 }
             }
@@ -621,16 +618,16 @@ impl Branch {
     pub fn collect_terms(
         &self,
         path: &Vec<String>,
-        dest: &mut std::collections::HashMap<Vec<String>, types::Hash>,
+        dest: &mut std::collections::HashMap<Vec<String>, types::Id>,
     ) {
         let mut children: Vec<(&Referent, &NameSegment)> = self.raw.terms.d1.iter().collect();
         children.sort();
         for (k, v) in children {
             match k {
-                types::Referent::Ref(types::Reference::DerivedId(types::Id(hash, _, _))) => {
+                types::Referent::Ref(types::Reference::DerivedId(id)) => {
                     let mut full = path.clone();
                     full.push(v.text.clone());
-                    dest.insert(full, hash.clone());
+                    dest.insert(full, id.clone());
                 }
                 _ => (),
             }

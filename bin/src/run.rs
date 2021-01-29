@@ -70,7 +70,7 @@ pub fn run_cli_term(term: &String, args: &[String]) -> std::io::Result<()> {
         ir_env.load(&hash).unwrap();
         hash
     } else {
-        let hash = types::Hash::from_string(term);
+        let hash = types::Id::from_string(term);
         ir_env.load(&hash).unwrap();
         hash
     };
@@ -150,7 +150,7 @@ pub fn run_term(
     println!("Running {:?} - {}", terms_path, hash);
     let env = env::Env::init(terms_path.parent().unwrap());
     let mut ir_env = ir::TranslationEnv::new(env);
-    ir_env.load(&types::Hash::from_string(hash)).unwrap();
+    ir_env.load(&types::Id::from_string(hash)).unwrap();
     use crate::printer::ToPretty;
 
     {
@@ -270,11 +270,9 @@ pub fn run_test(root: &str) -> std::io::Result<()> {
                 Value::Sequence(results) => {
                     for result in results {
                         match &**result {
-                            Value::PartialConstructor(
-                                Reference::DerivedId(Id(chash, _, _)),
-                                num,
-                                contents,
-                            ) if chash.to_string().starts_with("vmc06s") => {
+                            Value::PartialConstructor(Reference::DerivedId(cid), num, contents)
+                                if cid.to_string().starts_with("vmc06s") =>
+                            {
                                 if *num == 0 {
                                     // failed!
                                     println!(

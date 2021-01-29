@@ -4,6 +4,17 @@ use serde_derive::{Deserialize, Serialize};
 use shared::types::*;
 use std::collections::HashMap;
 
+fn escape_char(c: &char) -> String {
+    let res = format!("{}", c.escape_default());
+    if res.starts_with("\\u{") {
+        format!("#\\U+{}", &res[3..res.len() - 1])
+    } else if res.starts_with("\\") {
+        format!("#{}", res)
+    } else {
+        format!("#\\{}", res)
+    }
+}
+
 // fn filter_free_vbls(
 //     free: &Vec<(Symbol, usize, usize, bool)>,
 //     names: &Vec<(Symbol, usize)>,
@@ -256,9 +267,9 @@ fn unroll_cycle(
 
 pub struct TranslationEnv {
     pub env: env::Env,
-    pub terms: HashMap<Hash, (Chicken, ABT<Type>, std::collections::HashSet<Hash>)>,
-    pub types: HashMap<Hash, TypeDecl>,
-    pub anon_fns: Vec<(Hash, Chicken)>, // I think?
+    pub terms: HashMap<Id, (Chicken, ABT<Type>, std::collections::HashSet<Id>)>,
+    pub types: HashMap<Id, TypeDecl>,
+    pub anon_fns: Vec<(Id, Chicken)>, // I think?
 }
 
 use std::collections::HashSet;
@@ -273,43 +284,43 @@ impl TranslationEnv {
         }
     }
 
-    pub fn to_string(&self, hash: &Hash) -> String {
+    pub fn to_string(&self, id: &Id) -> String {
         let mut res = String::from("(define ");
-        res.push_str(&hash.to_string());
+        res.push_str(&id.to_string());
         res.push_str("\n  ");
-        let (term, _typ, _) = self.terms.get(hash).unwrap();
+        let (term, _typ, _) = self.terms.get(id).unwrap();
         res.push_str(&term.pretty_string(2, 100).0);
         res.push_str(")");
         return res;
     }
 
-    pub fn get_type(&mut self, hash: &Hash) -> TypeDecl {
-        match self.types.get(hash) {
+    pub fn get_type(&mut self, id: &Id) -> TypeDecl {
+        match self.types.get(id) {
             Some(v) => v.clone(),
             None => {
-                let res = self.env.load_type(&hash.to_string());
-                self.types.insert(hash.clone(), res.clone());
+                let res = self.env.load_type(&id.to_string());
+                self.types.insert(id.clone(), res.clone());
                 res
             }
         }
     }
 
-    pub fn load(&mut self, hash: &Hash) -> Result<HashSet<Hash>> {
-        if self.terms.contains_key(hash) {
-            let (_, _, used_hashes) = self.terms.get(hash).unwrap();
+    pub fn load(&mut self, id: &Id) -> Result<HashSet<Id>> {
+        if self.terms.contains_key(id) {
+            let (_, _, used_hashes) = self.terms.get(id).unwrap();
             // Already loaded
             return Ok(used_hashes.clone());
         }
         // let mut cmds = ChickenEnv::new(hash.clone());
         self.terms.insert(
-            hash.to_owned(),
+            id.to_owned(),
             (
                 Chicken::Atom("not-yet-evaluated".to_owned()),
                 ABT::Tm(Type::Ref(Reference::Builtin("nvm".to_owned()))),
                 std::collections::HashSet::new(),
             ),
         );
-        let (term, typ) = self.env.load(&hash.to_string())?;
+        let (term, typ) = self.env.load(&id.to_string())?;
         let (res, used_hashes) = {
             let mut loader = Loader {
                 used_hashes: std::collections::HashSet::new(),
@@ -321,9 +332,9 @@ impl TranslationEnv {
         match res {
             Ok(ch) => self
                 .terms
-                .insert(hash.to_owned(), (ch, typ, used_hashes.clone())),
+                .insert(id.to_owned(), (ch, typ, used_hashes.clone())),
             Err(env::Error::NotImplemented(text)) => self.terms.insert(
-                hash.to_owned(),
+                id.to_owned(),
                 (Chicken::Atom(text), typ, used_hashes.clone()),
             ),
             Err(err) => {
@@ -334,7 +345,7 @@ impl TranslationEnv {
         Ok(used_hashes)
     }
 
-    // pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> Result<usize> {
+    // pub fn add_fn(&mut self, hash: Id, contents: &ABT<Term>) -> Result<usize> {
     //     // let mut sub = ChickenEnv::new(hash.clone());
     //     let ch = contents.to_chicken(self)?;
     //     // resolve_marks(&mut sub.cmds);
@@ -351,20 +362,20 @@ impl TranslationEnv {
 }
 
 struct Loader<'a> {
-    used_hashes: std::collections::HashSet<Hash>,
+    used_hashes: std::collections::HashSet<Id>,
     translation_env: &'a mut TranslationEnv,
 }
 
 impl<'a> HashLoader for Loader<'a> {
-    fn add(&mut self, hash: &Hash) {
+    fn add(&mut self, hash: &Id) {
         self.used_hashes.insert(hash.clone());
     }
-    fn load(&mut self, hash: &Hash) -> Result<()> {
+    fn load(&mut self, hash: &Id) -> Result<()> {
         self.add(hash);
         self.translation_env.load(hash)?;
         return Ok(());
     }
-    fn get_type(&mut self, hash: &Hash) -> TypeDecl {
+    fn get_type(&mut self, hash: &Id) -> TypeDecl {
         self.add(hash);
         return self.translation_env.get_type(hash);
     }
@@ -412,15 +423,15 @@ fn pattern_to_chicken<T: HashLoader>(
         Int(b) => ifeq(term, atom(&format!("{}", b)), body),
         Float(b) => ifeq(term, atom(&format!("{}", b)), body),
         Text(b) => ifeq(term, atom(&format!("{:?}", b)), body),
-        Char(b) => ifeq(term, atom(&format!("\"{}\"", b)), body),
-        Constructor(Reference::DerivedId(Id(hash, _, _)), num, innards) => {
-            env.add(hash);
+        Char(b) => ifeq(term, atom(&escape_char(b)), body),
+        Constructor(Reference::DerivedId(id), num, innards) => {
+            env.add(id);
             if innards.len() == 0 {
                 return Ok(list(vec![
                     atom("if"),
                     list(vec![
                         atom("equal?"),
-                        atom(&format!("'{}_{}", hash.to_string(), num)),
+                        atom(&format!("'{}_{}", id.to_string(), num)),
                         term,
                     ]),
                     body,
@@ -453,7 +464,7 @@ fn pattern_to_chicken<T: HashLoader>(
                         list(vec![atom("list?"), tmp.clone()]),
                         list(vec![
                             atom("equal?"),
-                            atom(&format!("'{}_{}", hash.to_string(), num)),
+                            atom(&format!("'{}_{}", id.to_string(), num)),
                             list(vec![atom("list-ref"), tmp.clone(), atom("0")]),
                         ]),
                         list(vec![
@@ -536,8 +547,8 @@ fn pattern_to_chicken<T: HashLoader>(
             ])
         }
 
-        EffectBind(Reference::DerivedId(Id(hash, _, _)), num, args, kont) => {
-            env.add(hash);
+        EffectBind(Reference::DerivedId(id), num, args, kont) => {
+            env.add(id);
             body = pattern_to_chicken(
                 env,
                 kont,
@@ -579,7 +590,7 @@ fn pattern_to_chicken<T: HashLoader>(
                     list(vec![
                         atom("equal?"),
                         list(vec![atom("caddr"), term.clone()]),
-                        atom(&format!("'{}_{}", hash.to_string(), num)),
+                        atom(&format!("'{}_{}", id.to_string(), num)),
                     ]),
                 ]),
                 body,
@@ -661,13 +672,13 @@ fn pattern_to_chicken<T: HashLoader>(
 }
 
 pub trait HashLoader {
-    fn load(&mut self, hash: &Hash) -> Result<()>;
-    fn add(&mut self, hash: &Hash);
-    fn get_type(&mut self, hash: &Hash) -> TypeDecl;
+    fn load(&mut self, hash: &Id) -> Result<()>;
+    fn add(&mut self, hash: &Id);
+    fn get_type(&mut self, hash: &Id) -> TypeDecl;
 }
 
 // impl HashLoader for TranslationEnv {
-//     fn load(&mut self, hash: &Hash) -> Result<()> {
+//     fn load(&mut self, hash: &Id) -> Result<()> {
 //         self.load(hash)
 //     }
 // }
@@ -675,8 +686,8 @@ pub trait HashLoader {
 impl ToChicken for Term {
     fn to_chicken<T: HashLoader>(&self, env: &mut T) -> Result<Chicken> {
         match self {
-            Term::Request(Reference::DerivedId(Id(hash, _, _)), number) => {
-                let args_count = match env.get_type(&hash) {
+            Term::Request(Reference::DerivedId(id), number) => {
+                let args_count = match env.get_type(&id) {
                     TypeDecl::Effect(DataDecl { constructors, .. }) => {
                         calc_args(&constructors[*number].1)
                     }
@@ -684,13 +695,9 @@ impl ToChicken for Term {
                 };
 
                 if args_count == 0 {
-                    Ok(list(vec![atom(&format!(
-                        "{}_{}",
-                        hash.to_string(),
-                        number
-                    ))]))
+                    Ok(list(vec![atom(&format!("{}_{}", id.to_string(), number))]))
                 } else {
-                    Ok(atom(&format!("{}_{}", hash.to_string(), number)))
+                    Ok(atom(&format!("{}_{}", id.to_string(), number)))
                 }
             }
             Term::Handle(handler, expr) => {
@@ -702,9 +709,9 @@ impl ToChicken for Term {
                 // Err(env::Error::NotImplemented("handle".to_owned()))
             }
             Term::Ref(Reference::Builtin(name)) => Ok(Chicken::Atom(name.clone())),
-            Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                env.load(&hash)?;
-                Ok(Chicken::Atom(hash.to_string()))
+            Term::Ref(Reference::DerivedId(id)) => {
+                env.load(&id)?;
+                Ok(Chicken::Atom(id.to_string()))
             }
             Term::App(one, two) => Ok(list(vec![one.to_chicken(env)?, two.to_chicken(env)?])),
             Term::Int(num) => Ok(Chicken::Atom(num.to_string())),
@@ -712,7 +719,7 @@ impl ToChicken for Term {
             Term::Nat(num) => Ok(Chicken::Atom(num.to_string())),
             Term::Boolean(num) => Ok(Chicken::Atom(num.to_string())),
             Term::Text(num) => Ok(Chicken::Atom(format!("{:?}", num))),
-            Term::Char(num) => Ok(Chicken::Atom(format!("\"{}\"", num))),
+            Term::Char(num) => Ok(Chicken::Atom(escape_char(num))),
             Term::If(cond, yes, no) => Ok(list(vec![
                 Chicken::Atom("if".to_owned()),
                 cond.to_chicken(env)?,
@@ -734,9 +741,9 @@ impl ToChicken for Term {
             Term::Constructor(Reference::Builtin(name), num) => {
                 Ok(Chicken::Atom(format!("{}_{}", name, num)))
             }
-            Term::Constructor(Reference::DerivedId(Id(hash, _, _)), num) => {
-                env.get_type(hash);
-                Ok(Chicken::Atom(format!("{}_{}", hash.to_string(), num)))
+            Term::Constructor(Reference::DerivedId(id), num) => {
+                env.get_type(id);
+                Ok(Chicken::Atom(format!("{}_{}", id.to_string(), num)))
             }
             Term::Sequence(items) => {
                 let mut res = vec![];
@@ -835,15 +842,13 @@ impl ToChicken for Term {
             }
             Term::Ann(inner, _) => inner.to_chicken(env),
             Term::Blank => unreachable!("blank found"),
-            Term::TermLink(Referent::Con(Reference::DerivedId(Id(hash, _, _)), num, _)) => {
-                Ok(list(vec![
-                    atom("term-link"),
-                    atom(&format!("'{}_{}", hash.to_string(), num)),
-                ]))
-            }
-            Term::TypeLink(Reference::DerivedId(Id(hash, _, _))) => Ok(list(vec![
+            Term::TermLink(Referent::Con(Reference::DerivedId(id), num, _)) => Ok(list(vec![
+                atom("term-link"),
+                atom(&format!("'{}_{}", id.to_string(), num)),
+            ])),
+            Term::TypeLink(Reference::DerivedId(id)) => Ok(list(vec![
                 atom("type-link"),
-                atom(&format!("'{}", hash.to_string())),
+                atom(&format!("'{}", id.to_string())),
             ])),
             _ => Ok(Chicken::Atom(format!(
                 "(not-implemented {:?})",
@@ -878,8 +883,8 @@ fn get_vbls(body: &ABT<Term>) -> (Vec<String>, &ABT<Term>) {
 //                 unreachable!();
 //             }
 //             Term::Ref(Reference::Builtin(_)) => cmds.push(Chicken::Value(self.clone().into())),
-//             Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-//                 env.load(&hash)?;
+//             Term::Ref(Reference::DerivedId(id)) => {
+//                 env.load(&id)?;
 //                 cmds.push(Chicken::Value(self.clone().into()))
 //             }
 //             Term::App(one, two) => {

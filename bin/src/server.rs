@@ -320,8 +320,8 @@ impl crate::visitor::Visitor for TypeHashCollector {
         use shared::types::Type::*;
         use shared::types::*;
         match typ {
-            Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                self.0.insert(hash.to_string());
+            Ref(Reference::DerivedId(id)) => {
+                self.0.insert(id.to_string());
             }
             _ => (),
         };
@@ -343,7 +343,7 @@ async fn serve_terms(
         codebase
             .find_ns(ns.split(".").collect::<Vec<&str>>().as_slice())
             .expect("Unable to find ns")
-            .0
+            .to_string()
     };
 
     let flat_names: crate::printer::FlatNames = codebase.get_names().into();
@@ -403,7 +403,7 @@ async fn serve_json(
 ) -> Result<impl warp::Reply, Infallible> {
     let mut codebase = codebase.write().await;
     codebase.set_head(hash).unwrap();
-    let hashes: Vec<shared::types::Hash> = terms
+    let hashes: Vec<shared::types::Id> = terms
         .split(",")
         .map(|term| crate::pack::find_term(&mut codebase, &term))
         .collect();
@@ -422,7 +422,7 @@ async fn serve_bin(
 ) -> Result<impl warp::Reply, Infallible> {
     let mut codebase = codebase.write().await;
     codebase.set_head(hash).unwrap();
-    let hashes: Vec<shared::types::Hash> = terms
+    let hashes: Vec<shared::types::Id> = terms
         .split(",")
         .map(|term| crate::pack::find_term(&mut codebase, &term))
         .collect();

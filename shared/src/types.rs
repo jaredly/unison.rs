@@ -79,9 +79,9 @@ pub enum Reference {
 }
 
 impl Reference {
-    pub fn hash(&self) -> Option<&Hash> {
+    pub fn hash(&self) -> Option<&Id> {
         match self {
-            Reference::DerivedId(Id(hash, _, _)) => Some(hash),
+            Reference::DerivedId(id) => Some(id),
             _ => None,
         }
     }
@@ -91,43 +91,8 @@ impl std::fmt::Debug for Reference {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Reference::Builtin(name) => f.write_str(name),
-            Reference::DerivedId(id) => f.write_str(&format!("{:?}", id.0)),
+            Reference::DerivedId(id) => f.write_str(&format!("{:?}", id)),
         }
-    }
-}
-
-impl Into<String> for Hash {
-    fn into(self) -> String {
-        self.to_string()
-    }
-}
-
-impl From<String> for Hash {
-    fn from(other: String) -> Self {
-        Hash::from_string(&other)
-    }
-}
-
-impl From<&String> for Hash {
-    fn from(other: &String) -> Self {
-        Hash::from_string(other)
-    }
-}
-
-impl std::fmt::Debug for Hash {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        if self.0.len() <= 10 {
-            f.write_str(&self.0)
-        } else {
-            f.write_str("#")?;
-            f.write_str(&self.to_string()[0..10])
-        }
-    }
-}
-
-impl Reference {
-    pub fn from_hash(hash: &str) -> Self {
-        Reference::DerivedId(Id(Hash::from_string(hash), 0, 1))
     }
 }
 
@@ -135,6 +100,63 @@ impl Reference {
     Serialize,
     Deserialize,
     Clone,
+    std::cmp::Eq,
+    std::cmp::PartialEq,
+    std::hash::Hash,
+    PartialOrd,
+    Ord,
+)]
+pub struct Id {
+    pub hash: Hash,
+    // TODO make a constructor, and make these private
+    pub pos: usize,
+    pub size: usize,
+}
+
+// impl Into<String> for Hash {
+//     fn into(self) -> String {
+//         self.to_string()
+//     }
+// }
+
+// impl From<String> for Hash {
+//     fn from(other: String) -> Self {
+//         Hash::from_string(&other)
+//     }
+// }
+
+// impl From<&String> for Hash {
+//     fn from(other: &String) -> Self {
+//         Hash::from_string(other)
+//     }
+// }
+
+impl std::fmt::Debug for Id {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        if self.hash.0.len() <= 10 {
+            f.write_str(&self.hash.0)
+        } else {
+            f.write_str("#")?;
+            f.write_str(&self.hash.0[0..10])?;
+            if self.size > 1 {
+                f.write_fmt(format_args!(".{}c{}", self.pos, self.size))?;
+            }
+            Ok(())
+        }
+    }
+}
+
+impl Reference {
+    pub fn from_hash(hash: &str) -> Self {
+        Reference::DerivedId(Id::from_string(hash))
+    }
+}
+
+#[derive(
+    Serialize,
+    Deserialize,
+    Clone,
+    Debug,
     std::cmp::Eq,
     std::cmp::PartialEq,
     std::hash::Hash,
@@ -149,14 +171,46 @@ impl ToString for Hash {
     }
 }
 
+impl ToString for Id {
+    fn to_string(&self) -> String {
+        if self.size > 1 {
+            format!("{}.{}c{}", self.hash.0, self.pos, self.size)
+        } else {
+            self.hash.0.clone()
+        }
+    }
+}
+
 impl Hash {
+    // TODO remove
+    #[deprecated]
     pub fn from_string(hash: &str) -> Self {
+        return Hash(hash.into());
+    }
+}
+
+impl Id {
+    pub fn from_string(hash: &str) -> Self {
+        let parts: Vec<&str> = hash.split(".").collect();
+        if parts.len() == 2 {
+            let pos: Vec<&str> = parts[1].split("c").collect();
+            return Id {
+                hash: Hash(parts[0].to_owned()),
+                pos: pos[0].parse().unwrap(),
+                size: pos[1].parse().unwrap(),
+            };
+        }
         // if hash == "<eval>" {
         //     return Hash(vec![]);
         // }
         // let data = base32hex::decode(hash);
         // Hash(data)
-        Hash(hash.to_owned())
+        // Hash(hash.to_owned())
+        Id {
+            hash: Hash(hash.into()),
+            pos: 0,
+            size: 1,
+        }
     }
     // pub fn to_string(&self) -> String {
     //     // if self.0.len() == 0 {
@@ -168,19 +222,6 @@ impl Hash {
     //     self.0.clone()
     // }
 }
-
-#[derive(
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    std::cmp::Eq,
-    std::cmp::PartialEq,
-    std::hash::Hash,
-    PartialOrd,
-    Ord,
-)]
-pub struct Id(pub Hash, pub usize, pub usize);
 
 #[derive(
     Serialize,
@@ -260,7 +301,7 @@ pub enum Type {
 impl Type {
     pub fn ref_name(&self) -> Option<String> {
         match self {
-            Type::Ref(Reference::DerivedId(Id(hash, _, _))) => Some(hash.to_string()),
+            Type::Ref(Reference::DerivedId(id)) => Some(id.to_string()),
             Type::Ann(inner, _) => inner.as_tm().and_then(|m| m.ref_name()),
             Type::App(inner, _) => inner.as_tm().and_then(|m| m.ref_name()),
             _ => None,
@@ -357,15 +398,9 @@ impl Type {
             Forall(inner) => inner.is_primitive(),
             IntroOuter(inner) => inner.is_primitive(),
             Ref(Reference::Builtin(_)) => true,
-            Ref(Reference::DerivedId(Id(hash, _, _))) if hash.0 == crate::convert::OPTION_HASH => {
-                true
-            }
-            Ref(Reference::DerivedId(Id(hash, _, _))) if hash.0 == crate::convert::UNIT_HASH => {
-                true
-            }
-            Ref(Reference::DerivedId(Id(hash, _, _))) if hash.0 == crate::convert::TUPLE_HASH => {
-                true
-            }
+            Ref(Reference::DerivedId(id)) if id.hash.0 == crate::convert::OPTION_HASH => true,
+            Ref(Reference::DerivedId(id)) if id.hash.0 == crate::convert::UNIT_HASH => true,
+            Ref(Reference::DerivedId(id)) if id.hash.0 == crate::convert::TUPLE_HASH => true,
             _ => false,
         }
     }
@@ -467,12 +502,11 @@ pub enum Value {
 }
 
 impl Value {
+    // STOPSHIP: this should take suffixes (1c3) into account?
     pub fn is_constr(&self, hash_str: &str) -> bool {
         match self {
-            Value::Constructor(Reference::DerivedId(Id(hash, _, _)), ..) => hash.0 == hash_str,
-            Value::PartialConstructor(Reference::DerivedId(Id(hash, _, _)), ..) => {
-                hash.0 == hash_str
-            }
+            Value::Constructor(Reference::DerivedId(id), ..) => id.hash.0 == hash_str,
+            Value::PartialConstructor(Reference::DerivedId(id), ..) => id.hash.0 == hash_str,
             _ => false,
         }
     }
@@ -749,9 +783,9 @@ pub enum IR {
 
 #[derive(Serialize, Deserialize)]
 pub struct RuntimeEnv {
-    pub terms: HashMap<Hash, (Vec<IR>, ABT<Type>)>,
-    pub types: HashMap<Hash, TypeDecl>,
-    pub anon_fns: Vec<(Hash, Vec<IR>)>, // I think?
+    pub terms: HashMap<Id, (Vec<IR>, ABT<Type>)>,
+    pub types: HashMap<Id, TypeDecl>,
+    pub anon_fns: Vec<(Id, Vec<IR>)>, // I think?
 }
 
 impl RuntimeEnv {

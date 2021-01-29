@@ -84,9 +84,9 @@ fn unroll_cycle(
 
 pub struct TranslationEnv {
     pub env: env::Env,
-    pub terms: HashMap<Hash, (Vec<IR>, ABT<Type>)>,
-    types: HashMap<Hash, TypeDecl>,
-    pub anon_fns: Vec<(Hash, Vec<IR>)>, // I think?
+    pub terms: HashMap<Id, (Vec<IR>, ABT<Type>)>,
+    types: HashMap<Id, TypeDecl>,
+    pub anon_fns: Vec<(Id, Vec<IR>)>, // I think?
 }
 
 impl Into<RuntimeEnv> for TranslationEnv {
@@ -109,7 +109,7 @@ impl TranslationEnv {
         }
     }
 
-    pub fn get_type(&mut self, hash: &Hash) -> TypeDecl {
+    pub fn get_type(&mut self, hash: &Id) -> TypeDecl {
         match self.types.get(hash) {
             Some(v) => v.clone(),
             None => {
@@ -120,7 +120,7 @@ impl TranslationEnv {
         }
     }
 
-    pub fn load(&mut self, hash: &Hash) -> Result<()> {
+    pub fn load(&mut self, hash: &Id) -> Result<()> {
         if self.terms.contains_key(hash) {
             // Already loaded
             return Ok(());
@@ -141,7 +141,7 @@ impl TranslationEnv {
         self.terms.insert(hash.to_owned(), (cmds.cmds, typ));
         Ok(())
     }
-    pub fn add_fn(&mut self, hash: Hash, contents: &ABT<Term>) -> Result<usize> {
+    pub fn add_fn(&mut self, hash: Id, contents: &ABT<Term>) -> Result<usize> {
         let mut sub = IREnv::new(hash.clone());
         contents.to_ir(&mut sub, self)?;
 
@@ -195,13 +195,13 @@ fn resolve_marks(cmds: &mut Vec<IR>) {
 }
 
 pub struct IREnv {
-    pub term: Hash,
+    pub term: Id,
     pub cmds: Vec<IR>,
     pub counter: usize,
 }
 
 impl IREnv {
-    pub fn new(term: Hash) -> Self {
+    pub fn new(term: Id) -> Self {
         IREnv {
             term,
             cmds: vec![],
@@ -253,8 +253,8 @@ impl ToIR for Term {
                 cmds.push(IR::Mark(done_mk));
             }
             Term::Ref(Reference::Builtin(_)) => cmds.push(IR::Value(self.clone().into())),
-            Term::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                env.load(&hash)?;
+            Term::Ref(Reference::DerivedId(id)) => {
+                env.load(&id)?;
                 cmds.push(IR::Value(self.clone().into()))
             }
             Term::App(one, two) => {
@@ -359,7 +359,7 @@ impl ToIR for Term {
                 unimplemented!("Builtin Effect! I dont know the arity: {}", name);
             }
             Term::Request(Reference::DerivedId(id), number) => {
-                let t = env.get_type(&id.0);
+                let t = env.get_type(id);
                 match t {
                     TypeDecl::Effect(DataDecl { constructors, .. }) => {
                         let args = calc_args(&constructors[*number].1);

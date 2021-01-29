@@ -10,7 +10,7 @@ use std::sync::Arc;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Ret {
     FnCall(usize, Vec<(Symbol, usize, Arc<Value>)>, Arc<Value>),
-    Value(Hash),
+    Value(Id),
     Nothing,
     Request(Reference, usize, Vec<Arc<Value>>),
     ReRequest(Reference, usize, Vec<Arc<Value>>, usize, Vec<Frame>, usize),
@@ -50,9 +50,9 @@ impl IR {
                         *idx += 1;
                         return Ret::Request(a.clone(), *b, args.clone());
                     }
-                    Value::Ref(Reference::DerivedId(Id(hash, _, _))) => {
+                    Value::Ref(Reference::DerivedId(id)) => {
                         *idx += 1;
-                        return Ret::Value(hash.clone());
+                        return Ret::Value(id.clone());
                     }
                     _ => {
                         stack.push(Arc::new(term.clone()));

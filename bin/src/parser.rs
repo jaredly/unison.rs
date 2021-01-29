@@ -208,7 +208,11 @@ impl FromBuffer for Hash {
 
 impl FromBuffer for Id {
     fn get(buf: &mut Buffer) -> Self {
-        Id(buf.get(), buf.get(), buf.get())
+        Id {
+            hash: buf.get(),
+            pos: buf.get(),
+            size: buf.get(),
+        }
     }
 }
 
@@ -230,7 +234,7 @@ impl FromBuffer for Referent {
         match tag {
             0_u8 => Referent::Ref(buf.get()),
             1 => Referent::Con(buf.get(), buf.get(), buf.get()),
-            _ => unreachable!(),
+            tag => unreachable!("Unknown tag {}", tag),
         }
     }
 }

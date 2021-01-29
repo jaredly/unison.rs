@@ -82,7 +82,7 @@ pub fn build_effects_map(
 impl<'a> State<'a> {
     pub fn new_value(
         env: &'a RuntimeEnv,
-        hash: Hash,
+        hash: Id,
         trace: bool,
         effects: HashMap<String, ABT<Type>>,
     ) -> Self {
@@ -107,7 +107,7 @@ impl<'a> State<'a> {
         if !crate::check::validate(Default::default(), &typ, &value).is_ok() {
             return Err(InvalidLambda(fnid, value.clone()));
         }
-        let mut stack = Stack::new(Source::Fn(fnid, Hash::from_string("Lambda")), false);
+        let mut stack = Stack::new(Source::Fn(fnid, Id::from_string("Lambda")), false);
         stack.frames[0].bindings = bindings;
         stack.push(Arc::new(value));
         Ok(State {

@@ -22,11 +22,11 @@ impl<'a> visitor::Visitor for TypeWalker<'a> {
 
     fn visit_term(&mut self, term: &mut Term) -> bool {
         match term {
-            Term::Constructor(Reference::DerivedId(Id(hash, _, _)), _) => {
-                let hash = hash.to_string();
-                if !self.0.has_type(&hash) {
+            Term::Constructor(Reference::DerivedId(id), _) => {
+                let id = id.to_string();
+                if !self.0.has_type(&id) {
                     use visitor::Accept;
-                    self.0.load_type(&hash).accept(self);
+                    self.0.load_type(&id).accept(self);
                 }
             }
             _ => (),
@@ -36,11 +36,11 @@ impl<'a> visitor::Visitor for TypeWalker<'a> {
 
     fn visit_type(&mut self, typ: &mut Type) -> bool {
         match typ {
-            Type::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                let hash = hash.to_string();
-                if !self.0.has_type(&hash) {
+            Type::Ref(Reference::DerivedId(id)) => {
+                let id = id.to_string();
+                if !self.0.has_type(&id) {
                     use visitor::Accept;
-                    self.0.load_type(&hash).accept(self);
+                    self.0.load_type(&id).accept(self);
                 }
             }
             _ => (),
@@ -79,7 +79,7 @@ pub fn pack_all(terms_path: &std::path::Path, out: &str) -> std::io::Result<()> 
     let env = env::Env::init(root);
     let mut ir_env = ir::TranslationEnv::new(env);
 
-    let mut hashes: Vec<&Hash> = all_terms.values().collect();
+    let mut hashes: Vec<&Id> = all_terms.values().collect();
     hashes.sort();
     for hash in hashes {
         println!("Loading {:?}", hash);
@@ -113,7 +113,7 @@ pub struct Names<T: ToString> {
     pub types: HashMap<T, Vec<Vec<String>>>,
 }
 
-impl Default for Names<Hash> {
+impl Default for Names<Id> {
     fn default() -> Self {
         Names {
             terms: Default::default(),
@@ -142,7 +142,7 @@ impl<T: ToString> Names<T> {
     }
 }
 
-// fn branch_names(codebase: &Codebase) -> Names<Hash> {
+// fn branch_names(codebase: &Codebase) -> Names<Id> {
 //     let mut all_names = HashMap::new();
 //     let mut all_constr_names = HashMap::new();
 //     codebase.collect_terms_and_constructors(&vec![], &mut all_names, &mut all_constr_names);
@@ -155,7 +155,7 @@ impl<T: ToString> Names<T> {
 //     }
 // }
 
-pub fn env_names(names: &Names<Hash>, runtime_env: &RuntimeEnv) -> Names<String> {
+pub fn env_names(names: &Names<Id>, runtime_env: &RuntimeEnv) -> Names<String> {
     let mut term_names = HashMap::new();
     let mut constr_names = HashMap::new();
     for hash in runtime_env.terms.keys() {
@@ -181,10 +181,7 @@ pub fn env_names(names: &Names<Hash>, runtime_env: &RuntimeEnv) -> Names<String>
     }
 }
 
-pub fn terms_to_env(
-    root: &std::path::Path,
-    hashes: Vec<Hash>,
-) -> std::io::Result<types::RuntimeEnv> {
+pub fn terms_to_env(root: &std::path::Path, hashes: Vec<Id>) -> std::io::Result<types::RuntimeEnv> {
     let env = env::Env::init(&root);
     let mut ir_env = ir::TranslationEnv::new(env);
     for hash in hashes {
@@ -199,7 +196,7 @@ pub fn terms_to_env(
 pub fn term_to_env(root: &std::path::Path, hash: &str) -> std::io::Result<types::RuntimeEnv> {
     let env = env::Env::init(&root);
     let mut ir_env = ir::TranslationEnv::new(env);
-    ir_env.load(&types::Hash::from_string(hash)).unwrap();
+    ir_env.load(&types::Id::from_string(hash)).unwrap();
 
     walk_env(&mut ir_env.env);
 
@@ -210,7 +207,7 @@ pub fn term_to_env(root: &std::path::Path, hash: &str) -> std::io::Result<types:
 struct JsonEnv {
     terms: HashMap<String, (Vec<IR>, ABT<Type>)>,
     types: HashMap<String, TypeDecl>,
-    anon_fns: Vec<(Hash, Vec<IR>)>,
+    anon_fns: Vec<(Id, Vec<IR>)>,
 }
 impl JsonEnv {
     fn from_runtime(
@@ -287,21 +284,28 @@ pub fn pack_term(codebase: &mut Codebase, hash: &str, out: &str) -> std::io::Res
     Ok(())
 }
 
+// ok, so real talk solution would be:
+// I mean if I still wanted a near total ordering...
+
 fn topo_visit(
-    key: &Hash,
-    deps: &mut HashMap<Hash, HashSet<Hash>>,
-    res: &mut Vec<Hash>,
-    visiting: &mut HashSet<Hash>,
+    key: &Id,
+    deps: &mut HashMap<Id, HashSet<Id>>,
+    res: &mut Vec<Id>,
+    visiting: &mut HashSet<Id>,
 ) {
     if !deps.contains_key(key) {
         return;
     }
+    // oof. hm ok.
+    // should I limit this to things that need to be immediately available?
+    // that way I can guarantee no loops.
     if visiting.contains(key) {
-        unreachable!("Loop");
+        // unreachable!("Loop");
+        return; // it's fine
     }
     visiting.insert(key.clone());
     let v = deps.get(key).unwrap().clone();
-    let mut v = v.iter().collect::<Vec<&Hash>>();
+    let mut v = v.iter().collect::<Vec<&Id>>();
     v.sort();
     for k in v {
         if k == key {
@@ -314,12 +318,12 @@ fn topo_visit(
     res.insert(0, key.clone());
 }
 
-fn topo_sort(mut deps: HashMap<Hash, HashSet<Hash>>) -> Vec<Hash> {
+fn topo_sort(mut deps: HashMap<Id, HashSet<Id>>) -> Vec<Id> {
     let mut visiting = HashSet::new();
     let mut res = vec![];
     loop {
         let key = {
-            let mut keys = deps.keys().cloned().collect::<Vec<Hash>>();
+            let mut keys = deps.keys().cloned().collect::<Vec<Id>>();
             keys.sort();
             match keys.get(0) {
                 None => break,
@@ -340,8 +344,8 @@ fn topo_sort(mut deps: HashMap<Hash, HashSet<Hash>>) -> Vec<Hash> {
 
 fn pack_chicken_env(
     mut chicken_env: crate::chicken::TranslationEnv,
-    all_types: HashMap<Hash, Vec<Vec<String>>>,
-    all_terms: HashMap<Vec<String>, Hash>,
+    all_types: HashMap<Id, Vec<Vec<String>>>,
+    all_terms: HashMap<Vec<String>, Id>,
 ) -> std::io::Result<String> {
     let mut output = vec!["(load \"stdlib.scm\")\n".to_owned()];
 
@@ -370,7 +374,7 @@ fn pack_chicken_env(
         // deps.insert(hash.clone(), HashSet::new());
     }
 
-    let mut names_for_terms: HashMap<Hash, Vec<Vec<String>>> = HashMap::new();
+    let mut names_for_terms: HashMap<Id, Vec<Vec<String>>> = HashMap::new();
     for (k, v) in all_terms.iter() {
         let mut current = names_for_terms.get(v).cloned().unwrap_or_default();
         current.push(k.to_owned());
@@ -410,9 +414,9 @@ fn pack_chicken_env(
                 Some(ABT::Tm(Type::App(one, two))) => match (&*one, &*two) {
                     (
                         ABT::Tm(Type::Ref(Reference::Builtin(b))),
-                        ABT::Tm(Type::Ref(Reference::DerivedId(Id(thash, _, _))))
+                        ABT::Tm(Type::Ref(Reference::DerivedId(tid)))
                     ) if b == "Sequence" &&
-                    thash.0 == "vmc06s4f236sps61vqv35g7ridnae03uetth98aocort1825stbv7m6ncfca2j0gcane47c8db2rjtd2o6kch2lr7v2gst895pcs0m0" => {
+                    &tid.to_string() == "vmc06s4f236sps61vqv35g7ridnae03uetth98aocort1825stbv7m6ncfca2j0gcane47c8db2rjtd2o6kch2lr7v2gst895pcs0m0" => {
                         output.push(format!(
                             "(check-results {} {:?})",
                             hash.to_string(),
@@ -483,7 +487,7 @@ fn pack_all_chicken_inner(
             codebase
                 .find_ns(ns.split(".").collect::<Vec<&str>>().as_slice())
                 .expect("Namespace not found in codebase.")
-                .0
+                .to_string()
         };
 
         codebase.collect_terms(&ns, &vec![], &mut all_terms);
@@ -495,7 +499,7 @@ fn pack_all_chicken_inner(
     let mut chicken_env = TranslationEnv::new(env);
     // let mut ir_env = ir::TranslationEnv::new(env);
 
-    let hashes: Vec<&Hash> = all_terms.values().collect();
+    let hashes: Vec<&Id> = all_terms.values().collect();
     for hash in &hashes {
         match chicken_env.load(*hash) {
             Err(env::Error::TermNotFound(term)) => println!(
@@ -533,7 +537,7 @@ fn pack_all_json_inner(
             codebase
                 .find_ns(ns.split(".").collect::<Vec<&str>>().as_slice())
                 .unwrap()
-                .0
+                .to_string()
         };
 
         codebase.collect_terms(&ns, &vec![], &mut all_terms);
@@ -618,14 +622,14 @@ pub fn default_root() -> std::path::PathBuf {
     project
 }
 
-pub fn find_term(codebase: &mut Codebase, term: &str) -> Hash {
+pub fn find_term(codebase: &mut Codebase, term: &str) -> Id {
     let term = if &term[0..1] == "." { &term[1..] } else { term };
     // if &term[0..1] == "." {
     codebase
         .find_term(term.split(".").collect::<Vec<&str>>().as_slice())
         .unwrap()
     // } else {
-    //     types::Hash::from_string(term)
+    //     types::Id::from_string(term)
     // }
 }
 
@@ -640,7 +644,7 @@ pub fn pack_json(file: &String, outfile: &String) -> std::io::Result<()> {
         let root = default_root();
         let mut codebase = load_main_branch(root.as_path())?;
         let hash = find_term(&mut codebase, file);
-        pack_term_json(codebase, root.as_path(), &hash.0, outfile)?;
+        pack_term_json(codebase, root.as_path(), &hash.to_string(), outfile)?;
     }
 
     return Ok(());
@@ -658,14 +662,14 @@ pub fn pack(file: &String, outfile: &String) -> std::io::Result<()> {
         let root = default_root();
         let mut codebase = load_main_branch(root.as_path())?;
         let hash = find_term(&mut codebase, file);
-        pack_term(&mut codebase, &hash.0, outfile)
+        pack_term(&mut codebase, &hash.to_string(), outfile)
     }
 }
 
 pub fn pack_watch(term: &String, outfile: &String) -> std::io::Result<()> {
     watch(move |codebase| {
         let hash = find_term(codebase, term);
-        pack_term(codebase, &hash.0, outfile)
+        pack_term(codebase, &hash.to_string(), outfile)
     })
 }
 

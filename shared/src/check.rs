@@ -25,18 +25,18 @@ pub fn validate(
                 ("Char", Value::Char(_)) => Ok(()),
                 _ => Err(vec![format!("Expected {}, found {:?}", name, val)]),
             },
-            Type::Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                if hash.0 == UNIT_HASH {
+            Type::Ref(Reference::DerivedId(id)) => {
+                if id.hash.0 == UNIT_HASH {
                     match val {
-                        Value::Constructor(Reference::DerivedId(Id(hi, _, _)), 0)
-                            if hi.0 == UNIT_HASH =>
+                        Value::Constructor(Reference::DerivedId(id), 0)
+                            if id.hash.0 == UNIT_HASH =>
                         {
                             Ok(())
                         }
                         _ => Err(vec!["Expected a unit".to_owned()]),
                     }
                 } else {
-                    unimplemented!("Can't do custom types yet: {:?}", hash)
+                    unimplemented!("Can't do custom types yet: {:?}", id)
                 }
             }
             Type::Ann(inner, _) => validate(bindings, inner, val),
@@ -48,7 +48,7 @@ pub fn validate(
                 _ => unimplemented!("Sorry, arrow not yet supported"), // ugh, I don't have enough type information right here
             },
             Type::App(inner, v) => match &**inner {
-                Tm(Type::Ref(Reference::DerivedId(Id(hash, _, _)))) if hash.0 == FFI_HASH => {
+                Tm(Type::Ref(Reference::DerivedId(id))) if id.hash.0 == FFI_HASH => {
                     // this is my custom FFI type -- this is allowed without introspection...
                     Ok(())
                 }

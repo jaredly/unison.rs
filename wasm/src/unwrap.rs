@@ -7,17 +7,17 @@ const TUPLE_HASH: &'static str = "onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laok
 pub fn unwrap_tuple(value: &Value) -> Vec<&Value> {
     use Value::*;
     match value {
-        PartialConstructor(Reference::DerivedId(Id(hash, _, _)), 0, args) => {
-            if hash.0 == TUPLE_HASH {
+        PartialConstructor(Reference::DerivedId(id), 0, args) => {
+            if id.hash.0 == TUPLE_HASH {
                 let mut res = unwrap_tuple(&args[1]);
                 res.insert(0, &args[0]);
                 return res;
-            } else if hash.0 == UNIT_HASH {
+            } else if id.hash.0 == UNIT_HASH {
                 return vec![];
             }
         }
-        Constructor(Reference::DerivedId(Id(hash, _, _)), 0) => {
-            if hash.0 == UNIT_HASH {
+        Constructor(Reference::DerivedId(id), 0) => {
+            if id.hash.0 == UNIT_HASH {
                 return vec![];
             }
         }

@@ -22,17 +22,17 @@ const TUPLE_HASH: &'static str = "onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laok
 pub fn unwrap_tuple(value: &Value) -> Vec<&Value> {
     use Value::*;
     match value {
-        PartialConstructor(Reference::DerivedId(Id(hash, _, _)), 0, args) => {
-            if hash.0 == TUPLE_HASH {
+        PartialConstructor(Reference::DerivedId(id), 0, args) => {
+            if id.hash.0 == TUPLE_HASH {
                 let mut res = unwrap_tuple(&args[1]);
                 res.insert(0, &args[0]);
                 return res;
-            } else if hash.0 == UNIT_HASH {
+            } else if id.hash.0 == UNIT_HASH {
                 return vec![];
             }
         }
-        Constructor(Reference::DerivedId(Id(hash, _, _)), 0) => {
-            if hash.0 == UNIT_HASH {
+        Constructor(Reference::DerivedId(id), 0) => {
+            if id.hash.0 == UNIT_HASH {
                 return vec![];
             }
         }
@@ -65,8 +65,8 @@ fn value_to_doc(value: &Value, names: &FlatNames) -> pretty::RcDoc<'static, ()> 
                     .group(),
             )
             .append(RcDoc::text("]")),
-        PartialConstructor(Reference::DerivedId(Id(hash, _, _)), num, args) => {
-            if hash.0 == TUPLE_HASH {
+        PartialConstructor(Reference::DerivedId(id), num, args) => {
+            if id.hash.0 == TUPLE_HASH {
                 let mut items = unwrap_tuple(&args[1]);
                 items.insert(0, &args[0]);
                 RcDoc::text("(")
@@ -84,9 +84,9 @@ fn value_to_doc(value: &Value, names: &FlatNames) -> pretty::RcDoc<'static, ()> 
             } else {
                 let name = names
                     .constructors
-                    .get(&(hash.to_string(), *num))
+                    .get(&(id.to_string(), *num))
                     .map(|v| v.join("."))
-                    .unwrap_or(hash.0.clone());
+                    .unwrap_or(id.to_string());
                 RcDoc::text(name)
                     .append(RcDoc::text("("))
                     .append(
@@ -100,15 +100,15 @@ fn value_to_doc(value: &Value, names: &FlatNames) -> pretty::RcDoc<'static, ()> 
                     .append(RcDoc::text(")"))
             }
         }
-        Constructor(Reference::DerivedId(Id(hash, _, _)), num) => {
-            if hash.0 == UNIT_HASH {
+        Constructor(Reference::DerivedId(id), num) => {
+            if id.hash.0 == UNIT_HASH {
                 return RcDoc::text("()");
             }
             let name = names
                 .constructors
-                .get(&(hash.to_string(), *num))
+                .get(&(id.to_string(), *num))
                 .map(|v| v.join("."))
-                .unwrap_or(hash.0.clone());
+                .unwrap_or(id.to_string());
             RcDoc::text(name)
         }
         Boolean(i) => RcDoc::as_string(i),
@@ -225,14 +225,14 @@ impl ToDoc for Reference {
         use Reference::*;
         match self {
             Builtin(name) => RcDoc::text(name),
-            DerivedId(Id(hash, _, _)) => RcDoc::text(
+            DerivedId(id) => RcDoc::text(
                 // Try both terms and types, there won't be a collision, so it's fine
                 names
                     .terms
-                    .get(&hash.0)
-                    .or_else(|| names.types.get(&hash.0))
+                    .get(&id.to_string())
+                    .or_else(|| names.types.get(&id.to_string()))
                     .map(|name| name.join("."))
-                    .unwrap_or(format!("{:?}", hash)),
+                    .unwrap_or(format!("{:?}", id)),
             ),
         }
     }
@@ -293,12 +293,12 @@ impl ToDoc for Term {
             Blank => RcDoc::text("<blank>"),
             // PartialNativeApp(name, _) => f.write_fmt(format_args!("partial({})", name)),
             Ref(r) => r.to_doc(names),
-            Constructor(Reference::DerivedId(Id(hash, _, _)), n) => RcDoc::text(
+            Constructor(Reference::DerivedId(id), n) => RcDoc::text(
                 names
                     .constructors
-                    .get(&(hash.0.clone(), *n))
+                    .get(&(id.to_string(), *n))
                     .map(|n| n.join("."))
-                    .unwrap_or(format!("{:?}#{}", hash, n)),
+                    .unwrap_or(format!("{:?}#{}", id, n)),
             ),
             // I don't think this will ever happen?
             Constructor(r, _) => r.to_doc(names),

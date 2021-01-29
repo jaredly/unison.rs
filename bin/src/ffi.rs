@@ -4,9 +4,9 @@ use shared::types::*;
 
 fn unit() -> Value {
     Value::Constructor(
-    Reference::DerivedId(Id(Hash::from_string(
+    Reference::DerivedId(Id::from_string(
         "568rsi7o3ghq8mmbea2sf8msdk20ohasob5s2rvjtqg2lr0vs39l1hm98urrjemsr3vo3fa52pibqu0maluq7g8sfg3h5f5re6vitj8"
-    ), 0, 1)), 0)
+    )), 0)
 }
 
 pub struct RustFFI(pub crate::printer::FlatNames, pub Vec<FullRequest>);
@@ -22,7 +22,7 @@ impl RustFFI {
     ) -> Result<(), InvalidFFI> {
         let FullRequest(kind, number, args, frames, final_index, _t) = self.1.remove(0);
         match &kind {
-            Reference::DerivedId(Id(hash, _, _)) => match (&hash.to_string()[0..10], number) {
+            Reference::DerivedId(id) => match (&id.to_string()[0..10], number) {
                 ("onasci86q4", 0) => {
                     State::full_resume(
                         env,
@@ -66,8 +66,8 @@ impl shared::ffi::FFI for RustFFI {
     ) -> Option<Value> {
         // println!("Asking for a request {:?} : {} : {:?}", kind, number, args);
         match kind {
-            Reference::DerivedId(Id(hash, _, _)) => {
-                match &hash.to_string()[0..10] {
+            Reference::DerivedId(id) => {
+                match &id.to_string()[0..10] {
                     "ed72l2mrh0" => {
                         // currentTimeStampMs
                         if number == 0 {
@@ -111,7 +111,7 @@ impl shared::ffi::FFI for RustFFI {
 
     fn handles(&self, kind: &Reference) -> bool {
         match kind {
-            Reference::DerivedId(Id(hash, _, _)) => match &hash.to_string()[0..10] {
+            Reference::DerivedId(id) => match &id.to_string()[0..10] {
                 "onasci86q4" => true,
                 "ed72l2mrh0" => true,
                 "s81fshin91" => true,

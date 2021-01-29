@@ -23,12 +23,12 @@ pub fn to_json_type(typ: ABT<Type>) -> serde_json::Value {
                 ("arg".into(), to_json_type(*two)),
             ])),
             Ref(Reference::Builtin(text)) => String(text.to_owned()),
-            Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                if hash.0 == OPTION_HASH {
+            Ref(Reference::DerivedId(id)) => {
+                if id.hash.0 == OPTION_HASH {
                     String("Option".to_owned())
-                } else if hash.0 == UNIT_HASH {
+                } else if id.hash.0 == UNIT_HASH {
                     Null
-                } else if hash.0 == TUPLE_HASH {
+                } else if id.hash.0 == TUPLE_HASH {
                     String("Tuple".to_owned())
                 } else {
                     String("UNKNOWN_CUSTOM".to_owned())
@@ -105,8 +105,8 @@ where
                 },
                 _ => Err(format!("Unsupported builtin {}", name)),
             },
-            Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                let hash_raw = hash.to_string();
+            Ref(Reference::DerivedId(id)) => {
+                let hash_raw = id.to_string();
                 if hash_raw == UNIT_HASH {
                     if arg.is_empty() {
                         Ok(crate::unit())
@@ -118,7 +118,7 @@ where
                         [targ] => {
                             if arg.is_empty() {
                                 Ok(Value::PartialConstructor(
-                                    Reference::DerivedId(Id(hash.clone(), 0, 0)),
+                                    Reference::DerivedId(id.clone()),
                                     0,
                                     im::Vector::new(),
                                 ))
@@ -129,7 +129,7 @@ where
                         _ => Err(format!("Option type can only have one argument")),
                     }
                 } else {
-                    Err(format!("Custom types not yet supported: {:?}", hash))
+                    Err(format!("Custom types not yet supported: {:?}", id))
                 }
             }
         },

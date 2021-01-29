@@ -65,23 +65,23 @@ impl Env {
                 base.push("#".to_owned() + hash);
                 // full.push("compiled.ub");
                 info!("Trying to load term {:?}", base);
-                let mut f = concat(base.clone(), "compiled.ub".into());
-                let mut file = f.as_path();
+                let f = concat(base.clone(), "compiled.ub".into());
+                let file = f.as_path();
                 if !file.exists() {
                     // yay wonky hack
                     // full = self.root.clone();
                     // full.push("terms");
                     // full.push("compiled.ub");
-                    base.pop();
-                    base.push(format!("#{}.0c3", hash));
+                    // base.pop();
+                    // base.push(format!("#{}.0c3", hash));
 
-                    f = concat(base.clone(), "compiled.ub".into());
-                    file = f.as_path();
-                    if !file.exists() {
-                        println!("Didnt work also {:?}", file);
-                        // unreachable!("Nope");
-                        return Err(Error::TermNotFound(hash.to_owned()));
-                    }
+                    // f = concat(base.clone(), "compiled.ub".into());
+                    // file = f.as_path();
+                    // if !file.exists() {
+                    //     println!("Didnt work also {:?}", file);
+                    // unreachable!("Nope");
+                    return Err(Error::TermNotFound(hash.to_owned()));
+                    // }
                 }
                 let type_file = {
                     // let mut full = self.root.clone();

@@ -1,5 +1,6 @@
 (import (chicken bitwise))
 (import (chicken condition))
+(require-extension utf8)
 
 (define true #t)
 (define false #f)

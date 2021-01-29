@@ -51,12 +51,12 @@ impl shared::ffi::FFI for FFI {
         args: &Vec<Arc<Value>>,
     ) -> Option<Value> {
         match kind {
-            Reference::DerivedId(Id(hash, _, _)) => {
+            Reference::DerivedId(id) => {
                 let js_args = js_sys::Array::new();
                 for arg in args {
                     js_args.push(&crate::unwrap::unwrap(&arg));
                 }
-                self.0.get(&(hash.to_string(), number, true)).map(|f| {
+                self.0.get(&(id.to_string(), number, true)).map(|f| {
                     let result = f
                         .apply(&JsValue::UNDEFINED, &js_args)
                         .expect("JS Function failed with an error");
@@ -81,10 +81,10 @@ impl shared::ffi::FFI for FFI {
 
     fn handles(&self, kind: &Reference) -> bool {
         match kind {
-            Reference::DerivedId(Id(hash, _, _)) => {
+            Reference::DerivedId(id) => {
                 // TODO: need to iterate through all constructors
-                self.0.contains_key(&(hash.to_string(), 0, false))
-                    || self.0.contains_key(&(hash.to_string(), 0, true))
+                self.0.contains_key(&(id.to_string(), 0, false))
+                    || self.0.contains_key(&(id.to_string(), 0, true))
             }
             _ => false,
         }
@@ -94,7 +94,7 @@ impl shared::ffi::FFI for FFI {
     fn handle_request(&mut self, request: FullRequest) {
         let FullRequest(kind, number, args, frames, final_index, t) = request;
         match &kind {
-            Reference::DerivedId(Id(hash, _, _)) => {
+            Reference::DerivedId(id) => {
                 let js_args = js_sys::Array::new();
                 for arg in args {
                     js_args.push(&crate::unwrap::unwrap(&arg));
@@ -102,11 +102,11 @@ impl shared::ffi::FFI for FFI {
                 js_args.push(
                     &JsValue::from_serde(&(kind.clone(), number, frames, final_index)).unwrap(),
                 );
-                match self.0.get(&(hash.to_string(), number, false)) {
+                match self.0.get(&(id.to_string(), number, false)) {
                     Some(f) => {
                         f.apply(&JsValue::UNDEFINED, &js_args).unwrap();
                     }
-                    None => unreachable!("No handler provided for {:?} # {}", hash, number),
+                    None => unreachable!("No handler provided for {:?} # {}", id, number),
                 }
             }
             _ => unreachable!(),
@@ -236,7 +236,7 @@ pub fn run_sync(
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    let hash = shared::types::Hash::from_string(term);
+    let hash = shared::types::Id::from_string(term);
     let t = &env.terms.get(&hash).unwrap().1;
     let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
     for effect in effects.iter() {
@@ -283,7 +283,7 @@ pub fn info(env_id: usize, term: &str) -> Result<JsValue, JsValue> {
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    let (_, typ) = env.terms.get(&Hash::from_string(term)).unwrap();
+    let (_, typ) = env.terms.get(&Id::from_string(term)).unwrap();
     let (args, effects, result) = typ.args_and_effects();
     let js_res = js_sys::Array::new();
     for arg in args {
@@ -297,7 +297,7 @@ pub fn effects(env_id: usize, term: &str) -> Result<JsValue, JsValue> {
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    let (_, typ) = env.terms.get(&Hash::from_string(term)).unwrap();
+    let (_, typ) = env.terms.get(&Id::from_string(term)).unwrap();
     let (_args, effects, _result) = typ.args_and_effects();
     let js_res = js_sys::Array::new();
     for effect in effects {
@@ -334,12 +334,12 @@ fn to_js_type(typ: ABT<Type>) -> JsValue {
                 ("arg".into(), to_js_type(*two)),
             ]),
             Ref(Reference::Builtin(text)) => JsValue::from(text),
-            Ref(Reference::DerivedId(Id(hash, _, _))) => {
-                if hash.0 == shared::convert::OPTION_HASH {
+            Ref(Reference::DerivedId(id)) => {
+                if id.hash.0 == shared::convert::OPTION_HASH {
                     JsValue::from("Option")
-                } else if hash.0 == shared::convert::UNIT_HASH {
+                } else if id.hash.0 == shared::convert::UNIT_HASH {
                     JsValue::NULL
-                } else if hash.0 == shared::convert::TUPLE_HASH {
+                } else if id.hash.0 == shared::convert::TUPLE_HASH {
                     JsValue::from("Tuple")
                 } else {
                     JsValue::from("UNKNOWN_CUSTOM")
@@ -366,8 +366,8 @@ pub fn run(
     let mut l = ENV.lock().unwrap();
     let env: &mut shared::types::RuntimeEnv = l.map.get_mut(&env_id).unwrap();
 
-    let hash = shared::types::Hash::from_string(term);
-    let t = &env.terms.get(&hash).unwrap().1;
+    let id = shared::types::Id::from_string(term);
+    let t = &env.terms.get(&id).unwrap().1;
     // TODO validate that all effects are handled!
     let (targs, effects, _tres) = shared::ir_runtime::extract_args(t);
     for effect in effects.iter() {
