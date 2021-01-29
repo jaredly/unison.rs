@@ -360,17 +360,38 @@ fn pack_all_chicken_inner(
 
     let mut output = vec!["(load \"stdlib.scm\")\n".to_owned()];
 
-    let mut hashes: Vec<&Hash> = all_terms.values().collect();
-    hashes.sort();
+    let hashes: Vec<&Hash> = all_terms.values().collect();
     let mut deps = HashMap::new();
     for hash in &hashes {
         deps.insert((*hash).to_owned(), chicken_env.load(*hash).unwrap());
         // let text = chicken_env.to_string(hash);
         // output.push(text);
     }
+
+    let mut names_for_terms: HashMap<Hash, Vec<Vec<String>>> = HashMap::new();
+    for (k, v) in all_terms.iter() {
+        let mut current = names_for_terms.get(v).cloned().unwrap_or_default();
+        current.push(k.to_owned());
+        names_for_terms.insert(v.clone(), current);
+    }
+
     let sorted = topo_sort(deps);
     for hash in &sorted {
-        output.push(chicken_env.to_string(hash))
+        output.push(chicken_env.to_string(hash));
+        let names = names_for_terms.get(hash);
+        match names {
+            None => (),
+            Some(names) => {
+                let first = &names[0];
+                if first[first.len() - 1].starts_with("t_") {
+                    output.push(format!(
+                        "(check {} '{})",
+                        hash.to_string(),
+                        hash.to_string()
+                    ))
+                }
+            }
+        }
     }
 
     output.push(format!(

@@ -4,14 +4,21 @@
 (define true #t)
 (define false #f)
 
+(define (check v name)
+    (if (not v)
+    (begin
+        (print "Test failed! " name)
+        (print "Got " v)
+        (abort "Test failure")
+        )
+    (print "✅ passed #" (substring (symbol->string name) 0 10))
+        )
+    )
 
-; (define (Universal.== a) (lambda (b) (equal? a b)))
-(define (Text.!= a) (lambda (b) (not (equal? a b))))
 
 (define (f2c22r2a1sche28mn07brk1j45kp1bam3tr4k2j0un2hi1g7rbrud3f5mes2defqo1tpd9j38pqpg2f0efl3no0ede5ocl2am4bonm0 a)
     (lambda (b) (not (equal? a b)))
 )
-
 
 ; Cons/Nil
 
@@ -81,6 +88,7 @@
     (lambda (b) (expt a b)))
 
 
+(define (Text.!= a) (lambda (b) (not (equal? a b))))
 (define (Float.* a) (lambda (b) (* a b)))
 (define (Float./ a) (lambda (b) (/ a b)))
 (define (Float.- a) (lambda (b) (- a b)))
