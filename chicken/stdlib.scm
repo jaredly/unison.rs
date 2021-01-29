@@ -285,20 +285,3 @@
         )
     )))
 )
-
-
-; --- shimming ability definitions ---
-
-(define (csb691v7tp98lrjb9k3tfjme750l7n1f8gmnphq4d0132skvpi2gapbht08oup4nsmlalgkqgs89okfgg5h1q21t0bf71tkeifmfii0_0 vbl)
-    (call/cc (lambda (k) (throw-effect k (list 'csb691v7tp98lrjb9k3tfjme750l7n1f8gmnphq4d0132skvpi2gapbht08oup4nsmlalgkqgs89okfgg5h1q21t0bf71tkeifmfii0_0 vbl)))))
-
-
-
-(define (jbvl6groqo3gsiodptlckggapgclh37o4b0a2ia8v7j82v0589jfu5e6k220tcng8ds136lt7r33mlnbhjuau8ujcq0laci2pu22cr0_0)
-    (call/cc (lambda (k) (throw-effect k (list 'jbvl6groqo3gsiodptlckggapgclh37o4b0a2ia8v7j82v0589jfu5e6k220tcng8ds136lt7r33mlnbhjuau8ujcq0laci2pu22cr0_0)))))
-
-(define (1r0gt3snct0dbe4g4e42b3s6jsknadma01j28nrnm598783gnlpap9s9vd522re7iomr2qurmrpf135gis17db0lebolfslpol7p6dg_0 one)
-    (lambda (two)
-        (call/cc (lambda (k) (throw-effect k (list '1r0gt3snct0dbe4g4e42b3s6jsknadma01j28nrnm598783gnlpap9s9vd522re7iomr2qurmrpf135gis17db0lebolfslpol7p6dg_0 one two))))
-        ))
-(define getTwo 1r0gt3snct0dbe4g4e42b3s6jsknadma01j28nrnm598783gnlpap9s9vd522re7iomr2qurmrpf135gis17db0lebolfslpol7p6dg_0)

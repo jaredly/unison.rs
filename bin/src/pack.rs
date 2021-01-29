@@ -364,8 +364,20 @@ fn pack_all_chicken_inner(
     let mut deps = HashMap::new();
     for hash in &hashes {
         deps.insert((*hash).to_owned(), chicken_env.load(*hash).unwrap());
-        // let text = chicken_env.to_string(hash);
-        // output.push(text);
+    }
+
+    // the types folks
+    for (hash, decl) in chicken_env.types.iter() {
+        match decl {
+            TypeDecl::Effect(DataDecl { constructors, .. }) => {
+                for (i, (_, t)) in constructors.iter().enumerate() {
+                    let name = format!("{}_{}", hash.to_string(), i);
+                    output.push(super::chicken::ability_to_chicken(&name, t).to_string());
+                }
+            }
+            _ => (),
+        }
+        // deps.insert(hash.clone(), HashSet::new());
     }
 
     let mut names_for_terms: HashMap<Hash, Vec<Vec<String>>> = HashMap::new();
@@ -378,6 +390,7 @@ fn pack_all_chicken_inner(
     let sorted = topo_sort(deps);
     for hash in &sorted {
         output.push(chicken_env.to_string(hash));
+        // Add a `(check)` call if it's a `t_` term
         let names = names_for_terms.get(hash);
         match names {
             None => (),

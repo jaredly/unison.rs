@@ -38,7 +38,7 @@ pub enum Chicken {
 }
 
 impl Chicken {
-    fn to_string(&self) -> String {
+    pub fn to_string(&self) -> String {
         use Chicken::*;
         match self {
             Atom(atom) => atom.clone(),
@@ -151,7 +151,7 @@ fn unroll_cycle(
 pub struct TranslationEnv {
     pub env: env::Env,
     pub terms: HashMap<Hash, (Chicken, ABT<Type>, std::collections::HashSet<Hash>)>,
-    types: HashMap<Hash, TypeDecl>,
+    pub types: HashMap<Hash, TypeDecl>,
     pub anon_fns: Vec<(Hash, Chicken)>, // I think?
 }
 
@@ -874,6 +874,38 @@ fn get_vbls(body: &ABT<Term>) -> (Vec<String>, &ABT<Term>) {
 //         Ok(())
 //     }
 // }
+
+pub fn ability_to_chicken(name: &str, t: &ABT<Type>) -> Chicken {
+    let args = calc_args(t);
+    let mut vbls = vec![];
+    for i in 0..args {
+        vbls.push(atom(&format!("arg_{}", i)));
+    }
+    let mut body = list(vec![
+        atom("call/cc"),
+        list(vec![
+            atom("lambda"),
+            list(vec![atom("k")]),
+            list(vec![
+                atom("throw-effect"),
+                atom("k"),
+                list(
+                    vec![atom("list"), atom(&format!("'{}", name))]
+                        .into_iter()
+                        .chain(vbls.iter().cloned())
+                        .collect(),
+                ),
+            ]),
+        ]),
+    ]);
+    for vbl in vbls.iter().rev() {
+        body = list(vec![atom("lambda"), list(vec![vbl.clone()]), body]);
+    }
+    if args == 0 {
+        body = list(vec![atom("lambda"), list(vec![]), body]);
+    }
+    return list(vec![atom("define"), atom(name), body]);
+}
 
 fn calc_args(t: &ABT<Type>) -> usize {
     match t {
