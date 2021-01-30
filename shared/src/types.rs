@@ -78,11 +78,26 @@ pub enum Reference {
     DerivedId(Id),
 }
 
+impl Referent {
+    pub fn to_atom(&self) -> String {
+        match self {
+            Referent::Ref(r) => r.to_atom(),
+            Referent::Con(r, num, _) => format!("{}_{}", r.to_atom(), num),
+        }
+    }
+}
+
 impl Reference {
     pub fn hash(&self) -> Option<&Id> {
         match self {
             Reference::DerivedId(id) => Some(id),
             _ => None,
+        }
+    }
+    pub fn to_atom(&self) -> String {
+        match self {
+            Reference::DerivedId(id) => id.to_string(),
+            Reference::Builtin(name) => name.clone(),
         }
     }
 }

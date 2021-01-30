@@ -267,12 +267,12 @@ fn unroll_cycle(
 
 pub struct TranslationEnv {
     pub env: env::Env,
-    pub terms: HashMap<Id, (Chicken, ABT<Type>, std::collections::HashSet<Id>)>,
+    pub terms: HashMap<Id, (Chicken, ABT<Type>, std::collections::HashMap<Id, bool>)>,
     pub types: HashMap<Id, TypeDecl>,
     pub anon_fns: Vec<(Id, Chicken)>, // I think?
 }
 
-use std::collections::HashSet;
+// use std::collections::HashSet;
 
 impl TranslationEnv {
     pub fn new(env: env::Env) -> Self {
@@ -305,7 +305,7 @@ impl TranslationEnv {
         }
     }
 
-    pub fn load(&mut self, id: &Id) -> Result<HashSet<Id>> {
+    pub fn load(&mut self, id: &Id) -> Result<HashMap<Id, bool>> {
         if self.terms.contains_key(id) {
             let (_, _, used_hashes) = self.terms.get(id).unwrap();
             // Already loaded
@@ -317,13 +317,14 @@ impl TranslationEnv {
             (
                 Chicken::Atom("not-yet-evaluated".to_owned()),
                 ABT::Tm(Type::Ref(Reference::Builtin("nvm".to_owned()))),
-                std::collections::HashSet::new(),
+                std::collections::HashMap::new(),
             ),
         );
         let (term, typ) = self.env.load(&id.to_string())?;
         let (res, used_hashes) = {
             let mut loader = Loader {
-                used_hashes: std::collections::HashSet::new(),
+                stops: 0,
+                used_hashes: std::collections::HashMap::new(),
                 translation_env: self,
             };
             let res = term.to_chicken(&mut loader);
@@ -362,13 +363,15 @@ impl TranslationEnv {
 }
 
 struct Loader<'a> {
-    used_hashes: std::collections::HashSet<Id>,
+    // false = "indirect access (behind a lambda)"
+    used_hashes: std::collections::HashMap<Id, bool>,
     translation_env: &'a mut TranslationEnv,
+    stops: usize,
 }
 
 impl<'a> HashLoader for Loader<'a> {
     fn add(&mut self, hash: &Id) {
-        self.used_hashes.insert(hash.clone());
+        self.used_hashes.insert(hash.clone(), self.stops == 0);
     }
     fn load(&mut self, hash: &Id) -> Result<()> {
         self.add(hash);
@@ -378,6 +381,12 @@ impl<'a> HashLoader for Loader<'a> {
     fn get_type(&mut self, hash: &Id) -> TypeDecl {
         self.add(hash);
         return self.translation_env.get_type(hash);
+    }
+    fn stop_tracking(&mut self) {
+        self.stops += 1;
+    }
+    fn resume_tracking(&mut self) {
+        self.stops -= 1;
     }
 }
 
@@ -675,11 +684,24 @@ pub trait HashLoader {
     fn load(&mut self, hash: &Id) -> Result<()>;
     fn add(&mut self, hash: &Id);
     fn get_type(&mut self, hash: &Id) -> TypeDecl;
+    fn stop_tracking(&mut self);
+    fn resume_tracking(&mut self);
+    // fn notrack<T: HashLoader>(&mut self) -> &mut T;
 }
 
 // impl HashLoader for TranslationEnv {
+//     fn notrack(&mut self) -> &mut TranslationEnv {
+//         return self;
+//     }
+//     fn add(&mut self, _hash: &Id) {
+//         // ignored
+//     }
 //     fn load(&mut self, hash: &Id) -> Result<()> {
-//         self.load(hash)
+//         let _ = self.load(hash);
+//         Ok(())
+//     }
+//     fn get_type(&mut self, hash: &Id) -> TypeDecl {
+//         self.get_type(hash)
 //     }
 // }
 
@@ -701,9 +723,12 @@ impl ToChicken for Term {
                 }
             }
             Term::Handle(handler, expr) => {
+                env.stop_tracking();
+                let ex = expr.to_chicken(env);
+                env.resume_tracking();
                 Ok(list(vec![
                     atom("handle-ability"),
-                    list(vec![atom("lambda"), atom("()"), expr.to_chicken(env)?]),
+                    list(vec![atom("lambda"), atom("()"), ex?]),
                     handler.to_chicken(env)?,
                 ]))
                 // Err(env::Error::NotImplemented("handle".to_owned()))
@@ -777,14 +802,17 @@ impl ToChicken for Term {
                 _ => unimplemented!(),
             },
             Term::Lam(contents, _) => {
-                match &**contents {
+                env.stop_tracking();
+                let res = match &**contents {
                     ABT::Abs(name, _, body) => Ok(list(vec![
                         atom("lambda"),
                         list(vec![atom(&name.to_atom())]),
                         body.to_chicken(env)?,
                     ])),
                     _ => unimplemented!(),
-                }
+                };
+                env.resume_tracking();
+                return res;
                 // Ok(atom("lambda I think"))
             }
             Term::Match(value, cases) => {
@@ -842,13 +870,13 @@ impl ToChicken for Term {
             }
             Term::Ann(inner, _) => inner.to_chicken(env),
             Term::Blank => unreachable!("blank found"),
-            Term::TermLink(Referent::Con(Reference::DerivedId(id), num, _)) => Ok(list(vec![
+            Term::TermLink(referent) => Ok(list(vec![
                 atom("term-link"),
-                atom(&format!("'{}_{}", id.to_string(), num)),
+                atom(&format!("'{}", referent.to_atom())),
             ])),
-            Term::TypeLink(Reference::DerivedId(id)) => Ok(list(vec![
+            Term::TypeLink(reference) => Ok(list(vec![
                 atom("type-link"),
-                atom(&format!("'{}", id.to_string())),
+                atom(&format!("'{}", reference.to_atom())),
             ])),
             _ => Ok(Chicken::Atom(format!(
                 "(not-implemented {:?})",

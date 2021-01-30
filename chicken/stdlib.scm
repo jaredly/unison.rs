@@ -5,8 +5,8 @@
 (define true #t)
 (define false #f)
 
-(define term-link 'term-link)
-(define type-link 'type-link)
+(define (term-link v) (list 'term-link v))
+(define (type-link v) (list 'type-link v))
 
 (define (print-processing name)
     ;; Uncomment this line to debug terms that are failing to process
@@ -137,7 +137,7 @@
 
 (define (Text.!= a) (lambda (b) (not (equal? a b))))
 (define (Float.* a) (lambda (b) (* a b)))
-(define (Float./ a) (lambda (b) (/ a b)))
+(define (Float./ a) (lambda (b) (/ a (exact->inexact b))))
 (define (Float.- a) (lambda (b) (- a b)))
 (define (Float.+ a) (lambda (b) (+ a b)))
 (define Boolean.not not)

@@ -288,10 +288,10 @@ pub fn pack_term(codebase: &mut Codebase, hash: &str, out: &str) -> std::io::Res
 // I mean if I still wanted a near total ordering...
 
 fn topo_visit(
-    key: &Id,
-    deps: &mut HashMap<Id, HashSet<Id>>,
-    res: &mut Vec<Id>,
-    visiting: &mut HashSet<Id>,
+    key: &Hash,
+    deps: &mut HashMap<Hash, HashSet<Hash>>,
+    res: &mut Vec<Hash>,
+    visiting: &mut HashSet<Hash>,
 ) {
     if !deps.contains_key(key) {
         return;
@@ -305,7 +305,7 @@ fn topo_visit(
     }
     visiting.insert(key.clone());
     let v = deps.get(key).unwrap().clone();
-    let mut v = v.iter().collect::<Vec<&Id>>();
+    let mut v = v.iter().collect::<Vec<&Hash>>();
     v.sort();
     for k in v {
         if k == key {
@@ -318,12 +318,12 @@ fn topo_visit(
     res.insert(0, key.clone());
 }
 
-fn topo_sort(mut deps: HashMap<Id, HashSet<Id>>) -> Vec<Id> {
+fn topo_sort(mut deps: HashMap<Hash, HashSet<Hash>>) -> Vec<Hash> {
     let mut visiting = HashSet::new();
     let mut res = vec![];
     loop {
         let key = {
-            let mut keys = deps.keys().cloned().collect::<Vec<Id>>();
+            let mut keys = deps.keys().cloned().collect::<Vec<Hash>>();
             keys.sort();
             match keys.get(0) {
                 None => break,
@@ -334,6 +334,48 @@ fn topo_sort(mut deps: HashMap<Id, HashSet<Id>>) -> Vec<Id> {
         // let v = deps.get(key).unwrap();
     }
     res.reverse();
+    return res;
+}
+
+fn sort_circular(ids: &mut Vec<Id>, deps: &HashMap<Id, HashMap<Id, bool>>) {
+    ids.sort_by(
+        |a, b| match (deps.get(a).unwrap().get(b), deps.get(b).unwrap().get(a)) {
+            (Some(true), Some(true)) => unreachable!("Immediate loop, should not be possible"),
+            (_, Some(true)) => std::cmp::Ordering::Less,
+            (Some(true), _) => std::cmp::Ordering::Greater,
+            (_, _) => std::cmp::Ordering::Equal,
+        },
+    )
+}
+
+fn topo_sort_ids(deps: HashMap<Id, HashMap<Id, bool>>) -> Vec<Id> {
+    let mut hash_deps = HashMap::new();
+    let mut hash_to_ids = HashMap::new();
+    for (k, v) in &deps {
+        if !hash_deps.contains_key(&k.hash) {
+            hash_deps.insert(k.hash.clone(), HashSet::new());
+            hash_to_ids.insert(k.hash.clone(), vec![]);
+        }
+        hash_to_ids.get_mut(&k.hash).unwrap().push(k.clone());
+        hash_deps
+            .get_mut(&k.hash)
+            .unwrap()
+            .extend(v.iter().map(|h| h.0.hash.clone()));
+    }
+    let sorted_hashes = topo_sort(hash_deps);
+    let mut res = vec![];
+    for hash in &sorted_hashes {
+        match hash_to_ids.remove(hash) {
+            None => (),
+            Some(mut ids) => {
+                if ids.len() > 1 {
+                    sort_circular(&mut ids, &deps);
+                }
+                res.extend(ids.into_iter());
+            }
+        }
+    }
+    // STOPSHIP HERE
     return res;
 }
 
@@ -386,7 +428,7 @@ fn pack_chicken_env(
         deps.insert(k.to_owned(), kdeps.to_owned());
     }
 
-    let sorted = topo_sort(deps);
+    let sorted = topo_sort_ids(deps);
     for hash in &sorted {
         let typ = chicken_env.env.load(&hash.to_string()).map(|m| m.1).ok();
         let names = names_for_terms.get(hash);
@@ -499,8 +541,17 @@ fn pack_all_chicken_inner(
     let mut chicken_env = TranslationEnv::new(env);
     // let mut ir_env = ir::TranslationEnv::new(env);
 
+    let mut named_terms = HashSet::new();
+    for v in all_terms.values() {
+        named_terms.insert(v);
+    }
+
     let hashes: Vec<&Id> = all_terms.values().collect();
     for hash in &hashes {
+        // don't need it, thanks
+        if !named_terms.contains(hash) {
+            continue;
+        }
         match chicken_env.load(*hash) {
             Err(env::Error::TermNotFound(term)) => println!(
                 "Unable to pack {:?} - depended on missing term {:?}",
