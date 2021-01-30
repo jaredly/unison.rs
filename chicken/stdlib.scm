@@ -135,7 +135,6 @@
     (lambda (b) (expt a b)))
 
 
-(define (Text.!= a) (lambda (b) (not (equal? a b))))
 (define (Float.* a) (lambda (b) (* a b)))
 (define (Float./ a) (lambda (b) (/ a (exact->inexact b))))
 (define (Float.- a) (lambda (b) (- a b)))
@@ -270,6 +269,18 @@
 
 ; --- text stdlib ---
 
+(define (Text.uncons t)
+    (if (> (string-length t) 0)
+        (Some
+            (
+                (Cons (string-ref t 0))
+                ((Cons (substring t 1)) Nil)
+            )
+        )
+        None
+        )
+)
+(define (Text.!= a) (lambda (b) (not (equal? a b))))
 (define (Text.++ a) (lambda (b) (string-append a b)))
 (define Text.size string-length)
 (define (Text.take count) (lambda (str)
