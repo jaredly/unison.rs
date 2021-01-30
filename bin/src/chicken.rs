@@ -5,14 +5,18 @@ use shared::types::*;
 use std::collections::HashMap;
 
 fn escape_char(c: &char) -> String {
-    let res = format!("{}", c.escape_default());
-    if res.starts_with("\\u{") {
-        format!("#\\U+{}", &res[3..res.len() - 1])
-    } else if res.starts_with("\\") {
-        format!("#{}", res)
-    } else {
+    let mut res = format!("{}", c.escape_default());
+    if !res.starts_with("\\") {
         format!("#\\{}", res)
+    } else {
+        res = c.escape_unicode().to_string();
+        format!("#\\U+{}", &res[3..res.len() - 1])
     }
+    // if res.starts_with("\\u{") {
+    // } else if res.starts_with("\\") {
+    //     format!("#{}", res)
+    // } else {
+    // }
 }
 
 // fn filter_free_vbls(

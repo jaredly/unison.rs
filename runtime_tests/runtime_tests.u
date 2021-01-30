@@ -82,7 +82,6 @@ int.t_20 = Int.shiftLeft +3 5 == +96
 int.t_21 = Int.shiftRight +96 5 == +3
 int.t_22 = +4 * +3 == +12
 int.t_23 = Int.toText -3 == "-3"
-> int.t_23
 
 nat.t_01 = Nat.increment 3 == 4
 nat.t_02 = Nat.increment maxNat == 0
@@ -358,5 +357,6 @@ abilities.v_09 =
     one '(abilities.a_02.plus5 +3)
 abilities.t_09 = abilities.v_09 == +9
 
+-- ok, I need more abilities tests.
 
 > abilities.t_09

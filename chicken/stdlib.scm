@@ -10,13 +10,13 @@
 
 (define (print-processing name)
     ;; Uncomment this line to debug terms that are failing to process
-    (print "Evaluating " name)
+    ; (print "Evaluating " name)
     '())
 
 (define (check v name)
     (if (not v)
     (begin
-        (print "Test failed! " name)
+        (print "❌ Test failed! " name)
         (print "Got " v)
         ; (print "Test failure")
         )
@@ -36,7 +36,7 @@
         (lambda (result)
             (if (not (result-is-good result))
             (begin
-                (print "Test failed " name " " result)
+                (print "❌ Test failed " name " " result)
                 (abort "Test failed")
             )))
         (vector->list v)
@@ -115,18 +115,19 @@
     ))
 
 
-(define maxNat 18446744073709552000)
-(define minInt -18446744073709552000)
-(define maxInt 18446744073709552000)
+(define maxNat 18446744073709551615)
+(define maxInt +9223372036854775807)
 
 (define s9h25aadei68iscfiu60eldfhe9uvh0pk3knd9m965gqlejvc5jlcqs9gfcgpgvfv85n2pefvee4ca2n7mepcoqamou73g7ilscf450
     maxNat)
 
 (define p9og3s2h41natoslfjoi1do0omp82s4jiethebfd4j5p99ltbdmcua2egbiehs9tq9k65744cvugibiqdkgip21t7se4e8faktnl3k0
-    minInt)
+  -9223372036854775808)
 
 (define d75vubeoep5o8ph72v0v9qdm36n17up0d7bsbdckjapcs7k9g1kv5mnbpp3444u8fmvo2h3benmk7o3sd09g1lkrrvk4q93vv8u2n3g
     maxInt)
+
+(define minInt p9og3s2h41natoslfjoi1do0omp82s4jiethebfd4j5p99ltbdmcua2egbiehs9tq9k65744cvugibiqdkgip21t7se4e8faktnl3k0)
 
 (define (Nat.xor a)
     (lambda (b) (bitwise-xor a b)))
@@ -134,6 +135,7 @@
 (define (Nat.pow a)
     (lambda (b) (expt a b)))
 
+(print "mins " minInt " & " p9og3s2h41natoslfjoi1do0omp82s4jiethebfd4j5p99ltbdmcua2egbiehs9tq9k65744cvugibiqdkgip21t7se4e8faktnl3k0)
 
 (define (Float.* a) (lambda (b) (* a b)))
 (define (Float./ a) (lambda (b) (/ a (exact->inexact b))))
@@ -299,16 +301,18 @@
 (define (throw-effect k effect)
     (if (or (not (list? effect))
         (not (procedure? k))
-        (not (symbol? (car effect)))
-        )
+        (not (symbol? (car effect))))
         (begin
-        (print "Invalid input to throw-effect " k " " effect)
-        (abort "Invalid throw effect"))
+            (print "Invalid input to throw-effect " k " " effect)
+            (abort "Invalid throw effect"))
     (if (eq? '() stack)
-        (abort "no handler for effect")
+        (begin
+            (print "Effect without handlers " k " " effect)
+            (abort "no handler for effect")
+            )
         (let* ((handler (car stack)))
             (set! stack (cdr stack))
-            ;(print "Calling " name)
+            (print "<--- " effect)
             (handler (cons 'effect (cons k effect)))
         ))
     )
@@ -336,7 +340,7 @@
 
 (define (handle-ability inner handler)
     (handler (call/cc (lambda (k)
-        ;(print "adding handler " name)
+        (print "adding handler " stack)
         (add-handler k) ; TODO we'll have to pop at some point?
         (let ((value (inner)))
             ;(print "Got value " name " " value)
