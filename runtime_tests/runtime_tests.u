@@ -359,4 +359,29 @@ abilities.t_09 = abilities.v_09 == +9
 
 -- ok, I need more abilities tests.
 
-> abilities.t_09
+-- abilities.v_10 =
+
+> abilities.t_10
+
+abilities.v_10 = handle (let
+	handle (Store.put 1) with cases { a } -> a
+	Store.get) with cases
+		{ a } -> a
+		{ Store.get -> k } -> 500
+		{ Store.put m -> k } -> handle !k with cases
+			{ a } -> a
+			{ Store.get -> k } -> handle k m with cases
+				{ Store.get -> _ } -> 100
+				{ a } -> a
+abilities.t_10 = abilities.v_10 == 1
+
+-- abilities.v_11 NAILED IT! Found a bug.
+abilities.v_11 =
+	answer n = cases
+		{ a } -> a
+		{ Ask.ask -> k } -> handle (k n) with (answer n)
+	Store.withInitialValue 5 '(handle (Store.get + Ask.ask) with (answer 12))
+
+abilities.t_11 = abilities.v_11 == 17
+
+> there_and_back
