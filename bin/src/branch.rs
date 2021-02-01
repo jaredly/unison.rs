@@ -479,15 +479,23 @@ impl Codebase {
                     });
                 }
             }
+            println!("Got to the end, no {} in {}", path[0], of);
+            for (k, v) in &item.terms.d1 {
+                println!("{:?}", v);
+            }
             return Err(std::io::ErrorKind::NotFound.into());
         } else {
             // self.load_child(of, path[0])?;
-            let child = item
-                .children
-                .get(&seg)
-                .ok_or(std::io::Error::from(std::io::ErrorKind::NotFound))?
-                .clone();
+            let child = match item.children.get(&seg) {
+                None => {
+                    println!("No path item {:?} in {}", seg, of);
+                    return Err(std::io::Error::from(std::io::ErrorKind::NotFound));
+                }
+                Some(child) => child.clone(),
+            };
             return self.find_term_inner(&child.to_string(), &path[1..]);
+            // .ok_or(std::io::Error::from(std::io::ErrorKind::NotFound))?
+            // .clone();
         }
     }
 }

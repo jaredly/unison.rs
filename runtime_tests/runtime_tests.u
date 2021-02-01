@@ -384,4 +384,22 @@ abilities.v_11 =
 
 abilities.t_11 = abilities.v_11 == 17
 
-> there_and_back
+abilities.v_12 = withInitialValue 0 'let
+	handle (repeat 3 '(Store.modify (x -> x + 1))) with cases { a } -> a
+	Store.get
+abilities.t_12 = abilities.v_12 == 3
+
+abilities.v_13 = withInitialValue 0 'let
+	handle (Store.modify (x -> x + 1)) with cases { a } -> a
+	Store.get
+abilities.t_13 = abilities.v_13 == 1
+
+abilities.v_14 = withInitialValue 0 'let
+	handle (Store.put 1) with cases { a } -> a
+	Store.get
+abilities.t_14 = abilities.v_14 == 1
+
+
+> deal_nested
+> deal_nested_1
+> deal_nested_2

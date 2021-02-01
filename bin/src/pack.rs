@@ -442,6 +442,7 @@ fn pack_chicken_env(
         names.map(|names| {
             let first = &names[0];
             output.push(format!("; /end {}", first.join(".")));
+            output.push(format!("(define {} {})", first.join(".").replace("'", "-quot"), hash.to_string()));
 
             match typ {
                 Some(ABT::Tm(Type::Ref(Reference::Builtin(b)))) if b == "Boolean" => {
@@ -480,11 +481,8 @@ fn pack_chicken_env(
 fn pack_one_chicken_inner(
     codebase: &mut Codebase,
     outfile: &String,
-    term: &String,
+    hash: Id,
 ) -> std::io::Result<()> {
-    let hash = find_term(codebase, term);
-    println!("Mapped term name {} to hash {:?}", term, hash);
-
     let mut all_terms = HashMap::new();
     let mut all_types = HashMap::new();
 
@@ -633,7 +631,9 @@ pub fn pack_one_chicken(file: &String, term: &String, outfile: &String) -> std::
     let mut codebase = Codebase::new(root.to_owned())?;
     codebase.load_all()?;
 
-    pack_one_chicken_inner(&mut codebase, outfile, term)
+    let hash = find_term(&mut codebase, term);
+    println!("Mapped term name {} to hash {:?}", term, hash);
+    pack_one_chicken_inner(&mut codebase, outfile, hash)
 }
 
 pub fn pack_all_chicken(file: &String, ns: &[String], outfile: &String) -> std::io::Result<()> {
@@ -678,7 +678,7 @@ pub fn find_term(codebase: &mut Codebase, term: &str) -> Id {
     // if &term[0..1] == "." {
     codebase
         .find_term(term.split(".").collect::<Vec<&str>>().as_slice())
-        .unwrap()
+        .expect("Unable to load term. does it exist?")
     // } else {
     //     types::Id::from_string(term)
     // }
@@ -715,6 +715,13 @@ pub fn pack(file: &String, outfile: &String) -> std::io::Result<()> {
         let hash = find_term(&mut codebase, file);
         pack_term(&mut codebase, &hash.to_string(), outfile)
     }
+}
+
+pub fn pack_chicken_watch(term: &String, outfile: &String) -> std::io::Result<()> {
+    watch(move |codebase| {
+        let id = find_term(codebase, term);
+        pack_one_chicken_inner(codebase, outfile, id)
+    })
 }
 
 pub fn pack_watch(term: &String, outfile: &String) -> std::io::Result<()> {

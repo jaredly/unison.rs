@@ -63,6 +63,7 @@ fn main() -> std::io::Result<()> {
             ("pack-watch", [path, output]) => pack::pack_watch(path, output),
             ("pack", [path, output]) => pack::pack(path, output),
             ("pack-chicken", [path, term, output]) => pack::pack_one_chicken(path, term, output),
+            ("pack-chicken-watch", [term, output]) => pack::pack_chicken_watch(term, output),
             ("pack-all-chicken", [path, ns, output]) => {
                 pack::pack_all_chicken(path, &[ns.clone()], output)
             }
