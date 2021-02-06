@@ -1,0 +1,265 @@
+
+eq a b = if a == b then (Result.Ok "equal") else
+    let
+        Debug.watch "a" a
+        Debug.watch "b" b
+        Resolt.Fail "Bad"
+
+inner f = handle !f with cases
+    {One.one -> k} -> (k "inner")
+    { a } -> a
+
+outer f = handle (inner f)  with cases
+    {a} -> a
+    {Two.two -> k} -> handle (k "outer") with cases
+        {One.one -> k} -> handle (k "outer handling inner") with cases {a} -> a
+        {a} -> a
+
+t = eq (outer '(Two.two, One.one)) ("outer", "inner")
+test = (t, abilities.t_01, abilities.t_02, abilities.t_03, abilities.t_04, abilities.t_05, abilities.t_06, abilities.t_07) -- , abilities.t_08, abilities.t_09, abilities.t_10, abilities.t_11, abilities.t_12, abilities.t_13, abilities.t_14)
+
+> test
+> outer '(Two.two, One.one)
+> (Debug.watch "hi" 2, 1)
+
+--- nailing down the bug:
+
+unique ability One where
+    One.one : {One} Text
+
+unique ability Two where
+    Two.two : {Two} Text
+
+
+ability Simple where
+    Simple.inner: {Simple} Text
+    Simple.outer: {Simple} Text
+
+---
+
+Ok yeah that's pretty simple.
+So the basics:
+I thought that handlers were popped off the stack if they fell through.
+But instead, any fallen-through handlers are re-based onto the stack once
+the continuation is resumed.
+So when "re-throwing" a continuation, we need to hang on to the
+continuation that we just popped off? I think?
+So that means that "rethrow-effect" needs to have the handler's k passed to it.
+so it can keep track, right?
+And then once the continuation is called, k, we re-add things to the 
+handler stack, and then call the continuation.
+
+hmm yeah that seems sketchy to me conceptually.
+
+---
+
+inner n f = handle (!f :+ ("inner", n)) with cases
+    {Two.two m -> k} -> (inner (n + 1) '(k ([m] :+ ("second", n)))) :+ ("inner two", n)
+    {a} -> a :+ ("inner pure", n)
+
+outer n f = handle ((inner (n + 5) f) :+ ("outer", n)) with cases
+    {a} -> a :+ ("outer pure", n)
+    {One.one m -> k} -> (outer (n + 10) '(k ([m] :+ ("first", n)))) :+ ("outer two", n)
+
+> outer 0 '((One.one ("one req", 100)) ++ (Two.two ("two req", 100)))
+> outer 0 '(One.one ("one req", 100))
+> outer 0 '(Two.two ("two req", 100))
+---
+
+unique ability One where
+    One.one : (Text, Nat) ->{One} (List (Text, Nat))
+
+unique ability Two where
+    Two.two : (Text, Nat) ->{Two} (List (Text, Nat))
+
+
+---
+
+ability Both where
+    Both.first: List Text ->{Both} List Text
+    Both.second: List Text ->{Both} List Text
+
+inner f = handle (!f :+ "inner") with cases
+    {Both.second m -> k} -> (k (m :+ "second"))
+    {a} -> a :+ "inner pure"
+
+outer f = handle ((inner f) :+ "outer") with cases
+    {a} -> a :+ "outer pure"
+    {Both.first m -> k} ->
+        handle (k (m :+ "first")) with cases
+            {a} -> (a :+ "final pure")
+
+> outer '((Both.first ["inner first"]) ++ (Both.second ["inner second"]))
+> outer '(Both.first ["inner first"])
+> outer '(Both.second ["inner second"])
+
+
+
+ability Store a where
+    Store.put : a ->{Store a} ()
+    Store.get : {Store a} a
+
+just_get init = cases
+    { v }              -> v
+    {Store.get -> k}   -> 
+        handle 
+            k init 
+        with 
+            handler init
+
+handler init = cases
+    { v }              -> v
+    {Store.get -> k}   -> 
+        handle 
+            k init 
+        with 
+            handler init
+    {Store.put v -> k} -> 
+        handle 
+            !k 
+        with 
+            handler v
+
+withGet init thunk = handle !thunk with just_get init
+withInitialValue init thunk = handle !thunk with handler init
+
+
+
+value_working = 
+    withInitialValue 0 'let
+        Store.put 2
+        Store.get
+
+-- blank f = handle !f with cases { a } -> a
+
+-- doit = 'let
+--     handle (Store.put 2)
+--     with cases { a } -> a
+
+-- fallthrough =
+--     handle 'let
+
+value_working2 = withGet 2 '(Store.get)
+
+value = withGet 2 'let
+    handle
+        (Store.get)
+        with
+            cases
+                { a } -> a
+    Store.get
+
+
+withInit init rounds thunk = handle !thunk with cases
+    { v }              -> (v, "withInit", rounds)
+    {Store.get -> k}   -> withInit init (rounds + 1) '(k init) 
+    {Store.put v -> k} -> withInit v (rounds + 1) k
+
+value_broked = 
+    withInit 0 0 'let
+        -- ok so the issue is that, right here,
+        -- we finish a handler, and then "throw-pure" b/c thats what we do.
+        -- but that's wrong.
+        -- Why did we want to 'throw-pure'?
+        -- I think because the normal way of things wasn't cutting it?
+        -- I can't quite remember what.
+        m = 'let
+            Store.put 5
+            "done"
+        x = handle !m with cases { a } -> (a, "hi")
+        (x, Store.get)
+
+-- ok, evaluation should be:
+-- handler A is on the stack.
+-- then it gets "used up", and has to give up, because something matches
+-- then handler B is on the stack. yeah. that makes sense.
+-- a fairly linear path.
+
+-- and if there were a handler that got "fallen through" it would also be used up.
+
+hmmm = handle (abilities.a_02.plus5 +6, "yes") with cases
+    { a } -> (a, 1)
+    { abilities.a_02.plus5 v -> k } ->
+        handle (k (v + +5)) with cases { a } -> (a, 2)
+-- abilities.t_02 = hmmm == (+11, 2)
+> hmmm
+
+
+
+stack =
+    go n k = handle !k with cases
+        {Store.put m -> k} | m == n -> go (n .base.Int.- +1) k
+        { a } -> n
+    gets = 'let
+        Store.put 
+    go +3 '()
+
+> value_broked
+> stack
+ok = '(printLine "hi")
+-- test = value_broked == 2
+-- > test
+
+----
+
+hmmm = [1]handle ([2]abilities.a_02.plus5 +6, [3]"yes") with cases
+    { a } -> [4](a, 1)
+    { abilities.a_02.plus5 v -> k } ->
+        [5]handle ([6]k (v + +5)) with [7]cases { a } -> (a, 2)
+
+order goes
+1, 2, 5, 6, 2, 3, 7 (skipping 4)
+how does it know to jump back? That's what my "throw-pure" was trying to do.
+
+
+# BUT
+
+withInit init rounds thunk = [1]handle [2]!thunk with [3]cases
+    { v }              -> [4](v, "withInit", rounds)
+    {Store.get -> k}   -> [5]withInit init (rounds + 1) '(k init) 
+    {Store.put v -> k} -> [6]withInit v (rounds + 1) k
+
+value_broked = 
+    [7]withInit 0 0 [8]'let
+        -- ok so the issue is that, right here,
+        -- we finish a handler, and then "throw-pure" b/c thats what we do.
+        -- but that's wrong.
+        -- Why did we want to 'throw-pure'?
+        -- I think because the normal way of things wasn't cutting it?
+        -- I can't quite remember what.
+        m = 'let
+            [9]Store.put 5
+            [10]"done"
+        x = [11]handle [12]!m with [13]cases { a } -> (a, "hi")
+        [14](x, [15]Store.get)
+
+inner f = handle !f with cases {a} -> (a, "from inner")
+outer f = handle (inner f) with cases
+    {a} -> (a, "from outer")
+    {Store.get -> k} -> handle (k "sent") with cases {a} -> (a, "final")
+
+7, 0_1, 0_2, 8, 11, 12, 9, 13 (fallthrough)
+
+
+
+
+
+
+
+
+
+
+
+
+
+Now I transform this into
+(handle
+    (lambda () (plus5 +6))
+    (match the dealio)
+    )
+
+
+hmmm =
+
+handle1, if it sees a result, adds a 1
+but if it sees a request, it re-asks
