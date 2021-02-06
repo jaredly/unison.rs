@@ -1,5 +1,6 @@
 (import (chicken bitwise))
 (import (chicken condition))
+(import json)
 (require-extension utf8)
 
 (define true #t)
@@ -7,6 +8,26 @@
 
 (define (term-link v) (list 'term-link v))
 (define (type-link v) (list 'type-link v))
+
+(define (untuple term)
+    (if (and (list? term)
+            (= (length term) 3)
+            (equal? (car term) 'onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0_0))
+        (cons (cadr term) (untuple (caddr term)))
+        (if (equal? term Nil)
+            '()
+        term)))
+
+(define (to-json v)
+    (let ((o (open-output-string)))
+        (json-write v o)
+        (get-output-string o)
+    ))
+
+(define (Debug.watch text)
+    (lambda (v)
+        (print "⚠️  " text " " (to-json (untuple v)))
+        v))
 
 (define (print-processing name)
     ;; Uncomment this line to debug terms that are failing to process
@@ -292,9 +313,30 @@
 
 ; --- abilties ---
 
-(define stack '())
 
-(define name "wip")
+;;; Ok, so basic idea:
+;;; We maintain a stack of handlers
+;;; and if you fall through an evaluation, then the handler gets put back on the stack.
+;;; and if you add a handler, it gets added at the place where the handler stack pointer is at.
+;;; 
+;;; but when you call the continuation, we reset the pointer to the top, right?
+
+;; Ok, nother stress test.
+;; While we're partway down the handler stack, do a jump down & back & stuff.
+;; how do we deal?
+;;
+;; So like, what if the `k` continuation to jump back just keeps track of the handlers to put back on the handler stack?
+;; that way, we can handle nested jumps & back.
+;;
+;; Yeah that's a much better setup.
+
+
+
+
+
+;;; stack is of type Array<(handler, id)>
+;;; and we also need a 
+(define stack '())
 
 (define (throw-effect k effect)
     (if (or (not (list? effect))
@@ -334,7 +376,6 @@
         (throw-effect k ef)))
 
 (define (add-handler id handler)
-    ; (print "add handler " name " " handler " " stack)
     (set! stack (cons (list handler id) stack))
     (print "now " stack)
 )
@@ -358,3 +399,4 @@
         )))
     )
 )
+

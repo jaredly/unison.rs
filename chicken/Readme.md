@@ -17,6 +17,18 @@ or compile it to native code with
 $ csc outfile.scm
 ```
 
+## Debugging
+
+Using testbed.u
+cd into the testbed namespace
+run
+```bash
+cargo run --release -- pack-chicken-watch  .testbed.test testbed.scm
+```
+to continually regenerate testbed.scm with the term testbed.test
+
+and then you can update things via `ucm` and run `csi -s testbed.scm`.
+
 ## Next steps
 
 - [ ] allow you to specify a single term (program) to run
