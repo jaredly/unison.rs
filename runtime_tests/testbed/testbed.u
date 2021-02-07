@@ -1,4 +1,61 @@
 
+
+
+
+
+-----
+
+  .unison_random_mersenne._base_additions.Nat32.clearBit.test2 : [Result]
+  .unison_random_mersenne._base_additions.Nat32.clearBit.test2 =
+    (clearBit (Nat32 3) 2 == Nat32 3)
+
+  .unison_random_mersenne._base_additions.Nat32.clearBit : Nat32 -> Nat -> Nat32
+  .unison_random_mersenne._base_additions.Nat32.clearBit n i =
+    Nat32.and n (Nat32.complement (bit i))
+
+---
+
+> maxNat
+> (Nat.shiftRight maxNat 64)
+> (Nat.shiftRight (Nat.shiftLeft (Nat.shiftLeft 1 32) 32) 32)
+> (Nat.shiftLeft (Nat.shiftLeft 1 32) 32)
+> (Nat.shiftLeft 20 64)
+> truncate32 (Nat.shiftLeft 1 32)
+
+--- Mersenne
+
+
+  .unison_random_mersenne._base_additions.Nat32.bit.test3 : [Result]
+  .unison_random_mersenne._base_additions.Nat32.bit.test3 =
+    M1l.test.internals.v1.Test.check (bit 32 == Nat32 0)
+
+
+.testbed> view Nat32
+
+  type .unison_random_mersenne._base_additions.Nat32 = Nat32 Nat
+
+.testbed> view bit
+
+  .unison_random_mersenne._base_additions.Nat32.bit : Nat -> Nat32
+  .unison_random_mersenne._base_additions.Nat32.bit i = Nat32.shiftLeft (Nat32 1) i
+
+.testbed> view Nat32.shiftLeft
+
+  .unison_random_mersenne._base_additions.Nat32.shiftLeft : Nat32 -> Nat -> Nat32
+  .unison_random_mersenne._base_additions.Nat32.shiftLeft n b =
+    match n with Nat32 n' -> truncate32 (Nat.shiftLeft n' b)
+
+.testbed> view truncate32
+
+  .unison_random_mersenne._base_additions.Nat32.truncate32 : Nat -> Nat32
+  .unison_random_mersenne._base_additions.Nat32.truncate32 n =
+    Nat32 (Nat.shiftRight (Nat.shiftLeft n 32) 32)
+
+
+
+
+----
+
 eq a b = if a == b then (Result.Ok "equal") else
     let
         Debug.watch "a" a
@@ -30,6 +87,9 @@ test = (
 > Nat.complement 4
 > Nat.drop maxNat 4
 > Int.truncate0 -5
+> bit 32
+> Nat32 0
+> (Nat.shiftRight (Nat.shiftLeft 1 32) 32)
 
 --- nailing down the bug:
 

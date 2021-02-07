@@ -29,6 +29,10 @@ to continually regenerate testbed.scm with the term testbed.test
 
 and then you can update things via `ucm` and run `csi -s testbed.scm`.
 
+```
+env  RUST_BACKTRACE=1 cargo run  -- pack-chicken ~/.unison/v1/terms unison_random_mersenne._base_additions.Nat32.clearBit.test2  ./error.scm
+```
+
 ## Current Status
 
 - [x] runtime tests passing

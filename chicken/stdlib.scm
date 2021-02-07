@@ -62,7 +62,7 @@
         (lambda (result)
             (if (not (result-is-good result))
             (begin
-                (print "❌ Test failed " name " " result)
+                (print "❌ Test failed " name " " (to-json result))
                 (abort "Test failed")
             )))
         (vector->list v)
@@ -206,7 +206,11 @@
 
 (define (Nat.shiftLeft a)
     (lambda (b)
-        (arithmetic-shift a b)))
+        (let ((res (arithmetic-shift a b)))
+        (if (> res maxNat)
+        0
+        res)
+        )))
 
         
 (define (Nat.shiftRight a)
