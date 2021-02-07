@@ -1,17 +1,53 @@
 
+check = M1l.test.internals.v1.Test.check
 
+> money.Money.split.tests.withSingleRemainder
+> Money.split 3 (Money USD +10)
 
+money.test0 = check (Debug.watch "split" (Money.split 3 (Money USD +10))
+    == [Money USD +3, Money USD +3, Money USD +4])
 
+both x y = ((Universal.min x (Universal.max x y) == x) && (Universal.max x (Universal.min x y) == x))
+t1 = check (both 0 100)
+t2 = check (both minInt maxInt)
+t3 = check (both +100 +0)
+t4 = check (both +50 +50)
+
+-- test = Debug.watch "ok?" (t1, t2, t3, t4)
+test = base.Universal.max.tests.absorption
+> test
 
 -----
 
-  .unison_random_mersenne._base_additions.Nat32.clearBit.test2 : [Result]
-  .unison_random_mersenne._base_additions.Nat32.clearBit.test2 =
-    (clearBit (Nat32 3) 2 == Nat32 3)
-
-  .unison_random_mersenne._base_additions.Nat32.clearBit : Nat32 -> Nat -> Nat32
-  .unison_random_mersenne._base_additions.Nat32.clearBit n i =
+clearBit : Nat32 -> Nat -> Nat32
+clearBit n i =
     Nat32.and n (Nat32.complement (bit i))
+
+truncate32 n =
+    Nat32 (Nat.shiftRight (Nat.shiftLeft n 32) 32)
+> truncate32 (Nat.complement 4)
+> Nat.complement 4
+> Nat.shiftLeft 1 64
+> Nat.shiftLeft (Nat.complement 4) 32
+-- > Nat.shiftRight (Nat.shiftLeft (Nat.complement 4)
+
+> Nat32 3
+> Nat32.complement (bit 2)
+> Nat32.and (Nat32 3) (Nat32.complement (bit 2))
+> Nat.complement 4 == Nat.drop maxNat 4
+> Nat.complement 4
+
+clearBit.test0 = check ((bit 2) == Nat32 4)
+clearBit.test00 = check (Nat.complement 4 == 18446744073709551611)
+clearBit.test10 = check ((Debug.watch "comp2" (truncate32 (Nat.complement 4))) == Nat32 4294967291)
+clearBit.test1 = check ((Debug.watch "comp" (Nat32.complement (bit 2))) == Nat32 4294967291)
+clearBit.test2 =
+    check ((clearBit (Nat32 3) 2) == Nat32 3)
+clearBit.test3 =
+    check (
+        (Nat32.and (Nat32 3) (Nat32.complement (bit 2)))
+            == Nat32 3
+    )
 
 ---
 

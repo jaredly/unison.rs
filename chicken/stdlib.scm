@@ -36,7 +36,7 @@
 
 (define (print-processing name)
     ;; Uncomment this line to debug terms that are failing to process
-     (print "Evaluating " name)
+     ; (print "Evaluating " name)
     '())
 
 (define (check v name)
@@ -46,7 +46,7 @@
         (print "Got " v)
         ; (print "Test failure")
         )
-    (print "✅ passed " name)
+    ; (print "✅ passed " name)
         )
     )
 
@@ -58,16 +58,20 @@
 )
 
 (define (check-results v name)
-    (map
-        (lambda (result)
-            (if (not (result-is-good result))
+    (if (not (foldl
+        (lambda (current result)
+            (or (if (not (result-is-good result))
             (begin
                 (print "❌ Test failed " name " " (to-json result))
-                (abort "Test failed")
-            )))
+                ; (abort "Test failed")
+                #t
+            ) #f) current))
+        #f
         (vector->list v)
+        ))
+    ; (print "✅ passed " name)
+    '()
     )
-    (print "✅ passed " name)
     '()
 )
 
@@ -206,11 +210,7 @@
 
 (define (Nat.shiftLeft a)
     (lambda (b)
-        (let ((res (arithmetic-shift a b)))
-        (if (> res maxNat)
-        0
-        res)
-        )))
+        (bitwise-and (arithmetic-shift a b) maxNat)))
 
         
 (define (Nat.shiftRight a)
@@ -235,7 +235,7 @@
 (define (Int.xor a) (lambda (b) (bitwise-xor a b)))
 (define (Int.increment a) (+ a 1))
 (define (Int.decrement a) (- a 1))
-(define (Int./ a) (lambda (b) (/ a b)))
+(define (Int./ a) (lambda (b) (quotient a b)))
 (define (Int.* a) (lambda (b) (* a b)))
 (define (Int.negate a) (- a))
 
@@ -313,7 +313,9 @@
 ; --- text stdlib ---
 
 (define (Text.fromCharList lst)
-    (apply string (vector->list lst))
+    (apply string (vector->list lst)))
+(define (Text.toCharList text)
+    (list->vector (string->list text))
 )
 (define Char.fromNat integer->char)
 (define Char.toNat char->integer)

@@ -381,7 +381,11 @@ impl Codebase {
         path: &Vec<String>,
         names: &mut std::collections::HashMap<String, Vec<Vec<String>>>,
     ) {
-        let item = self.branches.get(of).unwrap();
+        // let item = self.branches.get(of).unwrap();
+        let item = match self.branches.get(of) {
+            None => {return;}
+            Some(item) => item
+        };
         item.collect_some_types(path, names);
         for (k, v) in &item.children {
             let mut full = path.clone();
@@ -396,7 +400,11 @@ impl Codebase {
         path: &Vec<String>,
         names: &mut std::collections::HashMap<Id, Vec<Vec<String>>>,
     ) {
-        let item = self.branches.get(of).unwrap();
+        // let item = self.branches.get(of).unwrap();
+        let item = match self.branches.get(of) {
+            None => {return;}
+            Some(item) => item
+        };
         item.collect_types(path, names);
         for (k, v) in &item.children {
             let mut full = path.clone();
@@ -426,7 +434,11 @@ impl Codebase {
         path: &Vec<String>,
         dest: &mut std::collections::HashMap<Vec<String>, types::Id>,
     ) {
-        let item = self.branches.get(of).unwrap();
+
+        let item = match self.branches.get(of) {
+            None => {return;}
+            Some(item) => item
+        };
         item.collect_terms(path, dest);
         let mut children: Vec<(&NameSegment, &Hash)> = item.children.iter().collect();
         children.sort_by(|(a, _), (b, _)| NameSegment::cmp(a, b));
