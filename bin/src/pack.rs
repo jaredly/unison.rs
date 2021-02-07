@@ -442,7 +442,7 @@ fn pack_chicken_env(
         names.map(|names| {
             let first = &names[0];
             output.push(format!("; /end {}", first.join(".")));
-            output.push(format!("(define {} {})", first.join(".").replace("'", "-quot"), hash.to_string()));
+            output.push(format!("(define {} {})", first.join(".").replace("'", "-quot").replace("|", "-bar-"), hash.to_string()));
 
             match typ {
                 Some(ABT::Tm(Type::Ref(Reference::Builtin(b)))) if b == "Boolean" => {
