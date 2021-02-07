@@ -29,6 +29,14 @@ to continually regenerate testbed.scm with the term testbed.test
 
 and then you can update things via `ucm` and run `csi -s testbed.scm`.
 
+## Current Status
+
+- [x] runtime tests passing
+- [x] abilities tests passing
+- [ ] I think I need to make sure that we handle multiple stacked fall-throughs correctly
+- [ ] `json.Json.Decode.tests.e2e.tuple.ok2` is failing, need to do that specifically.
+      it's in `error.scm` for further investigation.
+
 ## Next steps
 
 - [ ] allow you to specify a single term (program) to run

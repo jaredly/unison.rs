@@ -29,6 +29,11 @@
         (print "⚠️  " text " " (to-json (untuple v)))
         v))
 
+(define (bug v)
+    (print "BUG " (to-json (untuple v)))
+    (abort "Found a bug!")
+)
+
 (define (print-processing name)
     ;; Uncomment this line to debug terms that are failing to process
      (print "Evaluating " name)
@@ -160,6 +165,17 @@
 (define (Float./ a) (lambda (b) (/ a (exact->inexact b))))
 (define (Float.- a) (lambda (b) (- a b)))
 (define (Float.+ a) (lambda (b) (+ a b)))
+(define (Float.fromText a) 
+    (let ((v (string->number a)))
+        (if (equal? #f v)
+            None
+            (Some (exact->inexact v))
+        )
+))
+(define Int.toFloat exact->inexact)
+(define (Float.truncate v) (inexact->exact (floor v)))
+; (exact->inexact v)
+; )
 (define Boolean.not not)
 
         
@@ -208,6 +224,8 @@
 (define (Int.pow a) (lambda (b) (expt a b)))
 (define (Int.mod a) (lambda (b) (modulo a b)))
 (define (Int.complement a) (bitwise-not a))
+(define (Int.truncate0 a) (max 0 a))
+(define (Nat.complement a) (- maxNat a))
 (define (Int.or a) (lambda (b) (bitwise-ior a b)))
 (define (Int.and a) (lambda (b) (bitwise-and a b)))
 (define (Int.xor a) (lambda (b) (bitwise-xor a b)))
@@ -289,6 +307,12 @@
 ; (define (List.at a) (lambda (b) (list-ref b a)))
 
 ; --- text stdlib ---
+
+(define (Text.fromCharList lst)
+    (apply string (vector->list lst))
+)
+(define Char.fromNat integer->char)
+(define Char.toNat char->integer)
 
 (define (Text.uncons t)
     (if (> (string-length t) 0)

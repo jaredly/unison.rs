@@ -120,6 +120,16 @@ float.t_06 = (2.2 > 1.1) && (2.2 >= 1.1)
 
 bool.t_01 = Boolean.not true == false
 
+bool.t_02 = true || false
+bool.t_03 = false || true
+bool.t_04 = true || true
+bool.t_05 = Boolean.not (false || false)
+
+bool.t_06 = Boolean.not (false && true)
+bool.t_07 = Boolean.not (false && false)
+bool.t_08 = Boolean.not (true && false)
+bool.t_09 = true && true
+
 list.t_01 = List.size [1,2,6] == 3
 list.t_02 = List.at 2 [1,2,3] == Some 3
 list.t_03 = List.at 10 [1,2,3] == None
@@ -399,6 +409,8 @@ abilities.v_14 = withInitialValue 0 'let
 	Store.get
 abilities.t_14 = abilities.v_14 == 1
 
+
+--- NEED some Match tests! for matching, snoc, cons, etc. The whole bit.
 
 > deal_nested
 > deal_nested_1

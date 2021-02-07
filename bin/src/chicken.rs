@@ -772,7 +772,7 @@ impl ToChicken for Term {
                 two.to_chicken(env)?,
             ])),
             Term::Or(one, two) => Ok(list(vec![
-                Chicken::Atom("and".to_owned()),
+                Chicken::Atom("or".to_owned()),
                 one.to_chicken(env)?,
                 two.to_chicken(env)?,
             ])),
@@ -866,7 +866,7 @@ impl ToChicken for Term {
                     result = list(vec![
                         atom("let"),
                         list(vec![
-                            list(vec![atom("_vblnames"), list(vblnames)]),
+                            // list(vec![atom("_vblnames"), list(vblnames)]),
                             list(vec![atom("result"), body]),
                         ]),
                         list(vec![

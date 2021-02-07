@@ -22,9 +22,14 @@ test = (
     abilities.t_04, abilities.t_05,
     abilities.t_06, abilities.t_07, abilities.t_08, abilities.t_09, abilities.t_10, abilities.t_11, abilities.t_12, abilities.t_13, abilities.t_14)
 
-> test
+> (Int.toFloat (Float.truncate 5.4))
+> (Float.truncate 3.6, 3, 3.0)
+-- > test
 > outer '(Two.two, One.one)
 > (Debug.watch "hi" 2, 1)
+> Nat.complement 4
+> Nat.drop maxNat 4
+> Int.truncate0 -5
 
 --- nailing down the bug:
 
