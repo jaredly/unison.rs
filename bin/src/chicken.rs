@@ -577,8 +577,11 @@ fn pattern_to_chicken<T: HashLoader>(
                     vbls,
                     list(vec![
                         atom("list-ref"),
-                        term.clone(),
-                        atom(&format!("{}", i + 3)),
+                        list(vec![
+                            atom("caddr"),
+                            term.clone(),
+                        ]),
+                        atom(&format!("{}", i + 1)),
                     ]),
                     body,
                     depth + 1,
@@ -593,7 +596,7 @@ fn pattern_to_chicken<T: HashLoader>(
                     list(vec![
                         atom("equal?"),
                         list(vec![atom("length"), term.clone()]),
-                        atom(&format!("{}", args.len() + 3)),
+                        atom(&format!("{}", 4)),
                     ]),
                     list(vec![
                         atom("equal?"),
@@ -602,7 +605,15 @@ fn pattern_to_chicken<T: HashLoader>(
                     ]),
                     list(vec![
                         atom("equal?"),
-                        list(vec![atom("caddr"), term.clone()]),
+                        list(vec![atom("length"), list(vec![atom("caddr"), term.clone() ]) ]),
+                        atom(&format!("{}", args.len() + 1)),
+                    ]),
+                    list(vec![
+                        atom("equal?"),
+                        list(vec![
+                            atom("car"),
+                            list(vec![atom("caddr"), term.clone()]),
+                        ]),
                         atom(&format!("'{}_{}", id.to_string(), num)),
                     ]),
                 ]),
