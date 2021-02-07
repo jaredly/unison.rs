@@ -23,3 +23,14 @@ But I need to to be:
   
 The cool thing is I go through the handler pipeline each time
 so I can do a little y combinator action.
+
+oh orrrrr hmmm no it's that the Result value that we pass in has to contain the current handler. Yeah. it's like "the handler stack" or something. Maybe two things?
+
+Ok, so the effect, as it stands, is:
+
+(throw-effect kontinuation effect)
+where:
+- effect is (list 'some-symbol v1 v2 v3)
+- kontinuation is a lambda that accepts as arg any values the effect provides
+
+man I have such a hard time.

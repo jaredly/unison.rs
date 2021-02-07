@@ -16,7 +16,11 @@ outer f = handle (inner f)  with cases
         {a} -> a
 
 t = eq (outer '(Two.two, One.one)) ("outer", "inner")
-test = (t, abilities.t_01, abilities.t_02, abilities.t_03, abilities.t_04, abilities.t_05, abilities.t_06, abilities.t_07) -- , abilities.t_08, abilities.t_09, abilities.t_10, abilities.t_11, abilities.t_12, abilities.t_13, abilities.t_14)
+test = (
+    t, abilities.t_01,
+    abilities.t_02, abilities.t_03,
+    abilities.t_04, abilities.t_05,
+    abilities.t_06, abilities.t_07, abilities.t_08, abilities.t_09, abilities.t_10, abilities.t_11, abilities.t_12, abilities.t_13, abilities.t_14)
 
 > test
 > outer '(Two.two, One.one)
