@@ -1,20 +1,25 @@
-(import (rnrs arithmetic bitwise))
-; (import (chicken condition))
-; (import json)
-; (require-extension utf8)
-; (import srfi-67)
-; (import (chez-srfi))
-(import (srfi :67))
-(import (srfi :128))
-(import (srfi :133 vectors))
+
+
+
+
+
+;;; These are for gerbil
+(import :std/srfi/128)
+(import :std/srfi/133)
+(import :std/srfi/151)
+
+
+;;; These are for chez
+; (import (srfi :67))
+; (import (srfi :128))
+; (import (srfi :133 vectors))
+; (import (srfi :151))
 
 (define true #t)
 (define false #f)
 
 (define abort error)
-(define print (lambda args (display args) (display "\n")))
-(define arithmetic-shift bitwise-arithmetic-shift)
-; (define vector-copy! vector-copy)
+(define print (lambda args (map display args) (display "\n")))
 
 ;;;;;;;;
 
@@ -88,6 +93,8 @@
     '()
 )
 
+(define (no-match) (abort "failed to match"))
+
 (define (f2c22r2a1sche28mn07brk1j45kp1bam3tr4k2j0un2hi1g7rbrud3f5mes2defqo1tpd9j38pqpg2f0efl3no0ede5ocl2am4bonm0 a)
     (lambda (b) (not (equal? a b)))
 )
@@ -106,25 +113,25 @@
 
 ; Cons/Nil
 
-(define (onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0_0 one)
+(define (Cons one)
     (lambda (two) (list 'onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0_0 one two)))
 
-(define 568rsi7o3ghq8mmbea2sf8msdk20ohasob5s2rvjtqg2lr0vs39l1hm98urrjemsr3vo3fa52pibqu0maluq7g8sfg3h5f5re6vitj8_0
+(define Nil
     '568rsi7o3ghq8mmbea2sf8msdk20ohasob5s2rvjtqg2lr0vs39l1hm98urrjemsr3vo3fa52pibqu0maluq7g8sfg3h5f5re6vitj8_0)
 
-(define Cons onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0_0 )
-(define Nil 568rsi7o3ghq8mmbea2sf8msdk20ohasob5s2rvjtqg2lr0vs39l1hm98urrjemsr3vo3fa52pibqu0maluq7g8sfg3h5f5re6vitj8_0)
+; (define Cons onbcm0qctbnuctpm57tkc5p16b8gfke8thjf19p4r4laokji0b606rd0frnhj103qb90lve3fohkoc1eda70491hot656s1m6kk3cn0_0 )
+; (define Nil 568rsi7o3ghq8mmbea2sf8msdk20ohasob5s2rvjtqg2lr0vs39l1hm98urrjemsr3vo3fa52pibqu0maluq7g8sfg3h5f5re6vitj8_0)
 
 
 ; Some/None
-(define 5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_0
+(define None
     '5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_0)
 
-(define (5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_1 arg)
+(define (Some arg)
     (list '5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_1 arg))
 
-(define None 5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_0)
-(define Some 5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_1)
+; (define None 5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_0)
+; (define Some 5isltsdct9fhcrvud9gju8u0l9g0k9d3lelkksea3a8jdgs1uqrs5mm9p7bajj84gg8l9c9jgv9honakghmkb28fucoeb2p4v9ukmu8_1)
 
 
 
@@ -207,9 +214,9 @@
 
 
         
-(define (Nat.* a)
-    (lambda (b)
-        (* a b)))
+; (define (Nat.* a)
+;     (lambda (b)
+;         (* a b)))
 
         
 (define (Nat.or a)
@@ -1821,9 +1828,22 @@
         fvfia2buu96bbhqup30hmso49aano9u5rve82ovbd2msedra176jj6t3oj2hr5rngsfpf9fo38c8jjqqs19n505t1onbkd6bs9egka8)
        10000))))))
 
+; (define si3c5dmbks82jmujckto784880377lo0n6od3j7f5ht01034ae7h0muiirhi8p8s9roceeqhtnuivr5ke442vsdg0qc6f97qf7bj6fg
+;   (lambda
+;    (_)
+;    (ssbdakrj0hbr2rpno34bj8i64mokaaoc5rdj7sil5c87qrqeamf2996qrg0gc1thhamd4bbc40l991d7vgd35qekh5hsoiqkpccvk50
+;     (((49dfoqk8ri2sa1n5hrd1m1hc7vqdkorl4jqnvbsmht268lsnpopt6tsrpd4ll4rg93fmmuh1g660n5oujo66h8tnqi2fagp3nk451r0
+;          e082cs8ace1fr1mo5gg1n1adfrhr57p8ir3ca28n0f3t2googumdruou2sohv6u9daore07qcc10e5o1sj32hb7rck40f76nihi2gug)
+;         fvfia2buu96bbhqup30hmso49aano9u5rve82ovbd2msedra176jj6t3oj2hr5rngsfpf9fo38c8jjqqs19n505t1onbkd6bs9egka8)
+;        10))))
+
 ; /end testbed.run_long
 
 (define testbed.run_long si3c5dmbks82jmujckto784880377lo0n6od3j7f5ht01034ae7h0muiirhi8p8s9roceeqhtnuivr5ke442vsdg0qc6f97qf7bj6fg)
 
 
+; (export main)
+; (define (main . args)
+  ; (run-with-io testbed.run_long)
+; )
 (run-with-io testbed.run_long)
