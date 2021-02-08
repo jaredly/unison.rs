@@ -1,4 +1,11 @@
 
+run_long : '{IO} ()
+run_long = '(printLine (toText (List.size (unison_random_mersenne.random.mersenne.collect
+    unison_random_mersenne.random.mersenne.nat.next
+    unison_random_mersenne.random.mersenne.defaultSeed
+    10000))))
+
+----
 check = M1l.test.internals.v1.Test.check
 
 > money.Money.split.tests.withSingleRemainder

@@ -1,6 +1,7 @@
 
 ;;; stack is of type Array<(handler, id)>
-;;; and we also need a 
+;;; handler will be called with
+;;; (list 'effect kont (list 'some-effect some-arg) current-handler)
 (define stack '())
 
 (define (throw-effect k effect)
@@ -80,3 +81,39 @@
     )
 )
 
+
+
+(define (run-with-io inner)
+    (handle-ability
+        (lambda () (inner "Hello"))
+        ; 
+        (lambda (effect)
+            (if (not (list? effect))
+                (abort "Effect not a list")
+                (if (equal? 'effect (car effect))
+                    (if ; printText handle text
+                        ; we just pretend it's all stdout
+                        (equal? 'fgaevis4bljt5a8f8nv4dckj5ckau43r5dbda6s0oucsa5j8fn3ie5apjouc00pksqpja5vbud0d0joavnu7mcbja1mr56jumfu8d5g_37
+                            (car (caddr effect)))
+                        (begin
+                            (print (caddr (caddr effect)))
+                            (run-with-io (lambda (_) ((cadr effect)
+                                (list 'kc92tha5f12vamultsbq93aqnphg9pnhuq3sodqvhes6st2a3h5sd2rksuptds94ptvvpg0tj0jp1rehlb73rkn0kj2r6elkdqndhjo_1
+                                '())))
+                            )
+                        )
+                        (rethrow-effect effect)
+                    )
+                    (if (equal? 'pure (car effect))
+                        (cadr effect)
+                        (begin
+                            (print "Unexpected effect format " effect)
+                            (abort "Unexpected effect format")
+                        )
+                        )
+                ))
+        )
+
+    )
+
+)
