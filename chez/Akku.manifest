@@ -1,0 +1,9 @@
+#!r6rs ; -*- mode: scheme; coding: utf-8 -*-
+(import (akku format manifest))
+
+(akku-package ("chez" "0.0.0-alpha.0")
+  (synopsis "I did not edit Akku.manifest")
+  (authors "Guy Q. Schemer")
+  (license "NOASSERTION")
+  (depends ("chez-srfi" "^0.0.0-akku.181.7879b52"))
+)
