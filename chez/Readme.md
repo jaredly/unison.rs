@@ -10,3 +10,9 @@ Although if we start having a ton of code, it might be less practical.
 
 The full mersenne generator is 87k of scheme, and the gerbil-compiled binary is
 4.5mb.
+
+## Next steps?
+
+- get chez / gerbil passing tests folks.
+
+- make some scheme macros so that the code generation can be even simpler, and more directly parallel unison syntax

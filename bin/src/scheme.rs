@@ -10,31 +10,11 @@ fn escape_char(c: &char) -> String {
         format!("#\\{}", res)
     } else {
         res = c.escape_unicode().to_string();
-        format!("#\\U+{}", &res[3..res.len() - 1])
+        // CHICKEN
+        // format!("#\\U+{:0>4}", &res[3..res.len() - 1])
+        format!("#\\u{:0>4}", &res[3..res.len() - 1])
     }
-    // if res.starts_with("\\u{") {
-    // } else if res.starts_with("\\") {
-    //     format!("#{}", res)
-    // } else {
-    // }
 }
-
-// fn filter_free_vbls(
-//     free: &Vec<(Symbol, usize, usize, bool)>,
-//     names: &Vec<(Symbol, usize)>,
-// ) -> Vec<(Symbol, usize, usize, bool)> {
-//     free.clone()
-//         .into_iter()
-//         .map(|mut x| {
-//             if names.iter().find(|y| x.0 == y.0) != None {
-//                 x.3 = true;
-//                 x
-//             } else {
-//                 x
-//             }
-//         })
-//         .collect()
-// }
 
 // Hrmmmm ok so I do need to do some munging of symbols.
 // because `w'` isn't valid scheme
@@ -43,40 +23,40 @@ fn munge_identifier(id: String) -> String {
     id.replace("'", "-quot")
 }
 
-fn atom(s: &str) -> Chicken {
-    Chicken::Atom(s.to_owned())
+fn atom(s: &str) -> Scheme {
+    Scheme::Atom(s.to_owned())
 }
 
-fn list(items: Vec<Chicken>) -> Chicken {
+fn list(items: Vec<Scheme>) -> Scheme {
     let mut w = 2;
     for item in &items {
         w += item.width();
     }
-    Chicken::Apply(items, w)
+    Scheme::Apply(items, w)
 }
 
-fn vector(items: Vec<Chicken>) -> Chicken {
+fn vector(items: Vec<Scheme>) -> Scheme {
     let mut w = 3;
     for item in &items {
         w += item.width();
     }
-    Chicken::Vector(items, w)
+    Scheme::Vector(items, w)
 }
 
-fn square(items: Vec<Chicken>) -> Chicken {
+fn square(items: Vec<Scheme>) -> Scheme {
     let mut w = 2;
     for item in &items {
         w += item.width();
     }
-    Chicken::Square(items, w)
+    Scheme::Square(items, w)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Chicken {
+pub enum Scheme {
     Atom(String),
-    Apply(Vec<Chicken>, usize),
-    Square(Vec<Chicken>, usize),
-    Vector(Vec<Chicken>, usize),
+    Apply(Vec<Scheme>, usize),
+    Square(Vec<Scheme>, usize),
+    Vector(Vec<Scheme>, usize),
 }
 
 fn white(num: usize) -> String {
@@ -87,7 +67,7 @@ fn white(num: usize) -> String {
     return res;
 }
 
-fn pretty_list(mut left: usize, max_width: usize, items: &Vec<Chicken>) -> (String, usize) {
+fn pretty_list(mut left: usize, max_width: usize, items: &Vec<Scheme>) -> (String, usize) {
     if items.len() == 0 {
         return ("".to_owned(), left);
     }
@@ -123,9 +103,9 @@ fn pretty_list(mut left: usize, max_width: usize, items: &Vec<Chicken>) -> (Stri
     return (res, at);
 }
 
-impl Chicken {
+impl Scheme {
     pub fn width(&self) -> usize {
-        use Chicken::*;
+        use Scheme::*;
         match self {
             Atom(atom) => atom.len(),
             Apply(_items, w) => *w,
@@ -135,7 +115,7 @@ impl Chicken {
     }
 
     pub fn pretty_string(&self, left: usize, max_width: usize) -> (String, usize) {
-        use Chicken::*;
+        use Scheme::*;
         match self {
             Atom(atom) => (atom.to_owned(), left + atom.len()),
             Apply(items, _) => {
@@ -160,7 +140,7 @@ impl Chicken {
     }
 
     pub fn to_string(&self) -> String {
-        use Chicken::*;
+        use Scheme::*;
         match self {
             Atom(atom) => atom.clone(),
             Apply(items, _) => {
@@ -195,13 +175,13 @@ impl Chicken {
 }
 
 pub trait ToChicken {
-    fn to_chicken<T: HashLoader>(&self, env: &mut T) -> Result<Chicken>;
+    fn to_chicken<T: HashLoader>(&self, env: &mut T) -> Result<Scheme>;
 }
 
 impl ToChicken for ABT<Term> {
-    fn to_chicken<T: HashLoader>(&self, env: &mut T) -> Result<Chicken> {
+    fn to_chicken<T: HashLoader>(&self, env: &mut T) -> Result<Scheme> {
         match self {
-            ABT::Var(symbol, _usage) => Ok(Chicken::Atom(symbol.to_atom())),
+            ABT::Var(symbol, _usage) => Ok(Scheme::Atom(symbol.to_atom())),
             ABT::Tm(term) => term.to_chicken(env),
             ABT::Cycle(inner) => {
                 let mut names = vec![];
@@ -211,24 +191,24 @@ impl ToChicken for ABT<Term> {
 
                 for i in 0..names.len() {
                     bindings.push(list(vec![
-                        Chicken::Atom(names[i].0.to_atom()),
+                        Scheme::Atom(names[i].0.to_atom()),
                         values[i].to_chicken(env)?,
                     ]));
                 }
                 return Ok(list(vec![
-                    Chicken::Atom("letrec".to_owned()),
+                    Scheme::Atom("letrec".to_owned()),
                     list(bindings),
                     body.to_chicken(env)?,
                 ]));
                 // Err(env::Error::NotImplemented("cycle".to_owned()))
                 // names.reverse();
-                // cmds.push(Chicken::Cycle(names));
+                // cmds.push(Scheme::Cycle(names));
                 // body.to_chicken(cmds, env)?;
             }
             ABT::Abs(name, _uses, body) => {
-                // cmds.push(Chicken::PopAndName(name.clone(), *uses));
+                // cmds.push(Scheme::PopAndName(name.clone(), *uses));
                 // body.to_chicken(cmds, env)?;
-                // return Ok(Chicken::Apply(vec![Chicken::Atom(name.to_atom()), body.to_chicken(env)?]))
+                // return Ok(Scheme::Apply(vec![Scheme::Atom(name.to_atom()), body.to_chicken(env)?]))
                 return Ok(list(vec![
                     atom("'bare-abs"),
                     atom(&name.to_atom()),
@@ -271,9 +251,9 @@ fn unroll_cycle(
 
 pub struct TranslationEnv {
     pub env: env::Env,
-    pub terms: HashMap<Id, (Chicken, ABT<Type>, std::collections::HashMap<Id, bool>)>,
+    pub terms: HashMap<Id, (Scheme, ABT<Type>, std::collections::HashMap<Id, bool>)>,
     pub types: HashMap<Id, TypeDecl>,
-    pub anon_fns: Vec<(Id, Chicken)>, // I think?
+    pub anon_fns: Vec<(Id, Scheme)>, // I think?
 }
 
 // use std::collections::HashSet;
@@ -319,7 +299,7 @@ impl TranslationEnv {
         self.terms.insert(
             id.to_owned(),
             (
-                Chicken::Atom("not-yet-evaluated".to_owned()),
+                Scheme::Atom("not-yet-evaluated".to_owned()),
                 ABT::Tm(Type::Ref(Reference::Builtin("nvm".to_owned()))),
                 std::collections::HashMap::new(),
             ),
@@ -340,7 +320,7 @@ impl TranslationEnv {
                 .insert(id.to_owned(), (ch, typ, used_hashes.clone())),
             Err(env::Error::NotImplemented(text)) => self.terms.insert(
                 id.to_owned(),
-                (Chicken::Atom(text), typ, used_hashes.clone()),
+                (Scheme::Atom(text), typ, used_hashes.clone()),
             ),
             Err(err) => {
                 println!("Term broked: {:?}", term);
@@ -394,7 +374,7 @@ impl<'a> HashLoader for Loader<'a> {
     }
 }
 
-fn ifeq(term: Chicken, cmp: Chicken, yes: Chicken) -> Chicken {
+fn ifeq(term: Scheme, cmp: Scheme, yes: Scheme) -> Scheme {
     list(vec![
         atom("if"),
         list(vec![atom("equal?"), term, cmp]),
@@ -419,10 +399,10 @@ fn pattern_to_chicken<T: HashLoader>(
     env: &mut T,
     pat: &Pattern,
     vbls: &mut Vec<String>,
-    term: Chicken,
-    mut body: Chicken,
+    term: Scheme,
+    mut body: Scheme,
     depth: usize,
-) -> Result<Chicken> {
+) -> Result<Scheme> {
     use Pattern::*;
     Ok(match pat {
         Unbound => body,
@@ -721,7 +701,7 @@ pub trait HashLoader {
 // }
 
 impl ToChicken for Term {
-    fn to_chicken<T: HashLoader>(&self, env: &mut T) -> Result<Chicken> {
+    fn to_chicken<T: HashLoader>(&self, env: &mut T) -> Result<Scheme> {
         match self {
             Term::Request(Reference::DerivedId(id), number) => {
                 let args_count = match env.get_type(&id) {
@@ -748,42 +728,42 @@ impl ToChicken for Term {
                 ]))
                 // Err(env::Error::NotImplemented("handle".to_owned()))
             }
-            Term::Ref(Reference::Builtin(name)) => Ok(Chicken::Atom(name.clone())),
+            Term::Ref(Reference::Builtin(name)) => Ok(Scheme::Atom(name.clone())),
             Term::Ref(Reference::DerivedId(id)) => {
                 env.load(&id)?;
-                Ok(Chicken::Atom(id.to_string()))
+                Ok(Scheme::Atom(id.to_string()))
             }
             Term::App(one, two) => Ok(list(vec![one.to_chicken(env)?, two.to_chicken(env)?])),
-            Term::Int(num) => Ok(Chicken::Atom(num.to_string())),
-            Term::Float(num) => Ok(Chicken::Atom(num.to_string())),
-            Term::Nat(num) => Ok(Chicken::Atom(num.to_string())),
-            Term::Boolean(num) => Ok(Chicken::Atom(num.to_string())),
-            Term::Text(num) => Ok(Chicken::Atom(format!("{:?}", num))),
-            Term::Char(num) => Ok(Chicken::Atom(escape_char(num))),
+            Term::Int(num) => Ok(Scheme::Atom(num.to_string())),
+            Term::Float(num) => Ok(Scheme::Atom(num.to_string())),
+            Term::Nat(num) => Ok(Scheme::Atom(num.to_string())),
+            Term::Boolean(num) => Ok(Scheme::Atom(num.to_string())),
+            Term::Text(num) => Ok(Scheme::Atom(format!("{:?}", num))),
+            Term::Char(num) => Ok(Scheme::Atom(escape_char(num))),
             Term::If(cond, yes, no) => Ok(list(vec![
-                Chicken::Atom("if".to_owned()),
+                Scheme::Atom("if".to_owned()),
                 cond.to_chicken(env)?,
                 yes.to_chicken(env)?,
                 no.to_chicken(env)?,
             ])),
             Term::And(one, two) => Ok(list(vec![
-                Chicken::Atom("and".to_owned()),
+                Scheme::Atom("and".to_owned()),
                 one.to_chicken(env)?,
                 two.to_chicken(env)?,
             ])),
             Term::Or(one, two) => Ok(list(vec![
-                Chicken::Atom("or".to_owned()),
+                Scheme::Atom("or".to_owned()),
                 one.to_chicken(env)?,
                 two.to_chicken(env)?,
             ])),
             // A constructor is a function that takes a number of
             // arguments, and returns a list with its name as the first item.
             Term::Constructor(Reference::Builtin(name), num) => {
-                Ok(Chicken::Atom(format!("{}_{}", name, num)))
+                Ok(Scheme::Atom(format!("{}_{}", name, num)))
             }
             Term::Constructor(Reference::DerivedId(id), num) => {
                 env.get_type(id);
-                Ok(Chicken::Atom(format!("{}_{}", id.to_string(), num)))
+                Ok(Scheme::Atom(format!("{}_{}", id.to_string(), num)))
             }
             Term::Sequence(items) => {
                 let mut res = vec![];
@@ -793,7 +773,7 @@ impl ToChicken for Term {
                 return Ok(vector(res));
             }
             // Term::LetRec(_, bound, body) => match &**body {
-            //     ABT::Abs(name, _, body) => Ok(Chicken::Apply(vec![
+            //     ABT::Abs(name, _, body) => Ok(Scheme::Apply(vec![
             //         atom("letrec"),
             //         list(vec![
             //             list(vec![
@@ -848,7 +828,7 @@ impl ToChicken for Term {
                     let mut vblnames = vbls
                         .iter()
                         .map(|name| atom(&format!("'{}", name)))
-                        .collect::<Vec<Chicken>>();
+                        .collect::<Vec<Scheme>>();
                     vblnames.insert(0, atom("list"));
                     let mut body = match cond {
                         None => body.to_chicken(env)?,
@@ -893,7 +873,7 @@ impl ToChicken for Term {
                 atom("type-link"),
                 atom(&format!("'{}", reference.to_atom())),
             ])),
-            _ => Ok(Chicken::Atom(format!(
+            _ => Ok(Scheme::Atom(format!(
                 "(not-implemented {:?})",
                 format!("{:?}", self)
             ))),
@@ -919,142 +899,7 @@ fn get_vbls(body: &ABT<Term>) -> (Vec<String>, &ABT<Term>) {
     }
 }
 
-// impl ToChicken for Term {
-//     fn to_chicken(&self, cmds: &mut ChickenEnv, env: &mut TranslationEnv) -> Result<()> {
-//         match self {
-//             Term::Handle(handler, expr) => {
-//                 unreachable!();
-//             }
-//             Term::Ref(Reference::Builtin(_)) => cmds.push(Chicken::Value(self.clone().into())),
-//             Term::Ref(Reference::DerivedId(id)) => {
-//                 env.load(&id)?;
-//                 cmds.push(Chicken::Value(self.clone().into()))
-//             }
-//             Term::App(one, two) => {
-//                 one.to_chicken(cmds, env)?;
-//                 two.to_chicken(cmds, env)?;
-//                 cmds.push(Chicken::Call)
-//             }
-//             Term::Ann(term, _) => term.to_chicken(cmds, env)?,
-//             Term::Sequence(terms) => {
-//                 let ln = terms.len();
-//                 for inner in terms {
-//                     inner.to_chicken(cmds, env)?;
-//                 }
-//                 cmds.push(Chicken::Seq(ln))
-//             }
-//             Term::If(cond, yes, no) => {
-//                 let no_tok = cmds.mark();
-//                 let done_tok = cmds.mark();
-//                 cond.to_chicken(cmds, env)?;
-//                 cmds.push(Chicken::If(no_tok));
-//                 yes.to_chicken(cmds, env)?;
-//                 cmds.push(Chicken::JumpTo(done_tok));
-//                 cmds.push(Chicken::Mark(no_tok));
-//                 no.to_chicken(cmds, env)?;
-//                 cmds.push(Chicken::Mark(done_tok));
-//             }
-//             Term::And(a, b) => {
-//                 let fail_tok = cmds.mark();
-//                 let done_tok = cmds.mark();
-//                 a.to_chicken(cmds, env)?;
-//                 cmds.push(Chicken::If(fail_tok));
-//                 b.to_chicken(cmds, env)?;
-//                 cmds.push(Chicken::If(fail_tok));
-//                 cmds.push(Chicken::Value(Value::Boolean(true)));
-//                 cmds.push(Chicken::JumpTo(done_tok));
-//                 cmds.push(Chicken::Mark(fail_tok));
-//                 cmds.push(Chicken::Value(Value::Boolean(false)));
-//                 cmds.push(Chicken::Mark(done_tok));
-//             }
-//             Term::Or(a, b) => {
-//                 let good_tok = cmds.mark();
-//                 let fail_tok = cmds.mark();
-//                 let b_tok = cmds.mark();
-//                 let done_tok = cmds.mark();
-//                 a.to_chicken(cmds, env)?;
-//                 cmds.push(Chicken::If(b_tok));
-//                 cmds.push(Chicken::JumpTo(good_tok));
-//                 cmds.push(Chicken::Mark(b_tok));
-//                 b.to_chicken(cmds, env)?;
-//                 cmds.push(Chicken::If(fail_tok));
-
-//                 cmds.push(Chicken::Mark(good_tok));
-//                 cmds.push(Chicken::Value(Value::Boolean(true)));
-//                 cmds.push(Chicken::JumpTo(done_tok));
-
-//                 cmds.push(Chicken::Mark(fail_tok));
-//                 cmds.push(Chicken::Value(Value::Boolean(false)));
-
-//                 cmds.push(Chicken::Mark(done_tok));
-//             }
-//             Term::Let(_, v, body) => {
-//                 v.to_chicken(cmds, env)?;
-//                 body.to_chicken(cmds, env)?;
-//             }
-//             Term::Match(item, arms) => {
-//                 let done_tok = cmds.mark();
-//                 item.to_chicken(cmds, env)?;
-//                 let mut next_tok = cmds.mark();
-//                 for MatchCase(pattern, cond, body) in arms {
-//                     match cond {
-//                         None => {
-//                             cmds.push(Chicken::PatternMatch(pattern.clone(), false));
-//                             cmds.push(Chicken::If(next_tok));
-//                         }
-//                         Some(cond) => {
-//                             // TODO should I have an ID with these,
-//                             // to catch me of I pop the stack too much?
-//                             cmds.push(Chicken::MarkStack);
-//                             cmds.push(Chicken::PatternMatch(pattern.clone(), true));
-//                             cmds.push(Chicken::IfAndPopStack(next_tok));
-//                             cond.to_chicken(cmds, env)?;
-//                             cmds.push(Chicken::IfAndPopStack(next_tok));
-//                             cmds.push(Chicken::ClearStackMark);
-//                         }
-//                     }
-
-//                     body.to_chicken(cmds, env)?;
-//                     cmds.push(Chicken::JumpTo(done_tok));
-
-//                     cmds.push(Chicken::Mark(next_tok));
-//                     next_tok = cmds.mark();
-//                 }
-//                 cmds.push(Chicken::PatternMatchFail);
-//                 cmds.push(Chicken::Mark(done_tok));
-//                 cmds.push(Chicken::PopUpOne);
-//             }
-//             Term::Lam(contents, free_vbls) => {
-//                 let v = env.add_fn(cmds.term.clone(), &**contents)?;
-//                 cmds.push(Chicken::Fn(v, free_vbls.clone()));
-//             }
-//             Term::Request(Reference::Builtin(name), _) => {
-//                 unimplemented!("Builtin Effect! I dont know the arity: {}", name);
-//             }
-//             Term::Request(Reference::DerivedId(id), number) => {
-//                 let t = env.get_type(&id.0);
-//                 match t {
-//                     TypeDecl::Effect(DataDecl { constructors, .. }) => {
-//                         let args = calc_args(&constructors[*number].1);
-//                         cmds.push(Chicken::Value(Value::RequestWithArgs(
-//                             Reference::DerivedId(id.clone()),
-//                             *number,
-//                             args,
-//                             // ok, this is useless allocation if there are no
-//                             vec![],
-//                         )))
-//                     }
-//                     _ => unimplemented!("ok"),
-//                 }
-//             }
-
-//             _ => cmds.push(Chicken::Value(self.clone().into())),
-//         };
-//         Ok(())
-//     }
-// }
-
-pub fn ability_to_chicken(name: &str, t: &ABT<Type>) -> Chicken {
+pub fn ability_to_chicken(name: &str, t: &ABT<Type>) -> Scheme {
     let args = calc_args(t);
     let mut vbls = vec![];
     for i in 0..args {
@@ -1086,8 +931,8 @@ pub fn ability_to_chicken(name: &str, t: &ABT<Type>) -> Chicken {
     return list(vec![atom("define"), atom(name), body]);
 }
 
-// lol chicken -> type
-pub fn ability_to_type(name: &str, t: &ABT<Type>) -> Chicken {
+// lol scheme -> type
+pub fn ability_to_type(name: &str, t: &ABT<Type>) -> Scheme {
     let args = calc_args(t);
     if args == 0 {
         return list(vec![

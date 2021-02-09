@@ -1,4 +1,7 @@
+> testbed.t4
+> testbed.test
 
+---
 run_long : '{IO} ()
 run_long = '(printLine (toText (List.size (unison_random_mersenne.random.mersenne.collect
     unison_random_mersenne.random.mersenne.nat.next

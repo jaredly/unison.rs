@@ -385,7 +385,7 @@ fn topo_sort_ids(deps: HashMap<Id, HashMap<Id, bool>>) -> Vec<Id> {
 // ) ->
 
 fn pack_chicken_env(
-    mut chicken_env: crate::chicken::TranslationEnv,
+    mut chicken_env: crate::scheme::TranslationEnv,
     all_types: HashMap<Id, Vec<Vec<String>>>,
     all_terms: HashMap<Vec<String>, Id>,
 ) -> std::io::Result<String> {
@@ -402,14 +402,14 @@ fn pack_chicken_env(
                 for (i, (name, t)) in constructors.iter().enumerate() {
                     output.push(format!("; {}", name.to_atom()));
                     let name = format!("{}_{}", hash.to_string(), i);
-                    output.push(super::chicken::ability_to_chicken(&name, t).to_string());
+                    output.push(super::scheme::ability_to_chicken(&name, t).to_string());
                 }
             }
             TypeDecl::Data(DataDecl { constructors, .. }) => {
                 for (i, (name, t)) in constructors.iter().enumerate() {
                     output.push(format!("; {}", name.to_atom()));
                     let name = format!("{}_{}", hash.to_string(), i);
-                    output.push(super::chicken::ability_to_type(&name, t).to_string());
+                    output.push(super::scheme::ability_to_type(&name, t).to_string());
                 }
             }
         }
@@ -493,7 +493,7 @@ fn pack_one_chicken_inner(
     codebase.collect_types(&ns, &vec![], &mut all_types);
 
     let env = env::Env::init(codebase.root().as_path());
-    use crate::chicken::TranslationEnv;
+    use crate::scheme::TranslationEnv;
     let mut chicken_env = TranslationEnv::new(env);
 
     match chicken_env.load(&hash) {
@@ -535,7 +535,7 @@ fn pack_all_chicken_inner(
     }
 
     let env = env::Env::init(codebase.root().as_path());
-    use crate::chicken::TranslationEnv;
+    use crate::scheme::TranslationEnv;
     let mut chicken_env = TranslationEnv::new(env);
     // let mut ir_env = ir::TranslationEnv::new(env);
 

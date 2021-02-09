@@ -1,14 +1,10 @@
-;;; These are for gerbil
-(import :std/srfi/128)
-(import :std/srfi/133)
-(import :std/srfi/151)
-
-
 ;;; These are for chez
-; (import (srfi :67))
-; (import (srfi :128))
-; (import (srfi :133 vectors))
-; (import (srfi :151))
+(import (srfi :67))
+(import (srfi :128))
+(import (srfi :133 vectors))
+(import (srfi :151))
+
+(define foldl fold-left)
 
 (define true #t)
 (define false #f)
@@ -17,7 +13,6 @@
 (define print (lambda args (map display args) (display "\n")))
 
 ;;;;;;;;
-
 
 (define (term-link v) (list 'term-link v))
 (define (type-link v) (list 'type-link v))
@@ -31,19 +26,13 @@
             '()
         term)))
 
-(define (to-json v) v)
-    ; (let ((o (open-output-string)))
-    ;     (json-write v o)
-    ;     (get-output-string o)
-    ; ))
-
 (define (Debug.watch text)
     (lambda (v)
-        (print "⚠️  " text " " (to-json (untuple v)))
+        (print "⚠️  " text " " (untuple v))
         v))
 
 (define (bug v)
-    (print "BUG " (to-json (untuple v)))
+    (print "BUG " (untuple v))
     (abort "Found a bug!")
 )
 
@@ -59,7 +48,7 @@
         (print "Got " v)
         ; (print "Test failure")
         )
-    ; (print "✅ passed " name)
+    (print "✅ passed " name)
         )
     )
 
@@ -75,15 +64,15 @@
         (lambda (current result)
             (or (if (not (result-is-good result))
             (begin
-                (print "❌ Test failed " name " " (to-json result))
+                (print "❌ Test failed " name " " result)
                 ; (abort "Test failed")
                 #t
             ) #f) current))
         #f
         (vector->list v)
         ))
-    ; (print "✅ passed " name)
-    '()
+    (print "✅ passed " name)
+    ; '()
     )
     '()
 )
@@ -336,7 +325,7 @@
         (Some
             (
                 (Cons (string-ref t 0))
-                ((Cons (substring t 1 (- (string-length t) 1))) Nil)
+                ((Cons (substring t 1 (string-length t))) Nil)
             )
         )
         None
@@ -350,7 +339,7 @@
         (substring str 0 count))))
 (define (Text.drop count) (lambda (str)
     (let ((count (min count (string-length str))))
-        (substring str count (- (string-length str) count)))))
+        (substring str count (string-length str)))))
 
 ; --- abilties ---
 
