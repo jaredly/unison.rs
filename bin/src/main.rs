@@ -8,7 +8,6 @@ extern crate serde_json;
 
 mod base32hex;
 mod branch;
-mod scheme;
 mod env;
 mod ffi;
 mod ir;
@@ -16,6 +15,7 @@ mod pack;
 mod parser;
 mod printer;
 mod run;
+mod scheme;
 mod server;
 mod unique;
 mod visitor;

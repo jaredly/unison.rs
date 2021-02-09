@@ -557,10 +557,7 @@ fn pattern_to_chicken<T: HashLoader>(
                     vbls,
                     list(vec![
                         atom("list-ref"),
-                        list(vec![
-                            atom("caddr"),
-                            term.clone(),
-                        ]),
+                        list(vec![atom("caddr"), term.clone()]),
                         atom(&format!("{}", i + 1)),
                     ]),
                     body,
@@ -585,15 +582,15 @@ fn pattern_to_chicken<T: HashLoader>(
                     ]),
                     list(vec![
                         atom("equal?"),
-                        list(vec![atom("length"), list(vec![atom("caddr"), term.clone() ]) ]),
+                        list(vec![
+                            atom("length"),
+                            list(vec![atom("caddr"), term.clone()]),
+                        ]),
                         atom(&format!("{}", args.len() + 1)),
                     ]),
                     list(vec![
                         atom("equal?"),
-                        list(vec![
-                            atom("car"),
-                            list(vec![atom("caddr"), term.clone()]),
-                        ]),
+                        list(vec![atom("car"), list(vec![atom("caddr"), term.clone()])]),
                         atom(&format!("'{}_{}", id.to_string(), num)),
                     ]),
                 ]),
@@ -733,24 +730,22 @@ impl ToChicken for Term {
                 env.load(&id)?;
                 Ok(Scheme::Atom(id.to_string()))
             }
-            Term::App(one, two) => 
-                match &**one {
-                    // A-normal form or something
-                    // because chez doesn't evaludate the function
-                    // before evaluating the argument 🙃
-                    ABT::Tm(Term::App(_, _)) => {
-                        let tmp = atom(&format!("f-tmp"));
-                        // TODO if I know statically that the F or the Arg
-                        // is effect-free, then I don't need to do this dance.
-                        Ok(list(vec![
-                            atom("let"),
-                            list(vec![list(vec![tmp.clone(), one.to_chicken(env)?])]),
-                            list(vec![tmp, two.to_chicken(env)?])
-                        ]))
-                    }
-                    _ => Ok(list(vec![one.to_chicken(env)?, two.to_chicken(env)?]))
+            Term::App(one, two) => match &**one {
+                // A-normal form or something
+                // because chez doesn't evaludate the function
+                // before evaluating the argument 🙃
+                ABT::Tm(Term::App(_, _)) => {
+                    let tmp = atom(&format!("f-tmp"));
+                    // TODO if I know statically that the F or the Arg
+                    // is effect-free, then I don't need to do this dance.
+                    Ok(list(vec![
+                        atom("let"),
+                        list(vec![list(vec![tmp.clone(), one.to_chicken(env)?])]),
+                        list(vec![tmp, two.to_chicken(env)?]),
+                    ]))
                 }
-                ,
+                _ => Ok(list(vec![one.to_chicken(env)?, two.to_chicken(env)?])),
+            },
             Term::Int(num) => Ok(Scheme::Atom(num.to_string())),
             Term::Float(num) => Ok(Scheme::Atom(num.to_string())),
             Term::Nat(num) => Ok(Scheme::Atom(num.to_string())),

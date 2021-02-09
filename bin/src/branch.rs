@@ -383,8 +383,10 @@ impl Codebase {
     ) {
         // let item = self.branches.get(of).unwrap();
         let item = match self.branches.get(of) {
-            None => {return;}
-            Some(item) => item
+            None => {
+                return;
+            }
+            Some(item) => item,
         };
         item.collect_some_types(path, names);
         for (k, v) in &item.children {
@@ -402,8 +404,10 @@ impl Codebase {
     ) {
         // let item = self.branches.get(of).unwrap();
         let item = match self.branches.get(of) {
-            None => {return;}
-            Some(item) => item
+            None => {
+                return;
+            }
+            Some(item) => item,
         };
         item.collect_types(path, names);
         for (k, v) in &item.children {
@@ -434,10 +438,11 @@ impl Codebase {
         path: &Vec<String>,
         dest: &mut std::collections::HashMap<Vec<String>, types::Id>,
     ) {
-
         let item = match self.branches.get(of) {
-            None => {return;}
-            Some(item) => item
+            None => {
+                return;
+            }
+            Some(item) => item,
         };
         item.collect_terms(path, dest);
         let mut children: Vec<(&NameSegment, &Hash)> = item.children.iter().collect();

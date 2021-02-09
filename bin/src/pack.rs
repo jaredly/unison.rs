@@ -385,7 +385,7 @@ fn topo_sort_ids(deps: HashMap<Id, HashMap<Id, bool>>) -> Vec<Id> {
 // ) ->
 
 fn pack_chicken_env(
-    mut chicken_env: crate::scheme::TranslationEnv,
+    chicken_env: &mut crate::scheme::TranslationEnv,
     all_types: HashMap<Id, Vec<Vec<String>>>,
     all_terms: HashMap<Vec<String>, Id>,
 ) -> std::io::Result<String> {
@@ -504,10 +504,45 @@ fn pack_one_chicken_inner(
         _ => (),
     }
 
-    std::fs::write(
-        outfile,
-        pack_chicken_env(chicken_env, all_types, all_terms)?,
-    )?;
+    let mut serialized = pack_chicken_env(&mut chicken_env, all_types, all_terms)?;
+
+    let is_io = match chicken_env.terms.get(&hash) {
+        None => false,
+        Some((_, typ, _)) => {
+            println!("The Type: {:?}", typ);
+            match typ {
+                ABT::Tm(Type::Arrow(arg, body)) => match (&**arg, &**body) {
+                    (
+                        ABT::Tm(Type::Ref(Reference::DerivedId(Id{hash, size: 1, pos: 0}))),
+                        ABT::Tm(Type::Effect(effects, result)),
+                    ) if hash.to_string().starts_with("568rsi7o3g") => match (&**effects, &**result) {
+                        (
+                            ABT::Tm(Type::Effects(effects)),
+                            ABT::Tm(Type::Ref(Reference::DerivedId(Id{hash, size: 1, pos: 0}))),
+                         ) if effects.len() == 1 && hash.to_string().starts_with("568rsi7o3g") => {
+                            match &effects[0] {
+                                ABT::Tm(Type::Ref(Reference::DerivedId(Id{hash, pos: 0, size: 1})))
+                                    if hash.to_string().starts_with("fgaevis4bl") =>
+                                {
+                                    println!("YES");
+                                    true
+                                }
+                                _ => false,
+                            }
+                        }
+                        _ => false,
+                    },
+                    _ => false,
+                },
+                _ => false,
+            }
+        }
+    };
+    if is_io {
+        serialized += &format!("\n(run-with-io {})", hash.to_string());
+    }
+
+    std::fs::write(outfile, serialized)?;
 
     Ok(())
 }
@@ -566,7 +601,7 @@ fn pack_all_chicken_inner(
 
     std::fs::write(
         outfile,
-        pack_chicken_env(chicken_env, all_types, all_terms)?,
+        pack_chicken_env(&mut chicken_env, all_types, all_terms)?,
     )?;
 
     Ok(())
