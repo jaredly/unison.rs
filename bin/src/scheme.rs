@@ -12,7 +12,7 @@ fn escape_char(c: &char) -> String {
         res = c.escape_unicode().to_string();
         // CHICKEN
         // format!("#\\U+{:0>4}", &res[3..res.len() - 1])
-        format!("#\\u{:0>4}", &res[3..res.len() - 1])
+        format!("#\\x{:0>4}", &res[3..res.len() - 1])
     }
 }
 

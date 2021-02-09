@@ -38,7 +38,7 @@
 
 (define (print-processing name)
     ;; Uncomment this line to debug terms that are failing to process
-     ; (print "Evaluating " name)
+     (print "Evaluating " name)
     '())
 
 (define (check v name)

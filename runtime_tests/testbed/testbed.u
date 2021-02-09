@@ -1,5 +1,15 @@
-> testbed.t4
-> testbed.test
+
+-- endpointText = "{ \"total\": 2, \"users\": [ { \"id\": 0, \"name\": \"Admin\", \"likes\": [ \"cooking\", \"managing\" ] }, { \"id\": 1, \"name\": \"Alice\", \"likes\": [ \"cooking\", \"programming\" ] } ] }"
+-- test = check ((Debug.watch "v" (Decode.runParse (Decode.field "total" Decode.int) endpointText)) == Right +2)
+-- json.Json.Decode.tests.e2e.tuple.ok2
+-- test = json.Json.Decode.at.tests.ex1
+-- test = json.Json.Decode.field.tests.applicative
+test = json.external.unipar.Unipar.run json.Json.Value.parseNull "null" === Right Null
+
+-- test = check (Text.uncons "123" === Some (?1, "23"))
+-- test = check (Text.drop 1 "123" === "23")
+
+> test
 
 ---
 run_long : '{IO} ()
