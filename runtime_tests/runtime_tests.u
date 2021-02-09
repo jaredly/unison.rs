@@ -19,6 +19,12 @@ eq.t_12 = Some(0) != Some(1)
 eq.t_13 = None == None
 eq.t_14 = Some(1) != None
 
+-- function equality
+-- this is the kicker -
+
+eq.t_15 = (+) 4 == (+) 4
+eq.t_16 = (+) 4 != (+) 5
+
 -- let bindings
 
 let_.t_01 =
@@ -394,17 +400,17 @@ abilities.v_11 =
 
 abilities.t_11 = abilities.v_11 == 17
 
-abilities.v_12 = withInitialValue 0 'let
+abilities.v_12 = Store.withInitialValue 0 'let
 	handle (repeat 3 '(Store.modify (x -> x + 1))) with cases { a } -> a
 	Store.get
 abilities.t_12 = abilities.v_12 == 3
 
-abilities.v_13 = withInitialValue 0 'let
+abilities.v_13 = Store.withInitialValue 0 'let
 	handle (Store.modify (x -> x + 1)) with cases { a } -> a
 	Store.get
 abilities.t_13 = abilities.v_13 == 1
 
-abilities.v_14 = withInitialValue 0 'let
+abilities.v_14 = Store.withInitialValue 0 'let
 	handle (Store.put 1) with cases { a } -> a
 	Store.get
 abilities.t_14 = abilities.v_14 == 1

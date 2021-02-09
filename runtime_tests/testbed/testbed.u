@@ -1,6 +1,12 @@
 
-endpointText = "{ \"total\": 2, \"users\": [ { \"id\": 0, \"name\": \"Admin\", \"likes\": [ \"cooking\", \"managing\" ] }, { \"id\": 1, \"name\": \"Alice\", \"likes\": [ \"cooking\", \"programming\" ] } ] }"
-test = check ((Debug.watch "v" (Decode.runParse (Decode.field "total" Decode.int) endpointText)) == Right +2)
+-- test = (Debug.watch "res" (check (both +50 +50)))
+-- partial x y = x Nat.+ y
+-- test = (partial 4) Universal.== (partial 5)
+-- test = memo.Memo.run.test
+test = (+) 4 == (+) 4
+
+-- endpointText = "{ \"total\": 2, \"users\": [ { \"id\": 0, \"name\": \"Admin\", \"likes\": [ \"cooking\", \"managing\" ] }, { \"id\": 1, \"name\": \"Alice\", \"likes\": [ \"cooking\", \"programming\" ] } ] }"
+-- test = check ((Debug.watch "v" (Decode.runParse (Decode.field "total" Decode.int) endpointText)) == Right +2)
 -- text = json.Json.Decode.tests.e2e.tuple.ok2
 -- test = json.Json.Decode.at.tests.ex1
 -- test = json.Json.Decode.field.tests.applicative
