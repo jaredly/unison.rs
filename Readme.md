@@ -14,9 +14,6 @@ An experimental runtime for unison code, written in rust, compiled to wasm for u
 - `cd example` and `edit counter` - in the scratch file, change `"Hello unison"` to something else
 - save the scratch file, run `update` in unison, and see that the watcher auto-updates in your browser!
 
-
-```
-
 ```
 ability abilities.a_01 where
     getInt : Int
