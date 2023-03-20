@@ -14,17 +14,16 @@ An experimental runtime for unison code, written in rust, compiled to wasm for u
 - `cd example` and `edit counter` - in the scratch file, change `"Hello unison"` to something else
 - save the scratch file, run `update` in unison, and see that the watcher auto-updates in your browser!
 
-
-```
-
-```
+```haskell
 ability abilities.a_01 where
     getInt : Int
 abilities.f_01 = handle (abilities.a_01.getInt) with cases
     { a } -> (a, 2)
     { abilities.a_01.getInt -> k } -> handle (k +5) with cases { a } -> (a, 3)
 abilities.t_01 = abilities.f_01 == (+5, 3)
+```
 
+```scheme
 (define stack '())
 
 (define (throw-effect k effect)
